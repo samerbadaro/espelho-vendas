@@ -7,7 +7,7 @@ const chave = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 export const configurado = Boolean(url && chave);
 export const supabase = createClient(url || 'http://localhost', chave || 'sem-chave');
 
-export type Status = 'disponivel' | 'reservada' | 'vendida' | 'bloqueada';
+export type Status = 'disponivel' | 'reservada' | 'proposta' | 'contrato' | 'vendida' | 'bloqueada';
 
 export interface Unidade {
   id: string;
@@ -29,6 +29,8 @@ export interface Config {
 export const STATUS: { valor: Status; rotulo: string; plural: string }[] = [
   { valor: 'disponivel', rotulo: 'Disponível', plural: 'Disponíveis' },
   { valor: 'reservada', rotulo: 'Reservada', plural: 'Reservadas' },
+  { valor: 'proposta', rotulo: 'Proposta recebida', plural: 'Propostas recebidas' },
+  { valor: 'contrato', rotulo: 'Contrato em assinatura', plural: 'Contratos em assinatura' },
   { valor: 'vendida', rotulo: 'Vendida', plural: 'Vendidas' },
   { valor: 'bloqueada', rotulo: 'Bloqueada', plural: 'Bloqueadas' },
 ];
@@ -36,6 +38,18 @@ export const rotuloStatus = (s: Status) => STATUS.find((x) => x.valor === s)?.ro
 
 export const formatarArea = (a: number | null) =>
   a == null ? '—' : `${a.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m²`;
+
+export const formatarReais = (v: number | null | undefined) =>
+  v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/** "350.000,50" ou "350000.5" -> 350000.5 */
+export function lerNumero(texto: string): number | null {
+  const t = texto.replace(/[R$\s%]/g, '');
+  if (!t) return null;
+  const normal = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t;
+  const n = Number(normal);
+  return Number.isFinite(n) ? n : null;
+}
 
 export const formatarDataHora = (iso: string) =>
   new Date(iso).toLocaleString('pt-BR', {
@@ -132,7 +146,7 @@ export function useEspelho() {
 }
 
 export function contar(unidades: Unidade[]) {
-  const c: Record<Status, number> = { disponivel: 0, reservada: 0, vendida: 0, bloqueada: 0 };
+  const c: Record<Status, number> = { disponivel: 0, reservada: 0, proposta: 0, contrato: 0, vendida: 0, bloqueada: 0 };
   unidades.forEach((u) => c[u.status]++);
   return c;
 }

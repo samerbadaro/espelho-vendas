@@ -23,8 +23,6 @@ export function TV() {
   if (carregando) return <Aviso texto="Carregando o espelho…" />;
   if (erro && unidades.length === 0) return <Aviso texto={erro} />;
 
-  const total = unidades.length;
-  const vendidas = unidades.filter((u) => u.status === 'vendida').length;
   const mostrarUltima = ultima && Date.now() - ultima.quando < 120_000;
 
   return (
@@ -34,10 +32,6 @@ export function TV() {
       </main>
       <aside className="tv-painel">
         <h1 className="nome">{config?.nome_empreendimento}</h1>
-        <p className="tv-vendido">
-          <span className="tv-pct">{total ? Math.round((vendidas / total) * 100) : 0}%</span>
-          <span>vendido, {vendidas} de {total} unidades</span>
-        </p>
         <Resumo unidades={unidades} grande />
         {mostrarUltima && (
           <p className={`tv-ultima s-borda-${ultima!.u.status}`} key={ultima!.quando}>

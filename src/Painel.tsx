@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora,
+  supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
   type Unidade, type Status,
 } from './dados';
 import { Predio, Resumo } from './Predio';
@@ -11,6 +11,7 @@ interface Perfil { email: string; nome: string | null; papel: 'admin' | 'vendas'
 interface Registro {
   id: number; numero: string; status_anterior: Status | null; status_novo: Status;
   motivo: string | null; usuario_email: string | null; criado_em: string;
+  detalhes?: Record<string, unknown> | null;
 }
 
 /** Painel da Sec. Vendas: exige login e perfil cadastrado. */
@@ -161,25 +162,73 @@ function AreaEquipe({ perfil }: { perfil: Perfil }) {
   );
 }
 
+const EM_NEGOCIACAO: Status[] = ['reservada', 'proposta', 'contrato', 'vendida'];
 const EXIGE_MOTIVO = (de: Status, para: Status) =>
-  (de === 'reservada' || de === 'vendida') && (para === 'disponivel' || para === 'bloqueada');
+  EM_NEGOCIACAO.includes(de) && (para === 'disponivel' || para === 'bloqueada');
+
+interface Negociacao {
+  imobiliaria: string | null; corretor: string | null; cliente: string | null;
+  valor_venda: number | null; pv_aprovado: number | null;
+}
+
+const ERROS: Record<string, string> = {
+  CONFLITO: 'Outra pessoa alterou esta unidade agora há pouco. Feche, confira o status atual e tente de novo.',
+  MOTIVO_OBRIGATORIO: 'Informe o motivo para desfazer a negociação.',
+  DADOS_RESERVA_OBRIGATORIOS: 'Preencha imobiliária, corretor e cliente.',
+  DADOS_PROPOSTA_OBRIGATORIOS: 'Preencha o valor da venda e o PV aprovado.',
+  VALOR_INVALIDO: 'O valor da venda precisa ser maior que zero.',
+  PV_INVALIDO: 'O PV aprovado não pode ser negativo.',
+  SEM_PERMISSAO: 'Seu usuário não tem permissão para alterar unidades.',
+};
+
+const formatarPV = (v: number | null | undefined) =>
+  v == null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 
 function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
   unidade: Unidade; aoFechar: () => void; aoSalvar: (u: Unidade) => void; aoConflito: () => void;
 }) {
   const [novo, setNovo] = useState<Status | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [imob, setImob] = useState('');
+  const [corretor, setCorretor] = useState('');
+  const [cliente, setCliente] = useState('');
+  const [valor, setValor] = useState('');
+  const [pv, setPv] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [registros, setRegistros] = useState<Registro[]>([]);
+  const [neg, setNeg] = useState<Negociacao | null>(null);
+  const [sugestoes, setSugestoes] = useState<{ imob: string[]; corretor: string[] }>({ imob: [], corretor: [] });
   const [versaoAberta] = useState(unidade.versao);
 
   useEffect(() => {
     supabase.from('historico')
-      .select('id, numero, status_anterior, status_novo, motivo, usuario_email, criado_em')
+      .select('id, numero, status_anterior, status_novo, motivo, usuario_email, criado_em, detalhes')
       .eq('unidade_id', unidade.id).order('criado_em', { ascending: false }).limit(10)
       .then(({ data }) => setRegistros((data as Registro[]) ?? []));
+    supabase.from('negociacoes')
+      .select('imobiliaria, corretor, cliente, valor_venda, pv_aprovado')
+      .eq('unidade_id', unidade.id).eq('ativa', true).maybeSingle()
+      .then(({ data }) => {
+        const n = (data as Negociacao) ?? null;
+        setNeg(n);
+        if (n) {
+          setImob(n.imobiliaria ?? ''); setCorretor(n.corretor ?? ''); setCliente(n.cliente ?? '');
+          setValor(n.valor_venda != null ? n.valor_venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '');
+          setPv(n.pv_aprovado != null ? n.pv_aprovado.toLocaleString('pt-BR') : '');
+        }
+      });
   }, [unidade.id, unidade.versao]);
+
+  // sugestões de imobiliárias e corretores já usados (evita grafias diferentes)
+  useEffect(() => {
+    supabase.from('negociacoes').select('imobiliaria, corretor').limit(1000).then(({ data }) => {
+      const lista = (data as { imobiliaria: string | null; corretor: string | null }[]) ?? [];
+      const unicos = (k: 'imobiliaria' | 'corretor') =>
+        [...new Set(lista.map((x) => x[k]).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      setSugestoes({ imob: unicos('imobiliaria'), corretor: unicos('corretor') });
+    });
+  }, []);
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && aoFechar();
@@ -189,26 +238,36 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
 
   const mudouPorOutro = unidade.versao !== versaoAberta;
   const precisaMotivo = novo ? EXIGE_MOTIVO(unidade.status, novo) : false;
+  const reservaCompleta = Boolean(neg?.imobiliaria && neg?.corretor && neg?.cliente);
+  // campos da reserva: ao reservar, ou ao ir para proposta sem reserva registrada
+  const pedeReserva = novo === 'reservada' || (novo === 'proposta' && !reservaCompleta);
+  const pedeProposta = novo === 'proposta';
 
   const salvar = async () => {
     if (!novo) return;
-    if (precisaMotivo && !motivo.trim()) { setErro('Informe o motivo para desfazer a reserva ou a venda.'); return; }
+    const valorNum = lerNumero(valor);
+    const pvNum = lerNumero(pv);
+    if (precisaMotivo && !motivo.trim()) { setErro(ERROS.MOTIVO_OBRIGATORIO); return; }
+    if (pedeReserva && (!imob.trim() || !corretor.trim() || !cliente.trim())) { setErro(ERROS.DADOS_RESERVA_OBRIGATORIOS); return; }
+    if (pedeProposta) {
+      if (valorNum == null || pvNum == null) { setErro(ERROS.DADOS_PROPOSTA_OBRIGATORIOS); return; }
+      if (valorNum <= 0) { setErro(ERROS.VALOR_INVALIDO); return; }
+      if (pvNum < 0) { setErro(ERROS.PV_INVALIDO); return; }
+    }
     setSalvando(true); setErro('');
     const { data, error } = await supabase.rpc('alterar_status', {
       p_unidade_id: unidade.id, p_status: novo, p_versao: versaoAberta, p_motivo: motivo.trim() || null,
+      p_imobiliaria: pedeReserva ? imob.trim() : null,
+      p_corretor: pedeReserva ? corretor.trim() : null,
+      p_cliente: pedeReserva ? cliente.trim() : null,
+      p_valor: pedeProposta ? valorNum : null,
+      p_pv: pedeProposta ? pvNum : null,
     });
     setSalvando(false);
     if (error) {
-      if (error.message.includes('CONFLITO')) {
-        setErro('Outra pessoa alterou esta unidade agora há pouco. Feche, confira o status atual e tente de novo.');
-        aoConflito();
-      } else if (error.message.includes('MOTIVO_OBRIGATORIO')) {
-        setErro('Informe o motivo para desfazer a reserva ou a venda.');
-      } else if (error.message.includes('SEM_PERMISSAO')) {
-        setErro('Seu usuário não tem permissão para alterar unidades.');
-      } else {
-        setErro('Não foi possível salvar. Verifique a internet e tente novamente.');
-      }
+      const chave = Object.keys(ERROS).find((k) => error.message.includes(k));
+      setErro(chave ? ERROS[chave] : 'Não foi possível salvar. Verifique a internet e tente novamente.');
+      if (chave === 'CONFLITO') aoConflito();
       return;
     }
     aoSalvar(data as Unidade);
@@ -228,6 +287,16 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
           <div><dt>Status atual</dt><dd><span className={`etiqueta s-${unidade.status}`}>{rotuloStatus(unidade.status)}</span></dd></div>
         </dl>
 
+        {neg && EM_NEGOCIACAO.includes(unidade.status) && (
+          <dl className="ficha negociacao">
+            <div><dt>Imobiliária</dt><dd>{neg.imobiliaria || '—'}</dd></div>
+            <div><dt>Corretor</dt><dd>{neg.corretor || '—'}</dd></div>
+            <div className="largo"><dt>Cliente</dt><dd>{neg.cliente || '—'}</dd></div>
+            <div><dt>Valor da venda</dt><dd>{formatarReais(neg.valor_venda)}</dd></div>
+            <div><dt>PV aprovado</dt><dd>{formatarPV(neg.pv_aprovado)}</dd></div>
+          </dl>
+        )}
+
         {mudouPorOutro && <p className="erro" role="alert">Esta unidade acabou de ser alterada por outra pessoa. Feche e abra de novo antes de mudar.</p>}
 
         <fieldset className="opcoes" disabled={mudouPorOutro || salvando}>
@@ -243,12 +312,39 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
           ))}
         </fieldset>
 
-        {novo && (
+        {pedeReserva && (
+          <div className="campos">
+            <label>Imobiliária
+              <input list="lista-imob" value={imob} onChange={(e) => setImob(e.target.value)} maxLength={120} autoComplete="off" />
+            </label>
+            <label>Corretor
+              <input list="lista-corretor" value={corretor} onChange={(e) => setCorretor(e.target.value)} maxLength={120} autoComplete="off" />
+            </label>
+            <label className="largo">Cliente
+              <input value={cliente} onChange={(e) => setCliente(e.target.value)} maxLength={160} autoComplete="off" placeholder="Nome do cliente" />
+            </label>
+            <datalist id="lista-imob">{sugestoes.imob.map((x) => <option key={x} value={x} />)}</datalist>
+            <datalist id="lista-corretor">{sugestoes.corretor.map((x) => <option key={x} value={x} />)}</datalist>
+          </div>
+        )}
+
+        {pedeProposta && (
+          <div className="campos">
+            <label>Valor da venda (R$)
+              <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Ex.: 289.900,00"
+                onBlur={() => { const n = lerNumero(valor); if (n != null) setValor(n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })); }} />
+            </label>
+            <label>PV aprovado (%)
+              <input inputMode="decimal" value={pv} onChange={(e) => setPv(e.target.value)} placeholder="Ex.: 85" />
+            </label>
+          </div>
+        )}
+
+        {novo && (precisaMotivo || (!pedeReserva && !pedeProposta)) && (
           <label className="campo-motivo">
             {precisaMotivo ? 'Motivo (obrigatório)' : 'Observação (opcional)'}
             <textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={300}
-              placeholder={precisaMotivo ? 'Ex.: cliente desistiu da compra' : 'Ex.: corretor responsável'} />
-            <small>Não registre CPF nem dados pessoais do comprador aqui.</small>
+              placeholder={precisaMotivo ? 'Ex.: cliente desistiu da compra' : ''} />
           </label>
         )}
 
@@ -269,6 +365,7 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
                 <li key={h.id}>
                   {h.status_anterior ? rotuloStatus(h.status_anterior) : ''} para{' '}
                   <span className={`etiqueta s-${h.status_novo}`}>{rotuloStatus(h.status_novo).toLowerCase()}</span>
+                  {h.detalhes && <span className="motivo">{resumoDetalhes(h.detalhes)}</span>}
                   {h.motivo && <span className="motivo">“{h.motivo}”</span>}
                   <span className="quem">{h.usuario_email}, {formatarDataHora(h.criado_em)}</span>
                 </li>
@@ -279,4 +376,14 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
       </div>
     </div>
   );
+}
+
+function resumoDetalhes(d: Record<string, unknown>) {
+  const partes: string[] = [];
+  if (d.cliente) partes.push(`Cliente: ${d.cliente}`);
+  if (d.imobiliaria) partes.push(`Imobiliária: ${d.imobiliaria}`);
+  if (d.corretor) partes.push(`Corretor: ${d.corretor}`);
+  if (d.valor_venda != null) partes.push(`Valor: ${formatarReais(Number(d.valor_venda))}`);
+  if (d.pv_aprovado != null) partes.push(`PV: ${formatarPV(Number(d.pv_aprovado))}`);
+  return partes.join('; ');
 }

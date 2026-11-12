@@ -11,6 +11,8 @@
 
   --disponivel: #2F8F57;
   --reservada: #2F63A8;
+  --proposta: #B0730F;
+  --contrato: #6A4A9C;
   --vendida: #B23A31;
   --bloqueada: #85877F;
 
@@ -57,6 +59,8 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ===== Cores por status ===== */
 .s-disponivel { --cor: var(--disponivel); }
 .s-reservada  { --cor: var(--reservada); }
+.s-proposta   { --cor: var(--proposta); }
+.s-contrato   { --cor: var(--contrato); }
 .s-vendida    { --cor: var(--vendida); }
 .s-bloqueada  { --cor: var(--bloqueada); }
 
@@ -172,9 +176,7 @@ body[data-pagina='tv'] { background: #1A1C15; color: var(--pedra); overflow: hid
 .tv .faixa { font-size: calc(var(--linha-predio) * 0.4); }
 .tv .bloco-vazio { color: var(--latao); font-size: calc(var(--linha-predio) * 0.4); }
 .tv-painel { display: flex; flex-direction: column; gap: 4vh; justify-content: center; }
-.tv .nome { font-size: clamp(1.75rem, 3vw, 4rem); overflow-wrap: break-word; hyphens: auto; }
-.tv-vendido { margin: 0; display: flex; flex-direction: column; color: #A9AB9F; font-size: clamp(1rem, 1.6vw, 1.6rem); }
-.tv-pct { color: var(--pedra); font-weight: 750; font-size: clamp(3rem, 7vw, 8rem); line-height: 1; font-variation-settings: 'wdth' 110; }
+.tv .nome { font-size: clamp(1.75rem, 2.6vw, 3.4rem); overflow-wrap: break-word; hyphens: manual; }
 .resumo-grande { flex-direction: column; padding: 0; margin: 0; gap: 1.6vh; }
 .resumo-grande li {
   display: grid; grid-template-columns: 0.55em 3.2ch auto; align-items: center; gap: 0.4em;
@@ -189,6 +191,7 @@ body[data-pagina='tv'] { background: #1A1C15; color: var(--pedra); overflow: hid
   animation: entra 0.6s ease-out;
 }
 .s-borda-disponivel { --cor: var(--disponivel); } .s-borda-reservada { --cor: var(--reservada); }
+.s-borda-proposta { --cor: var(--proposta); } .s-borda-contrato { --cor: var(--contrato); }
 .s-borda-vendida { --cor: var(--vendida); } .s-borda-bloqueada { --cor: var(--bloqueada); }
 @keyframes entra { from { opacity: 0; transform: translateY(8px); } }
 .tv-pe { margin-top: auto; display: flex; flex-direction: column; gap: 6px; color: #A9AB9F; }
@@ -247,7 +250,6 @@ body[data-pagina='tv'] { background: #1A1C15; color: var(--pedra); overflow: hid
 .login input, .campo-motivo textarea {
   padding: 10px 12px; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--branco); color: var(--tinta);
 }
-.campo-motivo small { font-size: 0.75rem; }
 
 /* ===== Diálogo da unidade ===== */
 .fundo-dialogo {
@@ -265,6 +267,11 @@ body[data-pagina='tv'] { background: #1A1C15; color: var(--pedra); overflow: hid
 .ficha { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 16px 0; }
 .ficha dt { font-size: 0.75rem; color: var(--tinta-2); }
 .ficha dd { margin: 0; font-weight: 550; }
+.ficha.negociacao { background: var(--pedra); border-radius: 6px; padding: 12px; margin-top: -4px; }
+.ficha .largo, .campos .largo { grid-column: 1 / -1; }
+.campos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-bottom: 12px; }
+.campos label { display: flex; flex-direction: column; gap: 4px; font-size: 0.875rem; color: var(--tinta-2); }
+.campos input { padding: 10px 12px; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--branco); color: var(--tinta); min-width: 0; }
 .opcoes { border: 0; padding: 0; margin: 0 0 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .opcoes legend { font-size: 0.875rem; color: var(--tinta-2); margin-bottom: 6px; }
 .opcao {

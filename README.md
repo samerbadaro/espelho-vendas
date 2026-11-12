@@ -10,6 +10,16 @@ Espelho de unidades em tempo real, para uso interno da Launch.
 
 O sistema não guarda nenhum dado pessoal de comprador.
 
+## Status e dados exigidos
+
+| Status | O painel pede |
+|---|---|
+| Reservada | Imobiliária, corretor e cliente |
+| Proposta recebida | Valor da venda e PV aprovado (%) |
+| Contrato em assinatura | Nada |
+| Vendida | Nada |
+| Disponível ou Bloqueada (desfazendo negociação) | Motivo |
+
 ## Tecnologia
 
 - **Supabase**: banco PostgreSQL, login e tempo real. Toda alteração passa pela função `alterar_status`, que confere permissão, trava a unidade, detecta edição simultânea (erro `CONFLITO`) e grava o histórico.
@@ -21,6 +31,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 
 1. `supabase/migrations/001_estrutura.sql`
 2. `supabase/migrations/002_unidades.sql` (173 unidades, do 2º ao 17º andar)
+3. `supabase/migrations/003_negociacoes.sql` (status Proposta recebida e Contrato em assinatura; dados da negociação visíveis só para a equipe)
 
 ### Criar usuário da equipe
 
@@ -40,7 +51,7 @@ select id, email, 'admin' from auth.users where email = 'email@exemplo.com';
 Com PostgreSQL 16 local, aplique `supabase/tests/stub_supabase.sql` e as migrações num banco `espelho`. Depois rode:
 
 ```bash
-psql -d espelho -f supabase/tests/testes_permissoes.sql   # 16 testes de permissão
+psql -d espelho -f supabase/tests/testes_permissoes.sql   # 23 testes de permissão e de fluxo
 ./supabase/tests/teste_simultaneo.sh                      # duas alterações ao mesmo tempo
 ```
 
