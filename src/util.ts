@@ -60,9 +60,10 @@ export const ESTADOS_CIVIS: { valor: EstadoCivil; rotulo: string }[] = [
 ];
 export const temConjuge = (e: EstadoCivil) => e === 'casado' || e === 'uniao_estavel';
 
-export type StatusPasta = 'incompleta' | 'aguardando_analise' | 'em_analise' | 'pendente_correcao' | 'aprovada';
+export type StatusPasta = 'incompleta' | 'pronta' | 'aguardando_analise' | 'em_analise' | 'pendente_correcao' | 'aprovada';
 export const STATUS_PASTA: { valor: StatusPasta; rotulo: string }[] = [
   { valor: 'incompleta', rotulo: 'Incompleta' },
+  { valor: 'pronta', rotulo: 'Pronta para submeter' },
   { valor: 'aguardando_analise', rotulo: 'Aguardando análise' },
   { valor: 'em_analise', rotulo: 'Em análise' },
   { valor: 'pendente_correcao', rotulo: 'Pendente de correção' },

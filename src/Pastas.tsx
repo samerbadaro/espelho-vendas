@@ -9,6 +9,7 @@ import {
 interface PastaResumo {
   id: string; codigo: string; comprador_nome: string; comprador_cpf: string; status: StatusPasta;
   criada_em: string; imobiliaria_id: string; criado_por: string | null;
+  codigo_aprovacao: string | null; submetida_em: string | null;
   imobiliarias: { nome: string } | null; unidades: { numero: string } | null;
 }
 
@@ -24,6 +25,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
   const [imob, setImob] = useState('');
   const [erro, setErro] = useState('');
   const equipe = ehEquipe(perfil);
+  const [aba, setAba] = useState<'submetidas' | 'todas'>(equipe ? 'submetidas' : 'todas');
   const verCriador = equipe || perfil.papel === 'imobiliaria';
   const [corretores, setCorretores] = useState<Record<string, string>>({});
 
@@ -37,7 +39,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     supabase.from('pastas')
-      .select('id, codigo, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, imobiliarias(nome), unidades(numero)')
+      .select('id, codigo, codigo_aprovacao, submetida_em, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, imobiliarias(nome), unidades(numero)')
       .order('criada_em', { ascending: false })
       .then(({ data, error }) => {
         if (error) setErro('Não foi possível carregar as pastas. Recarregue a página.');
@@ -55,11 +57,13 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
     const t = busca.trim().toLowerCase();
     const d = soDigitos(busca);
     return (pastas ?? []).filter((p) =>
-      (!t || p.comprador_nome.toLowerCase().includes(t) || p.codigo.toLowerCase().includes(t)
+      (aba === 'todas' || p.codigo_aprovacao)
+      && (!t || p.comprador_nome.toLowerCase().includes(t) || p.codigo.toLowerCase().includes(t)
+                || (p.codigo_aprovacao ?? '').toLowerCase().includes(t)
         || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades?.numero ?? '').includes(t))
       && (!status || p.status === status)
       && (!imob || p.imobiliaria_id === imob));
-  }, [pastas, busca, status, imob, corretores]);
+  }, [pastas, busca, status, imob, corretores, aba]);
 
   return (
     <section className="secao">
@@ -67,6 +71,16 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
         <h2>Pastas de compradores</h2>
         <button className="botao principal" onClick={() => ir('/painel/pastas/nova')}>Nova pasta</button>
       </div>
+      {equipe && pastas && (
+        <div className="abas" role="tablist">
+          <button role="tab" aria-selected={aba === 'submetidas'} className={aba === 'submetidas' ? 'ativa' : ''} onClick={() => setAba('submetidas')}>
+            Submetidas ao incorporador <span className="contagem">{pastas.filter((p) => p.codigo_aprovacao).length}</span>
+          </button>
+          <button role="tab" aria-selected={aba === 'todas'} className={aba === 'todas' ? 'ativa' : ''} onClick={() => setAba('todas')}>
+            Todas as pastas criadas <span className="contagem">{pastas.length}</span>
+          </button>
+        </div>
+      )}
       <div className="filtros">
         <input type="search" placeholder={verCriador ? "Buscar por nome, CPF, código, unidade ou corretor" : "Buscar por nome, CPF, código ou unidade"} value={busca} onChange={(e) => setBusca(e.target.value)} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filtrar por status">
@@ -82,12 +96,12 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
       </div>
       {erro && <p className="erro">{erro}</p>}
       {pastas === null ? <p className="vazio">Carregando…</p> : filtradas.length === 0 ? (
-        <p className="vazio">{pastas.length === 0 ? 'Nenhuma pasta cadastrada ainda. Use “Nova pasta” para começar.' : 'Nenhuma pasta encontrada com esses filtros.'}</p>
+        <p className="vazio">{pastas.length === 0 ? 'Nenhuma pasta cadastrada ainda. Use “Nova pasta” para começar.' : aba === 'submetidas' && !busca && !status && !imob ? 'Nenhuma pasta foi submetida ao incorporador ainda.' : 'Nenhuma pasta encontrada com esses filtros.'}</p>
       ) : (
         <table className="tabela">
           <thead>
             <tr>
-              <th>Código</th><th>Comprador</th><th>CPF</th>
+              <th>Pasta</th><th>Aprovação</th><th>Comprador</th><th>CPF</th>
               {equipe && <th>Imobiliária</th>}
               {verCriador && <th>Cadastrada por</th>}
               <th>Unidade</th><th>Status</th><th>Cadastro</th>
@@ -98,8 +112,9 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
               <tr key={p.id} onClick={() => ir(`/painel/pastas/${p.id}`)} tabIndex={0}
                 onKeyDown={(e) => e.key === 'Enter' && ir(`/painel/pastas/${p.id}`)}>
                 <td className="mono">{p.codigo}</td>
+                <td className="mono">{p.codigo_aprovacao ?? '—'}</td>
                 <td><strong>{p.comprador_nome}</strong></td>
-                <td>{formatarCPF(p.comprador_cpf)}</td>
+                <td className="nowrap">{formatarCPF(p.comprador_cpf)}</td>
                 {equipe && <td>{p.imobiliarias?.nome}</td>}
                 {verCriador && <td>{p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '—'}</td>}
                 <td>{p.unidades?.numero ?? '—'}</td>
@@ -123,15 +138,16 @@ interface Pasta {
   comprador_telefone: string | null; comprador_email: string | null; estado_civil: EstadoCivil;
   conjuge_nome: string | null; conjuge_cpf: string | null; conjuge_nascimento: string | null;
   conjuge_telefone: string | null; conjuge_email: string | null;
-  dados_bancarios: string | null; observacoes: string | null; criado_por: string | null; criada_em: string;
+  comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criada_em: string;
+  codigo_aprovacao: string | null; submetida_em: string | null; submetida_por: string | null;
   imobiliarias?: { nome: string } | null; unidades?: { numero: string } | null;
 }
-type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criada_em' | 'imobiliarias' | 'unidades'>;
+type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criada_em' | 'imobiliarias' | 'unidades' | 'codigo_aprovacao' | 'submetida_em' | 'submetida_por'>;
 
 const FORM_VAZIO: Form = {
   imobiliaria_id: '', comprador_nome: '', comprador_cpf: '', comprador_nascimento: null, comprador_telefone: '',
-  comprador_email: '', estado_civil: 'solteiro', conjuge_nome: '', conjuge_cpf: '', conjuge_nascimento: null,
-  conjuge_telefone: '', conjuge_email: '', dados_bancarios: '', observacoes: '',
+  comprador_email: '', comprador_profissao: '', estado_civil: 'solteiro', conjuge_nome: '', conjuge_cpf: '', conjuge_nascimento: null,
+  conjuge_telefone: '', conjuge_email: '', observacoes: '',
 };
 
 export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
@@ -155,10 +171,10 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     setForm({
       imobiliaria_id: p.imobiliaria_id, comprador_nome: p.comprador_nome, comprador_cpf: formatarCPF(p.comprador_cpf),
       comprador_nascimento: p.comprador_nascimento, comprador_telefone: formatarTelefone(p.comprador_telefone),
-      comprador_email: p.comprador_email ?? '', estado_civil: p.estado_civil, conjuge_nome: p.conjuge_nome ?? '',
+      comprador_email: p.comprador_email ?? '', comprador_profissao: p.comprador_profissao ?? '', estado_civil: p.estado_civil, conjuge_nome: p.conjuge_nome ?? '',
       conjuge_cpf: formatarCPF(p.conjuge_cpf), conjuge_nascimento: p.conjuge_nascimento,
       conjuge_telefone: formatarTelefone(p.conjuge_telefone), conjuge_email: p.conjuge_email ?? '',
-      dados_bancarios: p.dados_bancarios ?? '', observacoes: p.observacoes ?? '',
+      observacoes: p.observacoes ?? '',
     });
   }, [id, nova]);
 
@@ -178,6 +194,9 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     setErro(''); setAviso('');
     if (form.comprador_nome.trim().length < 3) { setErro('Informe o nome completo do comprador.'); return; }
     if (!cpfValido(form.comprador_cpf)) { setErro('O CPF do comprador não é válido. Confira os números.'); return; }
+    if (soDigitos(form.comprador_telefone || '').length < 10) { setErro('Informe o telefone do comprador com DDD.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((form.comprador_email || '').trim())) { setErro('Informe um e-mail válido para o comprador.'); return; }
+    if ((form.comprador_profissao || '').trim().length < 2) { setErro('Informe a profissão do comprador.'); return; }
     const casal = temConjuge(form.estado_civil);
     if (casal && form.conjuge_cpf && !cpfValido(form.conjuge_cpf)) { setErro('O CPF do cônjuge não é válido. Confira os números.'); return; }
     if (nova && equipe && !form.imobiliaria_id) { setErro('Escolha a imobiliária responsável pela pasta.'); return; }
@@ -186,13 +205,13 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     const dados = {
       comprador_nome: form.comprador_nome.trim(), comprador_cpf: soDigitos(form.comprador_cpf),
       comprador_nascimento: form.comprador_nascimento || null, comprador_telefone: vazioNulo(soDigitos(form.comprador_telefone || '')),
-      comprador_email: vazioNulo(form.comprador_email), estado_civil: form.estado_civil,
+      comprador_email: vazioNulo(form.comprador_email), comprador_profissao: vazioNulo(form.comprador_profissao), estado_civil: form.estado_civil,
       conjuge_nome: casal ? vazioNulo(form.conjuge_nome) : null,
       conjuge_cpf: casal ? vazioNulo(soDigitos(form.conjuge_cpf || '')) : null,
       conjuge_nascimento: casal ? form.conjuge_nascimento || null : null,
       conjuge_telefone: casal ? vazioNulo(soDigitos(form.conjuge_telefone || '')) : null,
       conjuge_email: casal ? vazioNulo(form.conjuge_email) : null,
-      dados_bancarios: vazioNulo(form.dados_bancarios), observacoes: vazioNulo(form.observacoes),
+      observacoes: vazioNulo(form.observacoes),
     };
     setSalvando(true);
     if (nova) {
@@ -221,6 +240,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
           {!nova && (
             <p className="sub">
               <span className="mono">{pasta!.codigo}</span>
+              {pasta!.codigo_aprovacao && <>, aprovação <span className="mono">{pasta!.codigo_aprovacao}</span></>}
               {equipe && pasta!.imobiliarias && <>, {pasta!.imobiliarias.nome}</>}
               , cadastrada{pasta!.criado_por && perfil.papel !== 'corretor' ? ` por ${pasta!.criado_por}` : ''} em {formatarData(pasta!.criada_em)}
             </p>
@@ -235,7 +255,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       <form className="cartao" onSubmit={salvar}>
         <div className="cartao-topo">
           <h3>Dados do comprador</h3>
-          {!nova && !editando && <button type="button" className="botao" onClick={() => setEditando(true)}>Editar dados</button>}
+          {!nova && !editando && (equipe || !pasta!.codigo_aprovacao) && <button type="button" className="botao" onClick={() => setEditando(true)}>Editar dados</button>}
         </div>
         <fieldset disabled={!editando || salvando} className="grade-campos">
           {nova && equipe && (
@@ -250,9 +270,10 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
           <label>CPF<input {...campo('comprador_cpf')} inputMode="numeric" required
             onChange={(e) => setForm((f) => ({ ...f, comprador_cpf: formatarCPF(e.target.value) }))} /></label>
           <label>Data de nascimento<input type="date" {...campo('comprador_nascimento')} /></label>
-          <label>Telefone<input {...campo('comprador_telefone')} inputMode="tel"
+          <label>Telefone<input {...campo('comprador_telefone')} inputMode="tel" required
             onChange={(e) => setForm((f) => ({ ...f, comprador_telefone: formatarTelefone(e.target.value) }))} /></label>
-          <label>E-mail<input type="email" {...campo('comprador_email')} maxLength={160} /></label>
+          <label>E-mail<input type="email" {...campo('comprador_email')} maxLength={160} required /></label>
+          <label>Profissão<input {...campo('comprador_profissao')} maxLength={120} required /></label>
           <label>Estado civil
             <select {...campo('estado_civil')}>
               {ESTADOS_CIVIS.map((e) => <option key={e.valor} value={e.valor}>{e.rotulo}</option>)}
@@ -275,10 +296,9 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
           </>
         )}
 
-        <h3>Complementares</h3>
+        <h3>Observações</h3>
         <fieldset disabled={!editando || salvando} className="grade-campos">
-          <label className="largo">Dados bancários ou chave PIX<input {...campo('dados_bancarios')} maxLength={300} /></label>
-          <label className="largo">Observações<textarea rows={2} {...campo('observacoes')} maxLength={1000} /></label>
+          <label className="largo">Observações (opcional)<textarea rows={2} {...campo('observacoes')} maxLength={1000} /></label>
         </fieldset>
 
         {erro && <p className="erro" role="alert">{erro}</p>}
@@ -293,6 +313,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
         )}
       </form>
 
+      {!nova && <Submissao pasta={pasta!} equipe={equipe} aoSubmeter={() => setRecarga((n) => n + 1)} />}
       {!nova && <Documentos pasta={pasta!} estadoCivil={pasta!.estado_civil} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && <HistoricoPasta pastaId={id} recarga={recarga} />}
     </section>
@@ -458,7 +479,7 @@ function LinhaDocumento({ tipo, pasta, equipe, obrigatorio, docs, aoMudar }: {
           {d.analisado_por && d.status !== 'recusado' && d.status !== 'enviado' && (
             <span className="meta">{ROTULO_DOC[d.status]} por {d.analisado_por} em {formatarDataHora(d.analisado_em!)}</span>
           )}
-          {equipe && (
+          {equipe && pasta.codigo_aprovacao && (
             <div className="analise">
               {d.status !== 'em_analise' && d.status !== 'aprovado' && <button type="button" className="botao pequeno" onClick={() => analisar(d, 'em_analise')}>Em análise</button>}
               {d.status !== 'aprovado' && <button type="button" className="botao pequeno ok" onClick={() => analisar(d, 'aprovado')}>Aprovar</button>}
@@ -518,7 +539,7 @@ function HistoricoPasta({ pastaId, recarga }: { pastaId: string; recarga: number
   const descrever = (d: Record<string, unknown> | null) => {
     if (!d) return '';
     if (Array.isArray(d.campos)) return `Campos: ${(d.campos as string[]).map((c) => c.replace(/_/g, ' ')).join(', ')}`;
-    return [d.documento, d.arquivo, d.unidade && `Unidade ${d.unidade}`, d.motivo && `Motivo: ${d.motivo}`].filter(Boolean).join('; ');
+    return [d.codigo, d.documento, d.arquivo, d.unidade && `Unidade ${d.unidade}`, d.motivo && `Motivo: ${d.motivo}`].filter(Boolean).join('; ');
   };
   return (
     <div className="cartao">
@@ -532,6 +553,54 @@ function HistoricoPasta({ pastaId, recarga }: { pastaId: string; recarga: number
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Submissão ao incorporador
+// ---------------------------------------------------------------------
+function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolean; aoSubmeter: () => void }) {
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  if (pasta.codigo_aprovacao) {
+    return (
+      <div className="submissao feita">
+        <p><strong>Submetida ao incorporador</strong> com o código <span className="mono">{pasta.codigo_aprovacao}</span>
+          {pasta.submetida_em && <> em {formatarDataHora(pasta.submetida_em)}</>}{pasta.submetida_por && <> por {pasta.submetida_por}</>}.</p>
+        {!equipe && <p className="dica">Os dados do comprador ficam bloqueados para edição. Documentos recusados podem ser substituídos abaixo.</p>}
+      </div>
+    );
+  }
+
+  const pronta = pasta.status === 'pronta';
+  const submeter = async () => {
+    if (!confirm('Submeter a pasta para aprovação do incorporador? Depois disso os dados do comprador não poderão mais ser editados pela imobiliária.')) return;
+    setErro(''); setEnviando(true);
+    const { error } = await supabase.rpc('submeter_pasta', { p_pasta: pasta.id });
+    setEnviando(false);
+    if (error) {
+      setErro(error.message.includes('DOCUMENTOS_FALTANDO') ? 'Ainda falta anexar documento obrigatório.'
+        : error.message.includes('DADOS_INCOMPLETOS') ? 'Preencha telefone, e-mail e profissão do comprador antes de submeter.'
+        : 'Não foi possível submeter a pasta. Tente novamente.');
+      return;
+    }
+    aoSubmeter();
+  };
+  return (
+    <div className={`submissao${pronta ? ' pronta' : ''}`}>
+      <div>
+        <p><strong>{pronta ? 'Todos os documentos obrigatórios foram anexados.' : 'Pasta em preparação.'}</strong></p>
+        <p className="dica">{pronta
+          ? 'Submeta a pasta para o incorporador analisar. Ela receberá um código de aprovação (PA).'
+          : equipe ? 'A imobiliária ainda não anexou todos os documentos obrigatórios. A análise começa depois que a pasta for submetida.'
+            : 'Anexe todos os documentos marcados como obrigatórios para liberar o envio ao incorporador.'}</p>
+        {erro && <p className="erro">{erro}</p>}
+      </div>
+      <button className="botao principal" disabled={!pronta || enviando} onClick={submeter}>
+        {enviando ? 'Submetendo…' : 'Submeter ao incorporador'}
+      </button>
     </div>
   );
 }

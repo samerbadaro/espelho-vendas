@@ -27,13 +27,17 @@ create or replace function pg_temp.como(u text) returns void language sql as $$
 
 -- ===== Imobiliária A cria pasta =====
 set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000d');
-insert into pastas (comprador_nome, comprador_cpf, estado_civil) values ('Maria Teste', '12345678901', 'solteiro');
+do $$ begin insert into pastas (comprador_nome, comprador_cpf) values ('Sem Profissão', '10101010101');
+  insert into r(teste, ok) values ('Pasta sem telefone/e-mail/profissão é recusada', false);
+exception when others then insert into r(teste, ok) values ('Pasta sem telefone/e-mail/profissão é recusada', true); end $$;
+insert into pastas (comprador_nome, comprador_cpf, estado_civil, comprador_telefone, comprador_email, comprador_profissao)
+  values ('Maria Teste', '12345678901', 'solteiro', '64999998888', 'maria@t.com', 'Engenheira');
 insert into ctx select 'pasta', id::text from pastas where comprador_cpf='12345678901';
-insert into r(teste, ok) select 'A cria pasta (incompleta, código P-0001, ligada à A)',
-  (select status='incompleta' and codigo='P-0001' and imobiliaria_id='aaaaaaaa-0000-0000-0000-000000000001' from pastas limit 1);
+insert into r(teste, ok) select 'A cria pasta (incompleta, código P-00X, ligada à A)',
+  (select status='incompleta' and codigo ~ '^P-[0-9]{3}$' and imobiliaria_id='aaaaaaaa-0000-0000-0000-000000000001' from pastas limit 1);
 insert into r(teste, ok) select 'Histórico registra criação', exists(select 1 from historico_pastas where acao='Pasta criada' and usuario_email='imob-a@teste');
 do $$ begin
-  insert into pastas (imobiliaria_id, comprador_nome, comprador_cpf) values ('bbbbbbbb-0000-0000-0000-000000000002', 'Invasor', '99999999999');
+  insert into pastas (imobiliaria_id, comprador_nome, comprador_cpf, comprador_telefone, comprador_email, comprador_profissao) values ('bbbbbbbb-0000-0000-0000-000000000002', 'Invasor', '99999999999', '64999998888', 'x@t.com', 'X');
   insert into r(teste, ok) values ('A não cria pasta em nome da B', false);
 exception when others then insert into r(teste, ok) values ('A não cria pasta em nome da B', true); end $$;
 do $$ begin update pastas set status='aprovada';
@@ -51,7 +55,8 @@ insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-000
 insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/end.pdf' from ctx where k='pasta';
 insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/nasc.pdf' from ctx where k='pasta';
 insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/rg2.pdf' from ctx where k='pasta';
-insert into r(teste, ok) select 'A envia arquivos para a própria pasta', (select count(*) from storage.objects) = 4;
+insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/pix.pdf' from ctx where k='pasta';
+insert into r(teste, ok) select 'A envia arquivos para a própria pasta', (select count(*) from storage.objects) = 5;
 do $$ declare d documentos; p uuid := (select v::uuid from ctx where k='pasta'); begin
   d := registrar_documento(p, 1, 'aaaaaaaa-0000-0000-0000-000000000001/'||p||'/rg.pdf', 'rg.pdf', 1000, 'application/pdf');
   insert into ctx values ('doc_rg', d.id::text);
@@ -60,7 +65,12 @@ do $$ declare d documentos; p uuid := (select v::uuid from ctx where k='pasta');
   insert into ctx values ('doc_end', d.id::text);
   d := registrar_documento(p, 4, 'aaaaaaaa-0000-0000-0000-000000000001/'||p||'/nasc.pdf', 'nasc.pdf', 1000, 'application/pdf');
   insert into ctx values ('doc_nasc', d.id::text);
-  insert into r(teste, ok) select 'Obrigatórios enviados: aguardando análise', (select status='aguardando_analise' from pastas where id=p);
+  insert into r(teste, ok) select 'Sem o comprovante do PIX segue incompleta', (select status='incompleta' from pastas where id=p);
+  begin perform submeter_pasta(p); insert into r(teste, ok) values ('Não submete com documento faltando', false);
+  exception when others then insert into r(teste, ok) values ('Não submete com documento faltando', sqlerrm='DOCUMENTOS_FALTANDO'); end;
+  d := registrar_documento(p, 13, 'aaaaaaaa-0000-0000-0000-000000000001/'||p||'/pix.pdf', 'pix.pdf', 1000, 'application/pdf');
+  insert into ctx values ('doc_pix', d.id::text);
+  insert into r(teste, ok) select 'Obrigatórios anexados: pronta para submeter (sem código PA)', (select status='pronta' and codigo_aprovacao is null from pastas where id=p);
 end $$;
 do $$ begin perform registrar_documento((select v::uuid from ctx where k='pasta'), 2, 'aaaaaaaa-0000-0000-0000-000000000001/x/naoexiste.pdf', 'x.pdf', 1, 'application/pdf');
   insert into r(teste, ok) values ('Registro com caminho de outra pasta é recusado', false);
@@ -80,6 +90,23 @@ insert into r(teste, ok) select 'A vê só o próprio perfil', (select count(*) 
 do $$ begin insert into imobiliarias (nome) values ('Nova');
   insert into r(teste, ok) values ('Imobiliária não cadastra imobiliária', false);
 exception when others then insert into r(teste, ok) values ('Imobiliária não cadastra imobiliária', true); end $$;
+reset role;
+
+reset role;
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000b');
+do $$ begin perform analisar_documento((select v::uuid from ctx where k='doc_rg'), 'aprovado');
+  insert into r(teste, ok) values ('Equipe não analisa pasta ainda não submetida', false);
+exception when others then insert into r(teste, ok) values ('Equipe não analisa pasta ainda não submetida', sqlerrm='PASTA_NAO_SUBMETIDA'); end $$;
+reset role;
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000d');
+select submeter_pasta((select v::uuid from ctx where k='pasta')) \g /dev/null
+insert into r(teste, ok) select 'A submete: recebe PA-001 e fica aguardando análise',
+  (select codigo_aprovacao='PA-001' and status='aguardando_analise' and submetida_por='imob-a@teste' from pastas);
+do $$ begin perform submeter_pasta((select v::uuid from ctx where k='pasta'));
+  insert into r(teste, ok) values ('Não submete duas vezes', false);
+exception when others then insert into r(teste, ok) values ('Não submete duas vezes', sqlerrm='JA_SUBMETIDA'); end $$;
+do $$ declare n int; begin update pastas set comprador_nome='Mudado'; get diagnostics n = row_count;
+  insert into r(teste, ok) values ('Depois de submetida a imobiliária não edita os dados', n = 0); end $$;
 reset role;
 
 -- ===== Imobiliária B tenta acessar dados da A =====
@@ -130,7 +157,7 @@ end $$;
 reset role;
 
 set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000b');
-select analisar_documento(v::uuid, 'aprovado') from ctx where k in ('doc_rg2', 'doc_end', 'doc_nasc') \g /dev/null
+select analisar_documento(v::uuid, 'aprovado') from ctx where k in ('doc_rg2', 'doc_end', 'doc_nasc', 'doc_pix') \g /dev/null
 insert into r(teste, ok) select 'Todos obrigatórios aprovados: pasta aprovada', (select status='aprovada' from pastas);
 select vincular_unidade((select v::uuid from ctx where k='pasta'), (select id from unidades where numero='1205')) \g /dev/null
 insert into r(teste, ok) select 'Equipe vincula unidade', (select u.numero='1205' from pastas p join unidades u on u.id=p.unidade_id);
@@ -142,8 +169,10 @@ do $$ declare p uuid := (select v::uuid from ctx where k='pasta'); begin
   perform registrar_documento(p, 1, 'aaaaaaaa-0000-0000-0000-000000000001/'||p||'/rg3.pdf', 'rg3.pdf', 1, 'application/pdf');
   insert into r(teste, ok) values ('A não substitui documento já aprovado', false);
 exception when others then insert into r(teste, ok) values ('A não substitui documento já aprovado', sqlerrm='DOCUMENTO_BLOQUEADO'); end $$;
+reset role;
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000b');
 update pastas set estado_civil='casado', conjuge_nome='João Teste', conjuge_cpf='11122233344';
-insert into r(teste, ok) select 'Mudar para casado exige docs do cônjuge (volta a incompleta)', (select status='incompleta' from pastas);
+insert into r(teste, ok) select 'Equipe muda para casado: exige docs do cônjuge (volta a incompleta)', (select status='incompleta' from pastas);
 update pastas set estado_civil='solteiro';
 insert into r(teste, ok) select 'Voltar para solteiro apaga dados do cônjuge', (select conjuge_nome is null and conjuge_cpf is null from pastas);
 reset role;
@@ -176,7 +205,7 @@ insert into perfis (user_id, email, papel, imobiliaria_id) values
   ('00000000-0000-0000-0000-0000000000c1', 'corretor1@teste', 'corretor', 'aaaaaaaa-0000-0000-0000-000000000001'),
   ('00000000-0000-0000-0000-0000000000c2', 'corretor2@teste', 'corretor', 'aaaaaaaa-0000-0000-0000-000000000001') on conflict do nothing;
 set role authenticated; select pg_temp.como('00000000-0000-0000-0000-0000000000c1');
-insert into pastas (comprador_nome, comprador_cpf) values ('Cliente do Corretor 1', '22233344455');
+insert into pastas (comprador_nome, comprador_cpf, comprador_telefone, comprador_email, comprador_profissao) values ('Cliente do Corretor 1', '22233344455', '64988887777', 'c@t.com', 'Médico');
 insert into ctx select 'pasta_c1', id::text from pastas where comprador_cpf='22233344455';
 insert into r(teste, ok) select 'Corretor 1 cria pasta (fica registrado como criador)',
   (select criado_por_id='00000000-0000-0000-0000-0000000000c1' and imobiliaria_id='aaaaaaaa-0000-0000-0000-000000000001' from pastas where comprador_cpf='22233344455');

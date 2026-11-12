@@ -336,6 +336,7 @@ body[data-pagina='tv'] { background: #1A1C15; color: var(--pedra); overflow: hid
 .selo { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; white-space: nowrap; background: var(--fundo-selo); color: var(--cor-selo); }
 .selo.grande { font-size: 0.9375rem; padding: 6px 14px; }
 .sp-incompleta, .sd-pendente           { --fundo-selo: #E4E5DF; --cor-selo: #4C4F45; }
+.sp-pronta                             { --fundo-selo: #E9E2C6; --cor-selo: #5E5520; }
 .sp-aguardando_analise, .sd-enviado    { --fundo-selo: #DCE6F3; --cor-selo: #234E86; }
 .sp-em_analise, .sd-em_analise         { --fundo-selo: #F3E7CF; --cor-selo: #7F5309; }
 .sp-pendente_correcao, .sd-recusado    { --fundo-selo: #F5DCD9; --cor-selo: #8E2A23; }
@@ -395,3 +396,15 @@ body[data-pagina='tv'] { background: #1A1C15; color: var(--pedra); overflow: hid
   .acoes-linha { text-align: left; }
   .menu { order: 3; width: 100%; }
 }
+
+/* ===== Abas e submissão ===== */
+.abas { display: flex; gap: 4px; border-bottom: 1px solid var(--linha); margin-bottom: 14px; flex-wrap: wrap; }
+.abas button { border: 0; background: none; padding: 10px 14px; font-weight: 600; color: var(--tinta-2); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.abas button.ativa { color: var(--tinta); border-bottom-color: var(--latao); }
+.contagem { display: inline-block; min-width: 1.6em; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--pedra-2); font-size: 0.8125rem; text-align: center; }
+.submissao { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: var(--branco); border: 1px solid var(--linha); border-left: 4px solid var(--linha); border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; }
+.submissao p { margin: 0 0 4px; }
+.submissao.pronta { border-left-color: var(--latao); background: #FBF8EC; }
+.submissao.feita { border-left-color: var(--disponivel); display: block; }
+.tabela .mono, .tabela .nowrap { white-space: nowrap; }
