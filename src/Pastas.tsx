@@ -174,7 +174,7 @@ interface Pasta {
   comprador_nome: string; comprador_cpf: string; comprador_nascimento: string | null;
   comprador_telefone: string | null; comprador_email: string | null; estado_civil: EstadoCivil;
   conjuge_nome: string | null; conjuge_cpf: string | null; conjuge_nascimento: string | null;
-  conjuge_telefone: string | null; conjuge_email: string | null;
+  conjuge_telefone: string | null; conjuge_email: string | null; conjuge_profissao: string | null;
   comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criada_em: string;
   codigo_aprovacao: string | null; submetida_em: string | null; submetida_por: string | null;
   imobiliarias?: { nome: string } | null; unidades?: { numero: string } | null;
@@ -184,7 +184,7 @@ type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por'
 const FORM_VAZIO: Form = {
   imobiliaria_id: '', comprador_nome: '', comprador_cpf: '', comprador_nascimento: null, comprador_telefone: '',
   comprador_email: '', comprador_profissao: '', estado_civil: 'solteiro', conjuge_nome: '', conjuge_cpf: '', conjuge_nascimento: null,
-  conjuge_telefone: '', conjuge_email: '', observacoes: '',
+  conjuge_telefone: '', conjuge_email: '', conjuge_profissao: '', observacoes: '',
 };
 
 export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
@@ -210,7 +210,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       comprador_nascimento: p.comprador_nascimento, comprador_telefone: formatarTelefone(p.comprador_telefone),
       comprador_email: p.comprador_email ?? '', comprador_profissao: p.comprador_profissao ?? '', estado_civil: p.estado_civil, conjuge_nome: p.conjuge_nome ?? '',
       conjuge_cpf: formatarCPF(p.conjuge_cpf), conjuge_nascimento: p.conjuge_nascimento,
-      conjuge_telefone: formatarTelefone(p.conjuge_telefone), conjuge_email: p.conjuge_email ?? '',
+      conjuge_telefone: formatarTelefone(p.conjuge_telefone), conjuge_email: p.conjuge_email ?? '', conjuge_profissao: p.conjuge_profissao ?? '',
       observacoes: p.observacoes ?? '',
     });
   }, [id, nova]);
@@ -236,6 +236,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     if ((form.comprador_profissao || '').trim().length < 2) { setErro('Informe a profissão do comprador.'); return; }
     const casal = temConjuge(form.estado_civil);
     if (casal && form.conjuge_cpf && !cpfValido(form.conjuge_cpf)) { setErro('O CPF do cônjuge não é válido. Confira os números.'); return; }
+    if (casal && (form.conjuge_profissao || '').trim().length < 2) { setErro('Informe a profissão do cônjuge.'); return; }
     if (nova && equipe && !form.imobiliaria_id) { setErro('Escolha a imobiliária responsável pela pasta.'); return; }
 
     const vazioNulo = (s: string | null) => (s && s.trim() ? s.trim() : null);
@@ -248,6 +249,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       conjuge_nascimento: casal ? form.conjuge_nascimento || null : null,
       conjuge_telefone: casal ? vazioNulo(soDigitos(form.conjuge_telefone || '')) : null,
       conjuge_email: casal ? vazioNulo(form.conjuge_email) : null,
+      conjuge_profissao: casal ? vazioNulo(form.conjuge_profissao) : null,
       observacoes: vazioNulo(form.observacoes),
     };
     setSalvando(true);
@@ -326,6 +328,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
               <label>CPF<input {...campo('conjuge_cpf')} inputMode="numeric"
                 onChange={(e) => setForm((f) => ({ ...f, conjuge_cpf: formatarCPF(e.target.value) }))} /></label>
               <label>Data de nascimento<input type="date" {...campo('conjuge_nascimento')} /></label>
+              <label>Profissão<input {...campo('conjuge_profissao')} maxLength={120} required /></label>
               <label>Telefone (opcional)<input {...campo('conjuge_telefone')} inputMode="tel"
                 onChange={(e) => setForm((f) => ({ ...f, conjuge_telefone: formatarTelefone(e.target.value) }))} /></label>
               <label>E-mail (opcional)<input type="email" {...campo('conjuge_email')} maxLength={160} /></label>
@@ -620,6 +623,7 @@ function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolea
     setEnviando(false);
     if (error) {
       setErro(error.message.includes('DOCUMENTOS_FALTANDO') ? 'Ainda falta anexar documento obrigatório.'
+        : error.message.includes('DADOS_CONJUGE_INCOMPLETOS') ? 'Preencha nome, CPF e profissão do cônjuge antes de submeter.'
         : error.message.includes('DADOS_INCOMPLETOS') ? 'Preencha telefone, e-mail e profissão do comprador antes de submeter.'
         : 'Não foi possível submeter a pasta. Tente novamente.');
       return;

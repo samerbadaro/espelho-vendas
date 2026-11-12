@@ -38,6 +38,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 7. `supabase/migrations/007_correcao_obrigatorios.sql` (campos obrigatórios só ao criar/editar)
 8. `supabase/migrations/008_marca_e_visualizacoes.sql` (marca configurável, módulo de pastas opcional, registro de visualização de documentos, indicadores)
 9. `supabase/migrations/009_relatorios.sql` (Sec. Vendas vê os nomes dos logins, para relatórios e exportação)
+10. `supabase/migrations/010_profissao_conjuge.sql` (profissão do cônjuge; submissão exige nome, CPF e profissão do cônjuge)
 
 ### Criar usuário da equipe
 
