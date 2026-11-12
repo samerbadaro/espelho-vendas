@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { supabase, formatarDataHora } from './dados';
 import { useDialogos } from './ui';
+import { FileSpreadsheet, BarChart3 } from 'lucide-react';
 import {
   ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarTelefone, formatarData, formatarTamanho,
   ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC,
@@ -61,17 +62,52 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
       (aba === 'todas' || p.codigo_aprovacao)
       && (!t || p.comprador_nome.toLowerCase().includes(t) || p.codigo.toLowerCase().includes(t)
                 || (p.codigo_aprovacao ?? '').toLowerCase().includes(t)
-        || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades?.numero ?? '').includes(t))
+        || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades?.numero ?? '').includes(t)
+        || (corretores[p.criado_por ?? ''] ?? p.criado_por ?? '').toLowerCase().includes(t))
       && (!status || p.status === status)
       && (!imob || p.imobiliaria_id === imob));
   }, [pastas, busca, status, imob, corretores, aba]);
+
+  const [verResumo, setVerResumo] = useState(false);
+  const nomeCriador = (p: PastaResumo) => (p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '');
+
+  const exportar = () => {
+    const cab = ['Pasta', 'Aprovação (PA)', 'Cliente', 'Corretor', 'Imobiliária', 'Unidade', 'Status', 'Data de criação', 'Data de submissão'];
+    const linhas = filtradas.map((p) => [
+      p.codigo, p.codigo_aprovacao ?? '', p.comprador_nome, nomeCriador(p), p.imobiliarias?.nome ?? '',
+      p.unidades?.numero ?? '', rotuloPasta(p.status), formatarData(p.criada_em), p.submetida_em ? formatarData(p.submetida_em) : '',
+    ]);
+    const csv = [cab, ...linhas].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `pastas-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   return (
     <section className="secao">
       <div className="secao-topo">
         <h2>Pastas de compradores</h2>
-        <button className="botao principal" onClick={() => ir('/painel/pastas/nova')}>Nova pasta</button>
+        <div className="botoes">
+          {verCriador && pastas && pastas.length > 0 && (
+            <>
+              <button className="botao" onClick={() => setVerResumo((v) => !v)} aria-pressed={verResumo}>
+                <BarChart3 size={16} /> {verResumo ? 'Ocultar resumo' : equipe ? 'Resumo por imobiliária' : 'Resumo por corretor'}
+              </button>
+              <button className="botao" onClick={exportar} disabled={filtradas.length === 0}><FileSpreadsheet size={16} /> Exportar planilha</button>
+            </>
+          )}
+          <button className="botao principal" onClick={() => ir('/painel/pastas/nova')}>Nova pasta</button>
+        </div>
       </div>
+      {verResumo && pastas && (
+        <ResumoPastas pastas={pastas.filter((p) => (aba === 'todas' || p.codigo_aprovacao) && (!imob || p.imobiliaria_id === imob))}
+          chave={(p) => (equipe ? p.imobiliarias?.nome ?? '—' : nomeCriador(p) || '—')}
+          titulo={equipe ? 'Imobiliária' : 'Corretor'}
+          escopo={aba === 'submetidas' ? 'pastas submetidas ao incorporador' : 'todas as pastas criadas'} />
+      )}
       {equipe && pastas && (
         <div className="abas" role="tablist">
           <button role="tab" aria-selected={aba === 'submetidas'} className={aba === 'submetidas' ? 'ativa' : ''} onClick={() => setAba('submetidas')}>
@@ -604,6 +640,52 @@ function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolea
       <button className="botao principal" disabled={!pronta || enviando} onClick={submeter}>
         {enviando ? 'Submetendo…' : 'Submeter ao incorporador'}
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Resumo: quantidade de pastas por status, agrupadas por imobiliária (equipe) ou corretor (imobiliária)
+// ---------------------------------------------------------------------
+function ResumoPastas({ pastas, chave, titulo, escopo }: {
+  pastas: PastaResumo[]; chave: (p: PastaResumo) => string; titulo: string; escopo: string;
+}) {
+  const grupos = new Map<string, Record<string, number>>();
+  pastas.forEach((p) => {
+    const k = chave(p);
+    const g = grupos.get(k) ?? {};
+    g[p.status] = (g[p.status] ?? 0) + 1;
+    grupos.set(k, g);
+  });
+  const linhas = [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+  const total = (g: Record<string, number>) => Object.values(g).reduce((a, b) => a + b, 0);
+  const geral: Record<string, number> = {};
+  linhas.forEach(([, g]) => Object.entries(g).forEach(([k, v]) => { geral[k] = (geral[k] ?? 0) + v; }));
+  return (
+    <div className="cartao resumo-pastas">
+      <h3>Resumo por {titulo.toLowerCase()}</h3>
+      <p className="sub">Considerando {escopo}{linhas.length ? '' : ': nenhuma pasta'}.</p>
+      {linhas.length > 0 && (
+        <div className="tabela-rolagem">
+          <table className="tabela compacta numeros">
+            <thead>
+              <tr><th>{titulo}</th>{STATUS_PASTA.map((s) => <th key={s.valor}>{s.rotulo}</th>)}<th>Total</th></tr>
+            </thead>
+            <tbody>
+              {linhas.map(([nome, g]) => (
+                <tr key={nome}>
+                  <td>{nome}</td>
+                  {STATUS_PASTA.map((s) => <td key={s.valor}>{g[s.valor] ?? '—'}</td>)}
+                  <td><strong>{total(g)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><td>Total</td>{STATUS_PASTA.map((s) => <td key={s.valor}>{geral[s.valor] ?? '—'}</td>)}<td>{total(geral)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

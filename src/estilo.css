@@ -267,6 +267,18 @@ button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relati
 .acoes-linha { text-align: right; white-space: nowrap; }
 .acoes-linha .botao + .botao { margin-left: 6px; }
 
+.botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.tabela-rolagem { overflow-x: auto; margin-top: 12px; }
+.tabela.numeros th:not(:first-child), .tabela.numeros td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.tabela tfoot td { font-weight: 700; background: var(--superficie-2); border-top: 1px solid var(--borda); padding: 10px 14px; }
+@media (max-width: 860px) {
+  .resumo-pastas .tabela, .resumo-pastas .tabela tbody, .resumo-pastas .tabela tfoot { display: table-row-group; }
+  .resumo-pastas .tabela { display: table; min-width: 760px; }
+  .resumo-pastas .tabela thead { display: table-header-group; }
+  .resumo-pastas .tabela tr { display: table-row; padding: 0; }
+  .resumo-pastas .tabela td { display: table-cell; padding: 8px 12px; border-bottom: 1px solid var(--borda); }
+}
+
 /* Selos de status da pasta e do documento */
 .selo { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 650; white-space: nowrap; background: var(--fundo-selo); color: var(--cor-selo); }
 .selo::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
