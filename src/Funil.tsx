@@ -5,6 +5,10 @@ import { ir } from './util';
 import { useDialogos } from './ui';
 
 type Etapa = 'aprovada' | 'reserva' | 'contrato_confeccao' | 'enviado_assinatura' | 'assinado';
+const ESPELHO: Record<Etapa, string> = {
+  aprovada: 'Disponível', reserva: 'Reservada', contrato_confeccao: 'Proposta recebida', enviado_assinatura: 'Contrato em assinatura', assinado: 'Vendida',
+};
+
 const ETAPAS: { valor: Etapa; rotulo: string }[] = [
   { valor: 'aprovada', rotulo: 'Pasta aprovada' },
   { valor: 'reserva', rotulo: 'Reserva' },
@@ -26,7 +30,8 @@ function diasDesde(iso: string | null) {
 
 /** Funil de vendas da Sec. Vendas: pastas com documentação aprovada, por etapa. */
 export function Funil() {
-  const { avisar } = useDialogos();
+  const { avisar, confirmar } = useDialogos();
+  const [escolha, setEscolha] = useState<{ card: Card; etapa: Etapa } | null>(null);
   const [cards, setCards] = useState<Card[] | null>(null);
   const [nomes, setNomes] = useState<Record<string, string>>({});
   const [imob, setImob] = useState('');
@@ -57,18 +62,37 @@ export function Funil() {
   }, [cards]);
   const visiveis = (cards ?? []).filter((c) => !imob || c.imobiliaria_id === imob);
 
+  const ERROS: Record<string, string> = {
+    SEM_UNIDADE: 'Escolha a unidade desta pasta.',
+    UNIDADE_OCUPADA: 'Essa unidade já está em negociação com outro cliente no espelho.',
+    PASTA_JA_TEM_UNIDADE: 'Esta pasta já está em outra unidade. Volte o card para "Pasta aprovada" para trocar.',
+    PASTA_NAO_APROVADA: 'A documentação desta pasta não está mais aprovada.',
+  };
+
+  const executar = async (card: Card, etapa: Etapa, unidade?: string) => {
+    const { error } = await supabase.rpc('mover_etapa', { p_pasta: card.id, p_etapa: etapa, p_unidade: unidade ?? null });
+    if (error) {
+      const chave = Object.keys(ERROS).find((k) => error.message.includes(k));
+      avisar(chave ? ERROS[chave] : 'Não foi possível mover a pasta. Tente novamente.', 'erro');
+      return false;
+    }
+    await carregar();
+    avisar(`${card.comprador_nome}: ${ETAPAS.find((e) => e.valor === etapa)?.rotulo}. Espelho atualizado.`);
+    return true;
+  };
+
   const mover = async (id: string, etapa: Etapa) => {
     const card = cards?.find((c) => c.id === id);
     if (!card || card.etapa_venda === etapa) return;
-    const anterior = card.etapa_venda;
-    setCards((l) => l?.map((c) => (c.id === id ? { ...c, etapa_venda: etapa, etapa_atualizada_em: new Date().toISOString() } : c)) ?? null);
-    const { error } = await supabase.rpc('mover_etapa', { p_pasta: id, p_etapa: etapa });
-    if (error) {
-      setCards((l) => l?.map((c) => (c.id === id ? { ...c, etapa_venda: anterior } : c)) ?? null);
-      avisar('Não foi possível mover a pasta. Tente novamente.', 'erro');
+    const unid = card.unidades?.numero;
+    if (etapa === 'aprovada') {
+      if (unid && !(await confirmar({ titulo: `Voltar ${card.comprador_nome} para "Pasta aprovada"?`, texto: `A unidade ${unid} volta a ficar disponível no espelho.`, confirmar: 'Voltar e liberar unidade', perigo: true }))) return;
+      executar(card, etapa);
       return;
     }
-    avisar(`${card.comprador_nome}: ${ETAPAS.find((e) => e.valor === etapa)?.rotulo}.`);
+    if (!unid) { setEscolha({ card, etapa }); return; }
+    if (etapa === 'assinado' && !(await confirmar({ titulo: `Marcar a unidade ${unid} como vendida?`, texto: `${card.comprador_nome} vai para "Assinado / Vendido" e a unidade aparece como vendida no espelho e na TV.`, confirmar: 'Marcar como vendida' }))) return;
+    executar(card, etapa);
   };
 
   const soltar = (etapa: Etapa) => (e: DragEvent) => {
@@ -81,7 +105,7 @@ export function Funil() {
   return (
     <section className="secao larga">
       <div className="secao-topo">
-        <div><h2>Funil de vendas</h2><p className="sub">Pastas com documentação aprovada. Arraste o card para mudar a etapa.</p></div>
+        <div><h2>Funil de vendas</h2><p className="sub">Pastas com documentação aprovada. Arraste o card para mudar a etapa; o espelho acompanha.</p></div>
         {imobiliarias.length > 1 && (
           <select value={imob} onChange={(e) => setImob(e.target.value)} aria-label="Filtrar por imobiliária" style={{ width: 'auto' }}>
             <option value="">Todas as imobiliárias</option>
@@ -90,6 +114,10 @@ export function Funil() {
         )}
       </div>
 
+      {escolha && (
+        <EscolherUnidade card={escolha.card} etapa={escolha.etapa} aoFechar={() => setEscolha(null)}
+          aoConfirmar={async (u) => { if (await executar(escolha.card, escolha.etapa, u)) setEscolha(null); }} />
+      )}
       {cards === null ? <p className="vazio">Carregando…</p> : (
         <div className="kanban">
           {ETAPAS.map((et) => {
@@ -99,7 +127,7 @@ export function Funil() {
                 onDragOver={(e) => { e.preventDefault(); setSobre(et.valor); }}
                 onDragLeave={() => setSobre((s) => (s === et.valor ? null : s))}
                 onDrop={soltar(et.valor)}>
-                <div className="coluna-topo"><h3>{et.rotulo}</h3><span className="contagem">{lista.length}</span></div>
+                <div className="coluna-topo"><div><h3>{et.rotulo}</h3><span className="coluna-espelho">Espelho: {ESPELHO[et.valor]}</span></div><span className="contagem">{lista.length}</span></div>
                 <div className="coluna-cards">
                   {lista.length === 0 && <p className="coluna-vazia">Nenhuma pasta nesta etapa.</p>}
                   {lista.map((c) => {
@@ -131,5 +159,39 @@ export function Funil() {
         </div>
       )}
     </section>
+  );
+}
+
+/** Escolha da unidade quando a pasta ainda não tem uma. */
+function EscolherUnidade({ card, etapa, aoFechar, aoConfirmar }: {
+  card: Card; etapa: Etapa; aoFechar: () => void; aoConfirmar: (unidade: string) => Promise<void>;
+}) {
+  const [unidades, setUnidades] = useState<{ id: string; numero: string; area_privativa: number | null }[]>([]);
+  const [valor, setValor] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  useEffect(() => {
+    supabase.from('unidades').select('id, numero, area_privativa').eq('status', 'disponivel').order('andar').order('posicao')
+      .then(({ data }) => setUnidades((data as typeof unidades) ?? []));
+  }, []);
+  return (
+    <div className="fundo-dialogo" onClick={aoFechar}>
+      <div className="dialogo confirmacao" role="dialog" aria-modal="true" aria-labelledby="esc-titulo" onClick={(e) => e.stopPropagation()}>
+        <h2 id="esc-titulo">Qual unidade de {card.comprador_nome}?</h2>
+        <p>A pasta vai para “{ETAPAS.find((x) => x.valor === etapa)?.rotulo}” e a unidade fica como “{ESPELHO[etapa]}” no espelho.</p>
+        <label className="campo-motivo" style={{ marginTop: 14 }}>Unidades disponíveis
+          <select value={valor} onChange={(e) => setValor(e.target.value)} autoFocus>
+            <option value="">Escolha…</option>
+            {unidades.map((u) => <option key={u.id} value={u.id}>{u.numero}{u.area_privativa ? `, ${u.area_privativa.toLocaleString('pt-BR')} m²` : ''}</option>)}
+          </select>
+        </label>
+        <div className="dialogo-acoes">
+          <button className="botao" onClick={aoFechar}>Cancelar</button>
+          <button className="botao principal" disabled={!valor || enviando}
+            onClick={async () => { setEnviando(true); await aoConfirmar(valor); setEnviando(false); }}>
+            {enviando ? 'Salvando…' : 'Confirmar unidade'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

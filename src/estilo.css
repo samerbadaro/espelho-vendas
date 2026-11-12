@@ -333,6 +333,7 @@ button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relati
 .coluna.sobre { border-color: var(--destaque); background: color-mix(in srgb, var(--destaque) 10%, white); }
 .coluna-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 10px; border-bottom: 3px solid var(--k-cor, var(--borda-forte)); margin-bottom: 12px; }
 .coluna-topo h3 { margin: 0; font-size: 0.875rem; font-weight: 700; }
+.coluna-espelho { display: block; font-size: 0.6875rem; color: var(--tinta-3); margin-top: 2px; }
 .k-aprovada { --k-cor: var(--disponivel); } .k-reserva { --k-cor: var(--reservada); } .k-contrato_confeccao { --k-cor: var(--proposta); }
 .k-enviado_assinatura { --k-cor: var(--contrato); } .k-assinado { --k-cor: var(--vendida); }
 .coluna-cards { display: flex; flex-direction: column; gap: 10px; }

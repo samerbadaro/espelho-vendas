@@ -41,6 +41,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 10. `supabase/migrations/010_profissao_conjuge.sql` (profissão do cônjuge; submissão exige nome, CPF e profissão do cônjuge)
 11. `supabase/migrations/011_identidade_duohaus.sql` (cor de apoio e fonte configuráveis; identidade visual do Duo Haus)
 12. `supabase/migrations/012_funil_e_download.sql` (funil de vendas em kanban; download de todos os documentos com nomes padronizados)
+13. `supabase/migrations/013_funil_espelho.sql` (funil ligado ao espelho: mover o card muda o status da unidade)
 
 ### Criar usuário da equipe
 
