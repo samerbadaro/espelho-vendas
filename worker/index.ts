@@ -1,7 +1,8 @@
 /**
  * Servidor do Espelho de Vendas (Cloudflare Worker).
  * - Entrega o site (pasta dist) para qualquer endereço que não seja /api.
- * - /api/usuarios*: criação de logins e troca de senha, SOMENTE para administradores.
+ * - /api/usuarios*: criação de logins e troca de senha. Administradores gerenciam todos;
+ *   a imobiliária gerencia somente os corretores dela.
  *   Usa a chave secreta do Supabase, guardada como "secret" no Cloudflare
  *   (SUPABASE_SECRET_KEY) — ela nunca vai para o navegador.
  */
@@ -17,16 +18,33 @@ const json = (dados: unknown, status = 200) =>
   new Response(JSON.stringify(dados), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 const erro = (mensagem: string, status = 400) => json({ erro: mensagem }, status);
 
-const PAPEIS = ['admin', 'vendas', 'imobiliaria'] as const;
+const PAPEIS = ['admin', 'vendas', 'imobiliaria', 'corretor'] as const;
+type Papel = (typeof PAPEIS)[number];
 const emailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-async function exigirAdmin(req: Request, adm: SupabaseClient) {
+interface Chamador { id: string; papel: Papel; imobiliaria_id: string | null }
+
+/** Identifica quem chamou. Só administradores e imobiliárias (gestoras) podem gerenciar logins. */
+async function identificar(req: Request, adm: SupabaseClient): Promise<Chamador | null> {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
   const { data, error } = await adm.auth.getUser(token);
   if (error || !data.user) return null;
-  const { data: perfil } = await adm.from('perfis').select('papel').eq('user_id', data.user.id).maybeSingle();
-  return perfil?.papel === 'admin' ? data.user : null;
+  const { data: perfil } = await adm.from('perfis').select('papel, imobiliaria_id').eq('user_id', data.user.id).maybeSingle();
+  if (!perfil || (perfil.papel !== 'admin' && perfil.papel !== 'imobiliaria')) return null;
+  if (perfil.papel === 'imobiliaria') {
+    const { data: imob } = await adm.from('imobiliarias').select('ativa').eq('id', perfil.imobiliaria_id).maybeSingle();
+    if (!imob?.ativa) return null;
+  }
+  return { id: data.user.id, papel: perfil.papel as Papel, imobiliaria_id: perfil.imobiliaria_id };
+}
+
+/** Imobiliária só mexe nos corretores dela; admin mexe em todos. */
+async function podeGerenciar(quem: Chamador, alvo: string, adm: SupabaseClient) {
+  if (alvo === quem.id) return false;
+  if (quem.papel === 'admin') return true;
+  const { data } = await adm.from('perfis').select('papel, imobiliaria_id').eq('user_id', alvo).maybeSingle();
+  return data?.papel === 'corretor' && data.imobiliaria_id === quem.imobiliaria_id;
 }
 
 async function api(req: Request, env: Env, caminho: string): Promise<Response> {
@@ -36,8 +54,8 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
   const adm = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const admin = await exigirAdmin(req, adm);
-  if (!admin) return erro('Somente administradores podem fazer isso.', 403);
+  const quem = await identificar(req, adm);
+  if (!quem) return erro('Você não tem permissão para gerenciar logins.', 403);
 
   let corpo: Record<string, unknown>;
   try { corpo = await req.json(); } catch { return erro('Requisição inválida.'); }
@@ -46,14 +64,19 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
   if (caminho === '/api/usuarios') {
     const email = String(corpo.email || '').trim().toLowerCase();
     const senha = String(corpo.senha || '');
-    const papel = String(corpo.papel || '') as (typeof PAPEIS)[number];
+    let papel = String(corpo.papel || '') as Papel;
     const nome = String(corpo.nome || '').trim() || null;
-    const imobiliaria_id = corpo.imobiliaria_id ? String(corpo.imobiliaria_id) : null;
+    let imobiliaria_id = corpo.imobiliaria_id ? String(corpo.imobiliaria_id) : null;
+
+    // imobiliária só cria corretores, sempre na própria imobiliária
+    if (quem.papel === 'imobiliaria') { papel = 'corretor'; imobiliaria_id = quem.imobiliaria_id; }
 
     if (!emailValido(email)) return erro('Informe um e-mail válido.');
     if (senha.length < 8) return erro('A senha provisória precisa ter pelo menos 8 caracteres.');
     if (!PAPEIS.includes(papel)) return erro('Perfil inválido.');
-    if (papel === 'imobiliaria' && !imobiliaria_id) return erro('Escolha a imobiliária.');
+    const comImob = papel === 'imobiliaria' || papel === 'corretor';
+    if (comImob && !imobiliaria_id) return erro('Escolha a imobiliária.');
+    if (papel === 'corretor' && !nome) return erro('Informe o nome do corretor.');
 
     const criado = await adm.auth.admin.createUser({ email, password: senha, email_confirm: true });
     if (criado.error || !criado.data.user) {
@@ -62,7 +85,7 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     }
     const { error: ePerfil } = await adm.from('perfis').insert({
       user_id: criado.data.user.id, email, nome, papel,
-      imobiliaria_id: papel === 'imobiliaria' ? imobiliaria_id : null, trocar_senha: true,
+      imobiliaria_id: comImob ? imobiliaria_id : null, trocar_senha: true,
     });
     if (ePerfil) {
       await adm.auth.admin.deleteUser(criado.data.user.id);
@@ -71,9 +94,11 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     return json({ ok: true, user_id: criado.data.user.id });
   }
 
+  const user_id = String(corpo.user_id || '');
+  if (!(await podeGerenciar(quem, user_id, adm))) return erro('Você não pode alterar este login.', 403);
+
   // Definir nova senha provisória
   if (caminho === '/api/usuarios/senha') {
-    const user_id = String(corpo.user_id || '');
     const senha = String(corpo.senha || '');
     if (senha.length < 8) return erro('A senha provisória precisa ter pelo menos 8 caracteres.');
     const { error } = await adm.auth.admin.updateUserById(user_id, { password: senha });
@@ -82,10 +107,8 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     return json({ ok: true });
   }
 
-  // Remover login
+  // Remover login (as pastas criadas continuam com a imobiliária)
   if (caminho === '/api/usuarios/remover') {
-    const user_id = String(corpo.user_id || '');
-    if (user_id === admin.id) return erro('Você não pode remover o seu próprio login.');
     const { error } = await adm.auth.admin.deleteUser(user_id);
     if (error) return erro('Não foi possível remover o login.');
     return json({ ok: true });

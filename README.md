@@ -33,6 +33,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 2. `supabase/migrations/002_unidades.sql` (173 unidades, do 2º ao 17º andar)
 3. `supabase/migrations/003_negociacoes.sql` (status Proposta recebida e Contrato em assinatura; dados da negociação visíveis só para a equipe)
 4. `supabase/migrations/004_pastas.sql` (imobiliárias, pastas, documentos, armazenamento privado e isolamento entre imobiliárias)
+5. `supabase/migrations/005_corretores.sql` (corretor vê só as pastas que criou; a imobiliária vê todas as dela e cria os logins dos corretores)
 
 ### Criar usuário da equipe
 
@@ -53,7 +54,7 @@ Com PostgreSQL 16 local, aplique `supabase/tests/stub_supabase.sql` e as migraç
 
 ```bash
 psql -d espelho -f supabase/tests/testes_permissoes.sql   # 23 testes de permissão e de fluxo
-psql -d espelho -f supabase/tests/testes_pastas.sql       # 38 testes de pastas e isolamento entre imobiliárias
+psql -d espelho -f supabase/tests/testes_pastas.sql       # 54 testes de pastas e isolamento entre imobiliárias e corretores
 ./supabase/tests/teste_simultaneo.sh                      # duas alterações ao mesmo tempo
 ```
 

@@ -8,7 +8,7 @@ import {
 
 interface PastaResumo {
   id: string; codigo: string; comprador_nome: string; comprador_cpf: string; status: StatusPasta;
-  criada_em: string; imobiliaria_id: string;
+  criada_em: string; imobiliaria_id: string; criado_por: string | null;
   imobiliarias: { nome: string } | null; unidades: { numero: string } | null;
 }
 
@@ -24,10 +24,20 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
   const [imob, setImob] = useState('');
   const [erro, setErro] = useState('');
   const equipe = ehEquipe(perfil);
+  const verCriador = equipe || perfil.papel === 'imobiliaria';
+  const [corretores, setCorretores] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (verCriador) supabase.from('perfis').select('email, nome').then(({ data }) => {
+      const m: Record<string, string> = {};
+      ((data as { email: string; nome: string | null }[]) ?? []).forEach((x) => { m[x.email] = x.nome || x.email; });
+      setCorretores(m);
+    });
+  }, [verCriador]);
 
   useEffect(() => {
     supabase.from('pastas')
-      .select('id, codigo, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, imobiliarias(nome), unidades(numero)')
+      .select('id, codigo, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, imobiliarias(nome), unidades(numero)')
       .order('criada_em', { ascending: false })
       .then(({ data, error }) => {
         if (error) setErro('Não foi possível carregar as pastas. Recarregue a página.');
@@ -49,7 +59,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
         || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades?.numero ?? '').includes(t))
       && (!status || p.status === status)
       && (!imob || p.imobiliaria_id === imob));
-  }, [pastas, busca, status, imob]);
+  }, [pastas, busca, status, imob, corretores]);
 
   return (
     <section className="secao">
@@ -58,7 +68,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
         <button className="botao principal" onClick={() => ir('/painel/pastas/nova')}>Nova pasta</button>
       </div>
       <div className="filtros">
-        <input type="search" placeholder="Buscar por nome, CPF, código ou unidade" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input type="search" placeholder={verCriador ? "Buscar por nome, CPF, código, unidade ou corretor" : "Buscar por nome, CPF, código ou unidade"} value={busca} onChange={(e) => setBusca(e.target.value)} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filtrar por status">
           <option value="">Todos os status</option>
           {STATUS_PASTA.map((s) => <option key={s.valor} value={s.valor}>{s.rotulo}</option>)}
@@ -79,6 +89,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
             <tr>
               <th>Código</th><th>Comprador</th><th>CPF</th>
               {equipe && <th>Imobiliária</th>}
+              {verCriador && <th>Cadastrada por</th>}
               <th>Unidade</th><th>Status</th><th>Cadastro</th>
             </tr>
           </thead>
@@ -90,6 +101,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
                 <td><strong>{p.comprador_nome}</strong></td>
                 <td>{formatarCPF(p.comprador_cpf)}</td>
                 {equipe && <td>{p.imobiliarias?.nome}</td>}
+                {verCriador && <td>{p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '—'}</td>}
                 <td>{p.unidades?.numero ?? '—'}</td>
                 <td><span className={`selo sp-${p.status}`}>{rotuloPasta(p.status)}</span></td>
                 <td>{formatarData(p.criada_em)}</td>
@@ -210,7 +222,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
             <p className="sub">
               <span className="mono">{pasta!.codigo}</span>
               {equipe && pasta!.imobiliarias && <>, {pasta!.imobiliarias.nome}</>}
-              , cadastrada em {formatarData(pasta!.criada_em)}
+              , cadastrada{pasta!.criado_por && perfil.papel !== 'corretor' ? ` por ${pasta!.criado_por}` : ''} em {formatarData(pasta!.criada_em)}
             </p>
           )}
         </div>

@@ -167,5 +167,58 @@ exception when others then insert into r(teste, ok) values ('Visitante não lê 
 reset role;
 update config set publico_ativo=true;
 
+
+-- ===== Corretores (somente com a migração 005) =====
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000000c1', 'corretor1@teste'),
+  ('00000000-0000-0000-0000-0000000000c2', 'corretor2@teste') on conflict do nothing;
+insert into perfis (user_id, email, papel, imobiliaria_id) values
+  ('00000000-0000-0000-0000-0000000000c1', 'corretor1@teste', 'corretor', 'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('00000000-0000-0000-0000-0000000000c2', 'corretor2@teste', 'corretor', 'aaaaaaaa-0000-0000-0000-000000000001') on conflict do nothing;
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-0000000000c1');
+insert into pastas (comprador_nome, comprador_cpf) values ('Cliente do Corretor 1', '22233344455');
+insert into ctx select 'pasta_c1', id::text from pastas where comprador_cpf='22233344455';
+insert into r(teste, ok) select 'Corretor 1 cria pasta (fica registrado como criador)',
+  (select criado_por_id='00000000-0000-0000-0000-0000000000c1' and imobiliaria_id='aaaaaaaa-0000-0000-0000-000000000001' from pastas where comprador_cpf='22233344455');
+insert into r(teste, ok) select 'Corretor 1 vê só a própria pasta', (select count(*) from pastas) = 1;
+insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/rg-c1.pdf' from ctx where k='pasta_c1';
+do $$ declare p uuid := (select v::uuid from ctx where k='pasta_c1'); begin
+  perform registrar_documento(p, 1, 'aaaaaaaa-0000-0000-0000-000000000001/'||p||'/rg-c1.pdf', 'rg.pdf', 1, 'application/pdf');
+  insert into r(teste, ok) values ('Corretor 1 envia documento na própria pasta', true);
+exception when others then insert into r(teste, ok) values ('Corretor 1 envia documento na própria pasta', false); end $$;
+insert into r(teste, ok) select 'Corretor vê o próprio perfil e só ele', (select count(*) from perfis) = 1;
+reset role;
+
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-0000000000c2');
+insert into r(teste, ok) select 'Corretor 2 não vê pastas do Corretor 1 nem da imobiliária', (select count(*) from pastas) = 0;
+insert into r(teste, ok) select 'Corretor 2 não vê documentos nem arquivos dos outros', (select count(*) from documentos) = 0 and (select count(*) from storage.objects) = 0;
+insert into r(teste, ok) select 'Corretor 2 não vê histórico dos outros', (select count(*) from historico_pastas) = 0;
+do $$ declare n int; begin
+  update pastas set comprador_nome='X' where id=(select v::uuid from ctx where k='pasta_c1'); get diagnostics n = row_count;
+  insert into r(teste, ok) values ('Corretor 2 não edita pasta do Corretor 1', n = 0); end $$;
+do $$ begin
+  insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/plantado.pdf' from ctx where k='pasta_c1';
+  insert into r(teste, ok) values ('Corretor 2 não envia arquivo para pasta do Corretor 1', false);
+exception when others then insert into r(teste, ok) values ('Corretor 2 não envia arquivo para pasta do Corretor 1', true); end $$;
+do $$ begin perform registrar_documento((select v::uuid from ctx where k='pasta_c1'), 2, 'aaaaaaaa-0000-0000-0000-000000000001/x/y.pdf', 'y', 1, 'application/pdf');
+  insert into r(teste, ok) values ('Corretor 2 não registra documento na pasta do Corretor 1', false);
+exception when others then insert into r(teste, ok) values ('Corretor 2 não registra documento na pasta do Corretor 1', sqlerrm='SEM_PERMISSAO'); end $$;
+insert into r(teste, ok) select 'Corretor vê o espelho', (select count(*) from unidades) = 173;
+reset role;
+
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000d');
+insert into r(teste, ok) select 'Imobiliária vê pastas de todos os seus corretores', (select count(*) from pastas) = 2;
+insert into r(teste, ok) select 'Imobiliária vê documentos do corretor', exists (select 1 from documentos d join pastas p on p.id=d.pasta_id where p.comprador_cpf='22233344455');
+insert into r(teste, ok) select 'Imobiliária vê os logins dos seus corretores', (select count(*) from perfis) = 3;
+reset role;
+
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000e');
+insert into r(teste, ok) select 'Outra imobiliária não vê pasta do corretor', (select count(*) from pastas) = 0 and (select count(*) from perfis) = 1;
+reset role;
+
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000b');
+insert into r(teste, ok) select 'Equipe vê todas as pastas', (select count(*) from pastas) = 2;
+reset role;
+
 select (case when ok then 'OK    ' else 'FALHOU' end) || '  ' || teste from r order by n;
 select 'RESUMO: ' || count(*) filter (where ok) || ' de ' || count(*) || ' passaram' from r;

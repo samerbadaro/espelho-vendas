@@ -79,7 +79,7 @@ export interface Perfil {
   user_id: string;
   email: string;
   nome: string | null;
-  papel: 'admin' | 'vendas' | 'imobiliaria';
+  papel: 'admin' | 'vendas' | 'imobiliaria' | 'corretor';
   imobiliaria_id: string | null;
   trocar_senha: boolean;
 }

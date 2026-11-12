@@ -7,7 +7,7 @@ import {
 import { Predio, Resumo } from './Predio';
 import { Aviso, StatusConexao, useTitulo } from './Publico';
 import { ListaPastas, DetalhePasta } from './Pastas';
-import { Imobiliarias } from './Imobiliarias';
+import { Imobiliarias, Corretores } from './Imobiliarias';
 import { useRota, ir, type Perfil } from './util';
 
 interface Registro {
@@ -111,7 +111,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const rota = useRota();
   const [nome, setNome] = useState('');
   const [imob, setImob] = useState('');
-  const equipe = perfil.papel !== 'imobiliaria';
+  const equipe = perfil.papel === 'admin' || perfil.papel === 'vendas';
+  const gestor = perfil.papel === 'imobiliaria';
 
   useEffect(() => {
     supabase.from('config').select('nome_empreendimento').eq('id', 1).single()
@@ -123,7 +124,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
 
   const menu = equipe
     ? [{ c: '/painel', r: 'Espelho' }, { c: '/painel/pastas', r: 'Pastas' }, ...(perfil.papel === 'admin' ? [{ c: '/painel/imobiliarias', r: 'Imobiliárias e logins' }] : [])]
-    : [{ c: '/painel', r: 'Pastas' }, { c: '/painel/espelho', r: 'Espelho' }];
+    : [{ c: '/painel', r: 'Pastas' }, ...(gestor ? [{ c: '/painel/corretores', r: 'Corretores' }] : []), { c: '/painel/espelho', r: 'Espelho' }];
   const ativo = (c: string) => (c === '/painel' ? rota === '/painel' || (!equipe && rota.startsWith('/painel/pastas')) : rota.startsWith(c));
 
   let pagina;
@@ -132,6 +133,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (rota === '/painel/pastas' || (!equipe && rota === '/painel')) pagina = <ListaPastas perfil={perfil} />;
   else if (rota === '/painel/imobiliarias' && perfil.papel === 'admin') pagina = <Imobiliarias perfil={perfil} />;
   else if (rota === '/painel/espelho' && !equipe) pagina = <EspelhoSomenteLeitura />;
+  else if (rota === '/painel/corretores' && gestor) pagina = <Corretores perfil={perfil} />;
   else pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <ListaPastas perfil={perfil} />;
 
   return (
@@ -145,7 +147,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
           ))}
         </nav>
         <div className="topo-acoes">
-          <span className="usuario">{equipe ? perfil.nome || perfil.email : imob}</span>
+          <span className="usuario">{equipe ? perfil.nome || perfil.email : gestor ? imob : `${perfil.nome || perfil.email}, ${imob}`}</span>
           <button className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
         </div>
       </header>
