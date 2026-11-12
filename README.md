@@ -6,7 +6,7 @@ Espelho de unidades em tempo real, para uso interno da Launch.
 |---|---|---|
 | `/` | Link público (corretores e clientes, no celular) | Não |
 | `/tv` | TV do salão de vendas | Não |
-| `/painel` | Sec. Vendas e administradores alteram o status | Sim |
+| `/painel` | Sec. Vendas e administradores: espelho, pastas, imobiliárias e logins. Imobiliárias: as próprias pastas e o espelho | Sim |
 
 O sistema não guarda nenhum dado pessoal de comprador.
 
@@ -32,6 +32,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 1. `supabase/migrations/001_estrutura.sql`
 2. `supabase/migrations/002_unidades.sql` (173 unidades, do 2º ao 17º andar)
 3. `supabase/migrations/003_negociacoes.sql` (status Proposta recebida e Contrato em assinatura; dados da negociação visíveis só para a equipe)
+4. `supabase/migrations/004_pastas.sql` (imobiliárias, pastas, documentos, armazenamento privado e isolamento entre imobiliárias)
 
 ### Criar usuário da equipe
 
@@ -52,6 +53,7 @@ Com PostgreSQL 16 local, aplique `supabase/tests/stub_supabase.sql` e as migraç
 
 ```bash
 psql -d espelho -f supabase/tests/testes_permissoes.sql   # 23 testes de permissão e de fluxo
+psql -d espelho -f supabase/tests/testes_pastas.sql       # 38 testes de pastas e isolamento entre imobiliárias
 ./supabase/tests/teste_simultaneo.sh                      # duas alterações ao mesmo tempo
 ```
 
@@ -69,11 +71,15 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 
 - Build command: `npm run build`
 - Output: `dist`
-- Variáveis: `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+- Os dados públicos do Supabase estão em `.env.production`.
+- Secret obrigatório no Cloudflare (Settings → Variables and Secrets): `SUPABASE_SECRET_KEY`, a chave **secret** do Supabase. Ela é usada só pelo servidor (`worker/index.ts`) para criar logins e trocar senhas.
 
 ## Arquivos
 
 - `src/dados.ts`: conexão com o Supabase, carregamento e tempo real (com reconexão automática)
 - `src/Predio.tsx`: desenho do prédio e legenda
 - `src/Publico.tsx`, `src/TV.tsx`, `src/Painel.tsx`: as três telas
+- `src/Pastas.tsx`: pastas, documentos e análise
+- `src/Imobiliarias.tsx`: cadastro de imobiliárias e logins
+- `worker/index.ts`: servidor (site + criação de logins)
 - `src/estilo.css`: visual

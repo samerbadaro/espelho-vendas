@@ -6,18 +6,21 @@ import {
 } from './dados';
 import { Predio, Resumo } from './Predio';
 import { Aviso, StatusConexao, useTitulo } from './Publico';
+import { ListaPastas, DetalhePasta } from './Pastas';
+import { Imobiliarias } from './Imobiliarias';
+import { useRota, ir, type Perfil } from './util';
 
-interface Perfil { email: string; nome: string | null; papel: 'admin' | 'vendas' }
 interface Registro {
   id: number; numero: string; status_anterior: Status | null; status_novo: Status;
   motivo: string | null; usuario_email: string | null; criado_em: string;
   detalhes?: Record<string, unknown> | null;
 }
 
-/** Painel da Sec. Vendas: exige login e perfil cadastrado. */
+/** Painel: exige login e perfil cadastrado (admin, Sec. Vendas ou imobiliária). */
 export function Painel() {
   const [sessao, setSessao] = useState<Session | null | undefined>(undefined);
   const [perfil, setPerfil] = useState<Perfil | null | undefined>(undefined);
+  const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     if (!configurado) { setSessao(null); return; }
@@ -26,11 +29,12 @@ export function Painel() {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  const idUsuario = sessao?.user.id;
   useEffect(() => {
-    if (!sessao) { setPerfil(sessao === null ? null : undefined); return; }
-    supabase.from('perfis').select('email, nome, papel').eq('user_id', sessao.user.id).maybeSingle()
+    if (!idUsuario) { setPerfil(sessao === null ? null : undefined); return; }
+    supabase.from('perfis').select('user_id, email, nome, papel, imobiliaria_id, trocar_senha').eq('user_id', idUsuario).maybeSingle()
       .then(({ data }) => setPerfil((data as Perfil) ?? null));
-  }, [sessao]);
+  }, [idUsuario, recarga]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!configurado) return <Aviso texto="O sistema ainda não foi conectado ao banco de dados." />;
   if (sessao === undefined) return <Aviso texto="Carregando…" />;
@@ -44,7 +48,8 @@ export function Painel() {
       </div>
     );
   }
-  return <AreaEquipe perfil={perfil} />;
+  if (perfil.trocar_senha) return <TrocarSenha aoTrocar={() => setRecarga((n) => n + 1)} />;
+  return <Casca perfil={perfil} />;
 }
 
 function Login() {
@@ -68,15 +73,102 @@ function Login() {
       <label>Senha<input type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
       {erro && <p className="erro" role="alert">{erro}</p>}
       <button className="botao principal" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
+      <p className="dica">Esqueceu a senha? Peça uma nova ao administrador.</p>
     </form>
   );
 }
 
-function AreaEquipe({ perfil }: { perfil: Perfil }) {
+function TrocarSenha({ aoTrocar }: { aoTrocar: () => void }) {
+  const [senha, setSenha] = useState('');
+  const [confirma, setConfirma] = useState('');
+  const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const salvar = async (e: FormEvent) => {
+    e.preventDefault(); setErro('');
+    if (senha.length < 8) { setErro('A senha precisa ter pelo menos 8 caracteres.'); return; }
+    if (senha !== confirma) { setErro('As duas senhas não são iguais.'); return; }
+    setSalvando(true);
+    const { error } = await supabase.auth.updateUser({ password: senha });
+    if (error) { setSalvando(false); setErro('Não foi possível trocar a senha. Tente uma senha diferente.'); return; }
+    await supabase.rpc('senha_trocada');
+    setSalvando(false); aoTrocar();
+  };
+  return (
+    <form className="login" onSubmit={salvar}>
+      <h1>Crie sua senha</h1>
+      <p className="dica">Você entrou com uma senha provisória. Crie uma senha própria para continuar.</p>
+      <label>Nova senha<input type="password" autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
+      <label>Repita a nova senha<input type="password" autoComplete="new-password" value={confirma} onChange={(e) => setConfirma(e.target.value)} required /></label>
+      {erro && <p className="erro" role="alert">{erro}</p>}
+      <button className="botao principal" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar senha'}</button>
+      <button type="button" className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
+    </form>
+  );
+}
+
+/** Estrutura do painel: topo, menu e a página da vez. */
+function Casca({ perfil }: { perfil: Perfil }) {
+  const rota = useRota();
+  const [nome, setNome] = useState('');
+  const [imob, setImob] = useState('');
+  const equipe = perfil.papel !== 'imobiliaria';
+
+  useEffect(() => {
+    supabase.from('config').select('nome_empreendimento').eq('id', 1).single()
+      .then(({ data }) => setNome((data as { nome_empreendimento: string } | null)?.nome_empreendimento ?? ''));
+    if (!equipe) supabase.from('imobiliarias').select('nome').maybeSingle()
+      .then(({ data }) => setImob((data as { nome: string } | null)?.nome ?? ''));
+  }, [equipe]);
+  useTitulo(nome ? `Painel, ${nome}` : undefined);
+
+  const menu = equipe
+    ? [{ c: '/painel', r: 'Espelho' }, { c: '/painel/pastas', r: 'Pastas' }, ...(perfil.papel === 'admin' ? [{ c: '/painel/imobiliarias', r: 'Imobiliárias e logins' }] : [])]
+    : [{ c: '/painel', r: 'Pastas' }, { c: '/painel/espelho', r: 'Espelho' }];
+  const ativo = (c: string) => (c === '/painel' ? rota === '/painel' || (!equipe && rota.startsWith('/painel/pastas')) : rota.startsWith(c));
+
+  let pagina;
+  const idPasta = rota.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
+  if (idPasta) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
+  else if (rota === '/painel/pastas' || (!equipe && rota === '/painel')) pagina = <ListaPastas perfil={perfil} />;
+  else if (rota === '/painel/imobiliarias' && perfil.papel === 'admin') pagina = <Imobiliarias perfil={perfil} />;
+  else if (rota === '/painel/espelho' && !equipe) pagina = <EspelhoSomenteLeitura />;
+  else pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <ListaPastas perfil={perfil} />;
+
+  return (
+    <div className="painel">
+      <header className="topo">
+        <h1 className="nome">{nome}</h1>
+        <nav className="menu" aria-label="Seções">
+          {menu.map((m) => (
+            <a key={m.c} href={m.c} className={ativo(m.c) ? 'ativo' : ''} aria-current={ativo(m.c) ? 'page' : undefined}
+              onClick={(e) => { e.preventDefault(); ir(m.c); }}>{m.r}</a>
+          ))}
+        </nav>
+        <div className="topo-acoes">
+          <span className="usuario">{equipe ? perfil.nome || perfil.email : imob}</span>
+          <button className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
+        </div>
+      </header>
+      {pagina}
+    </div>
+  );
+}
+
+function EspelhoSomenteLeitura() {
+  const esp = useEspelho();
+  return (
+    <section className="secao">
+      <div className="secao-topo"><h2>Espelho de unidades</h2><StatusConexao conectado={esp.conectado} /></div>
+      <Resumo unidades={esp.unidades} />
+      <Predio unidades={esp.unidades} recentes={esp.recentes} />
+    </section>
+  );
+}
+
+function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
   const esp = useEspelho();
   const [selecionada, setSelecionada] = useState<Unidade | null>(null);
   const [historico, setHistorico] = useState<Registro[]>([]);
-  useTitulo(esp.config ? `Painel, ${esp.config.nome_empreendimento}` : undefined);
 
   const carregarHistorico = useCallback(async () => {
     const { data } = await supabase.from('historico')
@@ -101,19 +193,10 @@ function AreaEquipe({ perfil }: { perfil: Perfil }) {
   };
 
   return (
-    <div className="painel">
-      <header className="topo">
-        <h1 className="nome">{esp.config?.nome_empreendimento}</h1>
-        <StatusConexao conectado={esp.conectado} />
-        <div className="topo-acoes">
-          <span className="usuario">{perfil.nome || perfil.email}</span>
-          <button className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
-        </div>
-      </header>
-
+    <>
       <div className="painel-corpo">
         <section className="painel-espelho" aria-label="Espelho">
-          <Resumo unidades={esp.unidades} />
+          <div className="linha-status"><Resumo unidades={esp.unidades} /><StatusConexao conectado={esp.conectado} /></div>
           <p className="dica">Toque em uma unidade para alterar o status.</p>
           <Predio unidades={esp.unidades} recentes={esp.recentes} aoSelecionar={setSelecionada} />
         </section>
@@ -122,7 +205,7 @@ function AreaEquipe({ perfil }: { perfil: Perfil }) {
           {perfil.papel === 'admin' && esp.config && (
             <div className="caixa">
               <h2>Link público</h2>
-              <p>{esp.config.publico_ativo ? 'No ar. Qualquer pessoa com o link vê o espelho.' : 'Fora do ar. Só a equipe vê o espelho.'}</p>
+              <p>{esp.config.publico_ativo ? 'No ar. Qualquer pessoa com o link vê o espelho.' : 'Fora do ar. Só a equipe e as imobiliárias logadas veem o espelho.'}</p>
               <div className="links">
                 <a href="/" target="_blank" rel="noreferrer">Abrir link público</a>
                 <a href="/tv" target="_blank" rel="noreferrer">Abrir modo TV</a>
@@ -158,7 +241,7 @@ function AreaEquipe({ perfil }: { perfil: Perfil }) {
           aoConflito={() => esp.recarregar()}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -222,8 +305,14 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
 
   // sugestões de imobiliárias e corretores já usados (evita grafias diferentes)
   useEffect(() => {
-    supabase.from('negociacoes').select('imobiliaria, corretor').limit(1000).then(({ data }) => {
-      const lista = (data as { imobiliaria: string | null; corretor: string | null }[]) ?? [];
+    Promise.all([
+      supabase.from('negociacoes').select('imobiliaria, corretor').limit(1000),
+      supabase.from('imobiliarias').select('nome').eq('ativa', true),
+    ]).then(([n, i]) => {
+      const lista = [
+        ...((n.data as { imobiliaria: string | null; corretor: string | null }[]) ?? []),
+        ...((i.data as { nome: string }[]) ?? []).map((x) => ({ imobiliaria: x.nome, corretor: null })),
+      ];
       const unicos = (k: 'imobiliaria' | 'corretor') =>
         [...new Set(lista.map((x) => x[k]).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
       setSugestoes({ imob: unicos('imobiliaria'), corretor: unicos('corretor') });

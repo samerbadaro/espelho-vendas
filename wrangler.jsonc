@@ -1,10 +1,17 @@
-// Publicação no Cloudflare (Workers com arquivos estáticos)
+// Publicação no Cloudflare: servidor (worker/index.ts) + site estático (dist)
 {
   "name": "espelho-vendas",
+  "main": "worker/index.ts",
   "compatibility_date": "2025-09-01",
   "build": { "command": "npm run build" },
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "SUPABASE_URL": "https://mtlzwuiqznsyqasmdkew.supabase.co"
   }
+  // SUPABASE_SECRET_KEY: cadastrar como "Secret" no painel do Cloudflare
 }

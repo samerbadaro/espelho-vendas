@@ -14,3 +14,12 @@ grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid() to anon, authenticated;
 -- No Supabase, por padrão, anon/authenticated recebem tudo no schema public.
 alter default privileges in schema public grant all on tables to anon, authenticated;
+
+-- Armazenamento (mínimo para testar as políticas)
+create schema if not exists storage;
+create table if not exists storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+create table if not exists storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon, authenticated;
+grant select, insert on storage.objects to authenticated;
+grant select on storage.buckets to authenticated;
