@@ -223,7 +223,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     } else {
       const { error } = await supabase.from('pastas').update(dados).eq('id', id);
       setSalvando(false);
-      if (error) { setErro('Não foi possível salvar as alterações.'); return; }
+      if (error) { setErro(error.message.includes('DADOS_INCOMPLETOS') ? 'Preencha telefone, e-mail e profissão do comprador.' : `Não foi possível salvar as alterações. (Detalhe: ${error.message.slice(0, 120)})`); return; }
       setEditando(false); setAviso('Dados salvos.'); setRecarga((n) => n + 1);
     }
   };
@@ -440,7 +440,7 @@ function LinhaDocumento({ tipo, pasta, equipe, obrigatorio, docs, aoMudar }: {
     if (error) {
       setErro(error.message.includes('DOCUMENTO_BLOQUEADO')
         ? 'Este documento já está em análise ou aprovado e não pode ser substituído.'
-        : 'O arquivo subiu, mas não foi possível registrá-lo. Tente de novo.');
+        : `O arquivo subiu, mas não foi possível registrá-lo. Tente de novo. (Detalhe: ${error.message.slice(0, 120)})`);
       return;
     }
     aoMudar();
