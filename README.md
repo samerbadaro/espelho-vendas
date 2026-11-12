@@ -40,6 +40,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 9. `supabase/migrations/009_relatorios.sql` (Sec. Vendas vê os nomes dos logins, para relatórios e exportação)
 10. `supabase/migrations/010_profissao_conjuge.sql` (profissão do cônjuge; submissão exige nome, CPF e profissão do cônjuge)
 11. `supabase/migrations/011_identidade_duohaus.sql` (cor de apoio e fonte configuráveis; identidade visual do Duo Haus)
+12. `supabase/migrations/012_funil_e_download.sql` (funil de vendas em kanban; download de todos os documentos com nomes padronizados)
 
 ### Criar usuário da equipe
 
@@ -90,6 +91,7 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 - `src/Imobiliarias.tsx`: cadastro de imobiliárias e logins
 - `worker/index.ts`: servidor (site + criação de logins)
 - `src/Inicio.tsx`: tela inicial com indicadores
+- `src/Funil.tsx`: funil de vendas (kanban)
 - `src/Empreendimento.tsx`: nome, marca e módulos
 - `src/ui.tsx`: marca, confirmações, avisos e saída por inatividade
 - `src/estilo.css`: visual

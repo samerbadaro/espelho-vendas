@@ -327,6 +327,30 @@ button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relati
 .doc .botao { white-space: nowrap; }
 .anteriores ul { margin: 6px 0 0; padding-left: 18px; font-size: 0.875rem; }
 
+/* ===== Funil de vendas (kanban) ===== */
+.kanban { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 14px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
+.coluna { background: color-mix(in srgb, var(--apoio) 22%, #F4F4F2); border: 1px solid var(--borda); border-radius: var(--raio-g); padding: 12px; min-height: 360px; transition: background 0.12s, border-color 0.12s; }
+.coluna.sobre { border-color: var(--destaque); background: color-mix(in srgb, var(--destaque) 10%, white); }
+.coluna-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 10px; border-bottom: 3px solid var(--k-cor, var(--borda-forte)); margin-bottom: 12px; }
+.coluna-topo h3 { margin: 0; font-size: 0.875rem; font-weight: 700; }
+.k-aprovada { --k-cor: var(--disponivel); } .k-reserva { --k-cor: var(--reservada); } .k-contrato_confeccao { --k-cor: var(--proposta); }
+.k-enviado_assinatura { --k-cor: var(--contrato); } .k-assinado { --k-cor: var(--vendida); }
+.coluna-cards { display: flex; flex-direction: column; gap: 10px; }
+.coluna-vazia { color: var(--tinta-3); font-size: 0.8125rem; text-align: center; padding: 18px 6px; border: 1px dashed var(--borda-forte); border-radius: 10px; margin: 0; }
+.kcard { background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 12px 12px 10px; box-shadow: var(--sombra); cursor: grab; display: flex; flex-direction: column; gap: 6px; }
+.kcard:active { cursor: grabbing; }
+.kcard.arrastando { opacity: 0.45; }
+.kcard-topo { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--tinta-2); }
+.kcard-unidade { background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 4px; padding: 0 6px; font-weight: 600; }
+.alca { margin-left: auto; color: var(--tinta-3); }
+.kcard-nome { border: 0; background: none; padding: 0; text-align: left; font-weight: 650; font-size: 0.9375rem; cursor: pointer; color: var(--tinta); }
+.kcard-nome:hover { text-decoration: underline; }
+.kcard-meta { margin: 0; color: var(--tinta-2); font-size: 0.75rem; }
+.kcard-pe { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; }
+.kcard-dias { display: inline-flex; align-items: center; gap: 4px; color: var(--tinta-3); font-size: 0.75rem; white-space: nowrap; }
+.kcard-pe select { width: auto; max-width: 128px; padding: 3px 6px; font-size: 0.75rem; }
+@media (max-width: 860px) { .kanban { grid-template-columns: repeat(5, 260px); } }
+
 /* ===== Imobiliárias, corretores e logins ===== */
 .duas-colunas { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .linha-form { display: flex; gap: 8px; margin-bottom: 10px; }

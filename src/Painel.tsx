@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X,
+  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -13,6 +13,7 @@ import { ListaPastas, DetalhePasta } from './Pastas';
 import { Imobiliarias, Corretores } from './Imobiliarias';
 import { Inicio } from './Inicio';
 import { Empreendimento } from './Empreendimento';
+import { Funil } from './Funil';
 import { useRota, ir, type Perfil } from './util';
 import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
 
@@ -176,7 +177,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
     ? [
       { c: '/painel', r: 'Início', i: <Home size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
-      ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }, { c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       ...(admin ? [
         { c: '/painel/imobiliarias', r: 'Imobiliárias e logins', i: <Building2 size={18} /> },
         { c: '/painel/empreendimento', r: 'Empreendimento', i: <Settings size={18} /> },
@@ -195,6 +196,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
   if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
   else if (atual === '/painel/pastas' && pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
+  else if (atual === '/painel/funil' && equipe && pastasAtivas) pagina = <Funil />;
   else if (atual === '/painel/imobiliarias' && admin) pagina = <Imobiliarias perfil={perfil} />;
   else if (atual === '/painel/empreendimento' && admin) pagina = <Empreendimento />;
   else if (atual === '/painel/corretores' && gestor) pagina = <Corretores perfil={perfil} />;

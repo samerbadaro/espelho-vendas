@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { supabase, formatarDataHora } from './dados';
 import { useDialogos } from './ui';
-import { FileSpreadsheet, BarChart3 } from 'lucide-react';
+import { FileSpreadsheet, BarChart3, FileArchive } from 'lucide-react';
+import { zipSync } from 'fflate';
 import {
   ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarTelefone, formatarData, formatarTamanho,
   ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC,
@@ -420,11 +421,48 @@ function Documentos({ pasta, estadoCivil, equipe, aoMudar }: { pasta: Pasta; est
   }, [pasta.id, recarga]);
 
   const atualizar = () => { setRecarga((n) => n + 1); aoMudar(); };
+  const { avisar } = useDialogos();
+  const [baixando, setBaixando] = useState('');
+
+  // Baixa todos os documentos atuais num único .zip, com nomes padronizados (ex.: IDENTIFICACAO_CARLOS.pdf)
+  const baixarTodos = async () => {
+    setBaixando('Preparando…');
+    const r = await chamarApi('/api/documentos/pacote', { pasta_id: pasta.id });
+    if (r.erro || !r.arquivos) { setBaixando(''); avisar(r.erro || 'Não foi possível preparar o download.', 'erro'); return; }
+    const conteudo: Record<string, [Uint8Array, { level: 0 }]> = {};
+    try {
+      for (let i = 0; i < r.arquivos.length; i++) {
+        setBaixando(`Baixando ${i + 1} de ${r.arquivos.length}…`);
+        const resp = await fetch(r.arquivos[i].url);
+        if (!resp.ok) throw new Error();
+        conteudo[r.arquivos[i].nome] = [new Uint8Array(await resp.arrayBuffer()), { level: 0 }];
+      }
+    } catch {
+      setBaixando(''); avisar('A conexão falhou durante o download. Tente novamente.', 'erro'); return;
+    }
+    const zip = zipSync(conteudo);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }));
+    a.download = r.nome_zip || 'documentos.zip';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    setBaixando('');
+    avisar(`${r.arquivos.length} documentos baixados.`);
+    setRecarga((n) => n + 1);
+  };
   const visiveis = tipos.filter((t) => (t.pessoa !== 'conjuge' || temConjuge(estadoCivil))
     && (t.exibir_para.length === 0 || t.exibir_para.includes(estadoCivil)));
 
   return (
     <div className="cartao">
+      {equipe && docs.some((d) => d.atual) && (
+        <div className="cartao-topo">
+          <span className="sub">{docs.filter((d) => d.atual).length} documentos anexados</span>
+          <button type="button" className="botao" onClick={baixarTodos} disabled={!!baixando}>
+            <FileArchive size={16} /> {baixando || 'Baixar todos (.zip)'}
+          </button>
+        </div>
+      )}
       {PESSOAS.map((p) => {
         const lista = visiveis.filter((t) => t.pessoa === p.valor);
         if (!lista.length) return null;

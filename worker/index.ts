@@ -74,6 +74,33 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     return json({ ok: true, url: link.signedUrl });
   }
 
+  // Todos os documentos de uma pasta, com nomes padronizados, para baixar num único .zip (somente equipe)
+  if (caminho === '/api/documentos/pacote') {
+    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    if (!token) return erro('Faça login novamente.', 401);
+    const comoUsuario = createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: docs, error } = await comoUsuario.rpc('registrar_download', { p_pasta: String(corpo.pasta_id || '') });
+    if (error) return erro('Somente a equipe de vendas pode baixar todos os documentos.', 403);
+    const lista = (docs ?? []) as { caminho: string; nome_arquivo: string; sigla: string; nome_pessoa: string; codigo: string; cliente: string }[];
+    if (!lista.length) return erro('Esta pasta ainda não tem documentos.', 404);
+
+    const limpar = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const usados = new Map<string, number>();
+    const { data: links, error: eLinks } = await adm.storage.from('documentos').createSignedUrls(lista.map((d) => d.caminho), 120);
+    if (eLinks || !links) return erro('Não foi possível preparar os arquivos.', 500);
+    const arquivos = lista.map((d, i) => {
+      const ext = (d.nome_arquivo.match(/\.([A-Za-z0-9]{2,5})$/)?.[1] || 'pdf').toLowerCase();
+      const base = `${limpar(d.sigla)}_${limpar(d.nome_pessoa.trim().split(/\s+/)[0] || 'CLIENTE')}`;
+      const n = (usados.get(base) ?? 0) + 1;
+      usados.set(base, n);
+      return { nome: `${n > 1 ? `${base}_${n}` : base}.${ext}`, url: links[i]?.signedUrl };
+    }).filter((a) => a.url);
+    return json({ ok: true, nome_zip: `${limpar(lista[0].codigo)}_${limpar(lista[0].cliente)}.zip`, arquivos });
+  }
+
   const quem = await identificar(req, adm);
   if (!quem) return erro('Você não tem permissão para gerenciar logins.', 403);
 
