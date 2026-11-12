@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { supabase, formatarDataHora } from './dados';
+import { useDialogos } from './ui';
 import {
-  ir, soDigitos, formatarCPF, cpfValido, formatarTelefone, formatarData, formatarTamanho,
+  ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarTelefone, formatarData, formatarTamanho,
   ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC,
   type EstadoCivil, type StatusPasta, type StatusDocumento, type Perfil,
 } from './util';
@@ -111,15 +112,15 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
             {filtradas.map((p) => (
               <tr key={p.id} onClick={() => ir(`/painel/pastas/${p.id}`)} tabIndex={0}
                 onKeyDown={(e) => e.key === 'Enter' && ir(`/painel/pastas/${p.id}`)}>
-                <td className="mono">{p.codigo}</td>
-                <td className="mono">{p.codigo_aprovacao ?? '—'}</td>
-                <td><strong>{p.comprador_nome}</strong></td>
-                <td className="nowrap">{formatarCPF(p.comprador_cpf)}</td>
-                {equipe && <td>{p.imobiliarias?.nome}</td>}
-                {verCriador && <td>{p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '—'}</td>}
-                <td>{p.unidades?.numero ?? '—'}</td>
+                <td className="mono" data-rotulo="Pasta">{p.codigo}</td>
+                <td className="mono" data-rotulo="Aprovação">{p.codigo_aprovacao ?? '—'}</td>
+                <td className="celula-titulo"><strong>{p.comprador_nome}</strong></td>
+                <td className="nowrap" data-rotulo="CPF">{formatarCPF(p.comprador_cpf)}</td>
+                {equipe && <td data-rotulo="Imobiliária">{p.imobiliarias?.nome}</td>}
+                {verCriador && <td data-rotulo="Cadastrada por">{p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '—'}</td>}
+                <td data-rotulo="Unidade">{p.unidades?.numero ?? '—'}</td>
                 <td><span className={`selo sp-${p.status}`}>{rotuloPasta(p.status)}</span></td>
-                <td>{formatarData(p.criada_em)}</td>
+                <td data-rotulo="Cadastro">{formatarData(p.criada_em)}</td>
               </tr>
             ))}
           </tbody>
@@ -448,9 +449,9 @@ function LinhaDocumento({ tipo, pasta, equipe, obrigatorio, docs, aoMudar }: {
 
   const abrir = async (d: Documento) => {
     const janela = window.open('', '_blank');
-    const { data, error } = await supabase.storage.from('documentos').createSignedUrl(d.caminho, 120);
-    if (error || !data) { janela?.close(); setErro('Não foi possível abrir o arquivo.'); return; }
-    if (janela) janela.location.href = data.signedUrl; else window.location.href = data.signedUrl;
+    const r = await chamarApi('/api/documentos/link', { documento_id: d.id });
+    if (r.erro || !r.url) { janela?.close(); setErro(r.erro || 'Não foi possível abrir o arquivo.'); return; }
+    if (janela) janela.location.href = r.url; else window.location.href = r.url;
   };
 
   const analisar = async (d: Documento, novo: StatusDocumento, mot?: string) => {
@@ -561,6 +562,7 @@ function HistoricoPasta({ pastaId, recarga }: { pastaId: string; recarga: number
 // Submissão ao incorporador
 // ---------------------------------------------------------------------
 function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolean; aoSubmeter: () => void }) {
+  const { confirmar, avisar } = useDialogos();
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
 
@@ -576,7 +578,7 @@ function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolea
 
   const pronta = pasta.status === 'pronta';
   const submeter = async () => {
-    if (!confirm('Submeter a pasta para aprovação do incorporador? Depois disso os dados do comprador não poderão mais ser editados pela imobiliária.')) return;
+    if (!(await confirmar({ titulo: 'Submeter ao incorporador?', texto: 'A pasta recebe o código de aprovação (PA) e os dados do comprador deixam de poder ser editados pela imobiliária.', confirmar: 'Submeter pasta' }))) return;
     setErro(''); setEnviando(true);
     const { error } = await supabase.rpc('submeter_pasta', { p_pasta: pasta.id });
     setEnviando(false);
@@ -586,6 +588,7 @@ function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolea
         : 'Não foi possível submeter a pasta. Tente novamente.');
       return;
     }
+    avisar('Pasta submetida ao incorporador.');
     aoSubmeter();
   };
   return (

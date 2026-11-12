@@ -11,7 +11,8 @@
     "run_worker_first": ["/api/*"]
   },
   "vars": {
-    "SUPABASE_URL": "https://mtlzwuiqznsyqasmdkew.supabase.co"
+    "SUPABASE_URL": "https://mtlzwuiqznsyqasmdkew.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_UEbdwY_CmKxEJ_0yaGFqCA_6g52r8yb"
   }
   // SUPABASE_SECRET_KEY: cadastrar como "Secret" no painel do Cloudflare
 }

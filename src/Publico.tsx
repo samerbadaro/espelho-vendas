@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useEspelho, type Unidade } from './dados';
 import { Predio, Resumo } from './Predio';
+import { Logo, useMarca } from './ui';
 
 /** Página pública (link compartilhável). Sem login, sem dados de compradores. */
 export function Publico() {
   const { unidades, config, carregando, erro, conectado, recentes } = useEspelho();
+  const { marca } = useMarca();
   useTitulo(config?.nome_empreendimento);
 
   if (carregando) return <Aviso texto="Carregando o espelho…" />;
@@ -13,13 +15,23 @@ export function Publico() {
 
   return (
     <div className="pagina-publica">
-      <header className="topo">
-        <h1 className="nome">{config?.nome_empreendimento}</h1>
-        <StatusConexao conectado={conectado} />
+      <header className="publico-topo">
+        <div className="publico-marca">
+          <Logo escuro />
+          {marca.cidade && <span>{marca.cidade}</span>}
+        </div>
       </header>
-      <Resumo unidades={unidades} />
-      <Predio unidades={unidades} recentes={recentes} />
-      <p className="rodape">Disponibilidade sujeita a confirmação pela equipe de vendas.</p>
+      <div className="publico-corpo">
+        <div className="publico-titulo">
+          <h1>Espelho de vendas</h1>
+          <StatusConexao conectado={conectado} />
+        </div>
+        <div className="cartao espelho-cartao">
+          <Resumo unidades={unidades} />
+          <Predio unidades={unidades} recentes={recentes} />
+        </div>
+        <p className="rodape">Disponibilidade sujeita a confirmação pela equipe de vendas.</p>
+      </div>
     </div>
   );
 }

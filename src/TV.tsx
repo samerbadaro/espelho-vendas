@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useEspelho, rotuloStatus } from './dados';
 import { Predio, Resumo } from './Predio';
 import { Aviso, StatusConexao, useAgora, useTitulo } from './Publico';
+import { Logo, useMarca } from './ui';
 
 /** Modo TV do salão de vendas: tela cheia, leitura à distância, sem interação. */
 export function TV() {
   const { unidades, config, carregando, erro, conectado, recentes } = useEspelho();
   const agora = useAgora(15_000);
+  const { marca } = useMarca();
   useTitulo(config?.nome_empreendimento);
 
   // Última movimentação recebida em tempo real (fica visível por 2 minutos)
@@ -31,7 +33,10 @@ export function TV() {
         <Predio unidades={unidades} recentes={recentes} />
       </main>
       <aside className="tv-painel">
-        <h1 className="nome">{config?.nome_empreendimento}</h1>
+        <div className="tv-marca">
+          {marca.logo_escuro_url || marca.logo_url ? <Logo escuro /> : <h1 className="nome">{config?.nome_empreendimento}</h1>}
+          {marca.cidade && <span className="tv-cidade">{marca.cidade}</span>}
+        </div>
         <Resumo unidades={unidades} grande />
         {mostrarUltima && (
           <p className={`tv-ultima s-borda-${ultima!.u.status}`} key={ultima!.quando}>

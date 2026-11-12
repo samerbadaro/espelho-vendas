@@ -35,6 +35,8 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 4. `supabase/migrations/004_pastas.sql` (imobiliárias, pastas, documentos, armazenamento privado e isolamento entre imobiliárias)
 5. `supabase/migrations/005_corretores.sql` (corretor vê só as pastas que criou; a imobiliária vê todas as dela e cria os logins dos corretores)
 6. `supabase/migrations/006_submissao.sql` (submissão ao incorporador com código PA, comprovante do PIX, telefone/e-mail/profissão obrigatórios)
+7. `supabase/migrations/007_correcao_obrigatorios.sql` (campos obrigatórios só ao criar/editar)
+8. `supabase/migrations/008_marca_e_visualizacoes.sql` (marca configurável, módulo de pastas opcional, registro de visualização de documentos, indicadores)
 
 ### Criar usuário da equipe
 
@@ -84,4 +86,7 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 - `src/Pastas.tsx`: pastas, documentos e análise
 - `src/Imobiliarias.tsx`: cadastro de imobiliárias e logins
 - `worker/index.ts`: servidor (site + criação de logins)
+- `src/Inicio.tsx`: tela inicial com indicadores
+- `src/Empreendimento.tsx`: nome, marca e módulos
+- `src/ui.tsx`: marca, confirmações, avisos e saída por inatividade
 - `src/estilo.css`: visual

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { supabase } from './dados';
 import { chamarApi, gerarSenha, type Perfil } from './util';
+import { useDialogos } from './ui';
 
 interface Imob { id: string; nome: string; ativa: boolean }
 
@@ -8,6 +9,7 @@ const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas:
 
 /** Cadastro de imobiliárias e logins (somente administrador). */
 export function Imobiliarias({ perfil }: { perfil: Perfil }) {
+  const { confirmar, avisar } = useDialogos();
   const [imobs, setImobs] = useState<Imob[]>([]);
   const [usuarios, setUsuarios] = useState<Perfil[]>([]);
   const [novaImob, setNovaImob] = useState('');
@@ -34,24 +36,24 @@ export function Imobiliarias({ perfil }: { perfil: Perfil }) {
   };
 
   const alternarAtiva = async (i: Imob) => {
-    if (i.ativa && !confirm(`Desativar ${i.nome}? O login dela deixa de acessar o sistema (as pastas continuam guardadas).`)) return;
+    if (i.ativa && !(await confirmar({ titulo: `Desativar ${i.nome}?`, texto: 'Os logins da imobiliária e dos corretores dela deixam de acessar o sistema. As pastas continuam guardadas.', confirmar: 'Desativar', perigo: true }))) return;
     await supabase.from('imobiliarias').update({ ativa: !i.ativa }).eq('id', i.id);
     carregar();
   };
 
   const novaSenha = async (u: Perfil) => {
-    if (!confirm(`Gerar uma nova senha provisória para ${u.email}?`)) return;
+    if (!(await confirmar({ titulo: 'Gerar nova senha provisória?', texto: `A senha atual de ${u.email} deixa de funcionar.`, confirmar: 'Gerar senha' }))) return;
     const senha = gerarSenha();
     const r = await chamarApi('/api/usuarios/senha', { user_id: u.user_id, senha });
-    if (r.erro) { alert(r.erro); return; }
+    if (r.erro) { avisar(r.erro, 'erro'); return; }
     setSenhaMostrada({ email: u.email, senha }); carregar();
   };
 
   const remover = async (u: Perfil) => {
-    if (!confirm(`Remover o login ${u.email}? A pessoa perde o acesso imediatamente. As pastas e o histórico continuam guardados.`)) return;
+    if (!(await confirmar({ titulo: `Remover o login ${u.email}?`, texto: 'A pessoa perde o acesso imediatamente. As pastas e o histórico continuam guardados.', confirmar: 'Remover', perigo: true }))) return;
     const r = await chamarApi('/api/usuarios/remover', { user_id: u.user_id });
-    if (r.erro) { alert(r.erro); return; }
-    carregar();
+    if (r.erro) { avisar(r.erro, 'erro'); return; }
+    avisar('Login removido.'); carregar();
   };
 
   const nomeImob = (id: string | null) => imobs.find((i) => i.id === id)?.nome ?? '—';
@@ -173,6 +175,7 @@ function NovoLogin({ imobs, aoCriar }: { imobs: Imob[]; aoCriar: (email: string,
 
 /** Imobiliária gerencia os logins dos seus corretores. */
 export function Corretores({ perfil }: { perfil: Perfil }) {
+  const { confirmar, avisar } = useDialogos();
   const [lista, setLista] = useState<Perfil[]>([]);
   const [email, setEmail] = useState('');
   const [nome, setNome] = useState('');
@@ -198,17 +201,17 @@ export function Corretores({ perfil }: { perfil: Perfil }) {
     setSenhaMostrada({ email: email.trim().toLowerCase(), senha }); setEmail(''); setNome(''); carregar();
   };
   const novaSenha = async (u: Perfil) => {
-    if (!confirm(`Gerar uma nova senha provisória para ${u.nome || u.email}?`)) return;
+    if (!(await confirmar({ titulo: 'Gerar nova senha provisória?', texto: `A senha atual de ${u.nome || u.email} deixa de funcionar.`, confirmar: 'Gerar senha' }))) return;
     const senha = gerarSenha();
     const r = await chamarApi('/api/usuarios/senha', { user_id: u.user_id, senha });
-    if (r.erro) { alert(r.erro); return; }
+    if (r.erro) { avisar(r.erro, 'erro'); return; }
     setSenhaMostrada({ email: u.email, senha }); carregar();
   };
   const remover = async (u: Perfil) => {
-    if (!confirm(`Remover o acesso de ${u.nome || u.email}? As pastas que ele criou continuam com a imobiliária.`)) return;
+    if (!(await confirmar({ titulo: `Remover o acesso de ${u.nome || u.email}?`, texto: 'As pastas que ele criou continuam com a imobiliária.', confirmar: 'Remover', perigo: true }))) return;
     const r = await chamarApi('/api/usuarios/remover', { user_id: u.user_id });
-    if (r.erro) { alert(r.erro); return; }
-    carregar();
+    if (r.erro) { avisar(r.erro, 'erro'); return; }
+    avisar('Acesso removido.'); carregar();
   };
 
   return (

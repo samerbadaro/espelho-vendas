@@ -86,7 +86,7 @@ export interface Perfil {
 }
 
 /** Chama o servidor (/api) com o login atual. */
-export async function chamarApi(caminho: string, corpo: unknown): Promise<{ ok?: boolean; erro?: string }> {
+export async function chamarApi(caminho: string, corpo: unknown): Promise<{ ok?: boolean; erro?: string; url?: string }> {
   const { data } = await supabase.auth.getSession();
   try {
     const r = await fetch(caminho, {

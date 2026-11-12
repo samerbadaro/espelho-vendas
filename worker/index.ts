@@ -11,6 +11,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SUPABASE_URL: string;
+  SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_SECRET_KEY?: string;
 }
 
@@ -54,11 +55,27 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
   const adm = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const quem = await identificar(req, adm);
-  if (!quem) return erro('Você não tem permissão para gerenciar logins.', 403);
-
   let corpo: Record<string, unknown>;
   try { corpo = await req.json(); } catch { return erro('Requisição inválida.'); }
+
+  // Link temporário (1 minuto) para visualizar um documento.
+  // A permissão é conferida pelo banco COM O LOGIN DO USUÁRIO, que também registra a visualização.
+  if (caminho === '/api/documentos/link') {
+    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    if (!token) return erro('Faça login novamente.', 401);
+    const comoUsuario = createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: arquivo, error } = await comoUsuario.rpc('registrar_visualizacao', { p_documento: String(corpo.documento_id || '') });
+    if (error || !arquivo) return erro('Você não tem acesso a este documento.', 403);
+    const { data: link, error: eLink } = await adm.storage.from('documentos').createSignedUrl(String(arquivo), 60);
+    if (eLink || !link) return erro('Não foi possível gerar o link do documento.', 500);
+    return json({ ok: true, url: link.signedUrl });
+  }
+
+  const quem = await identificar(req, adm);
+  if (!quem) return erro('Você não tem permissão para gerenciar logins.', 403);
 
   // Criar login
   if (caminho === '/api/usuarios') {

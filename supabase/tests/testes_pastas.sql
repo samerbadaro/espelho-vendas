@@ -56,7 +56,9 @@ insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-000
 insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/nasc.pdf' from ctx where k='pasta';
 insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/rg2.pdf' from ctx where k='pasta';
 insert into storage.objects (bucket_id, name) select 'documentos', 'aaaaaaaa-0000-0000-0000-000000000001/' || v || '/pix.pdf' from ctx where k='pasta';
+reset role;
 insert into r(teste, ok) select 'A envia arquivos para a própria pasta', (select count(*) from storage.objects) = 5;
+set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000d');
 do $$ declare d documentos; p uuid := (select v::uuid from ctx where k='pasta'); begin
   d := registrar_documento(p, 1, 'aaaaaaaa-0000-0000-0000-000000000001/'||p||'/rg.pdf', 'rg.pdf', 1000, 'application/pdf');
   insert into ctx values ('doc_rg', d.id::text);

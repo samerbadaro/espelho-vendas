@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import {
+  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X,
+} from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
   type Unidade, type Status,
@@ -8,7 +11,10 @@ import { Predio, Resumo } from './Predio';
 import { Aviso, StatusConexao, useTitulo } from './Publico';
 import { ListaPastas, DetalhePasta } from './Pastas';
 import { Imobiliarias, Corretores } from './Imobiliarias';
+import { Inicio } from './Inicio';
+import { Empreendimento } from './Empreendimento';
 import { useRota, ir, type Perfil } from './util';
+import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
 
 interface Registro {
   id: number; numero: string; status_anterior: Status | null; status_novo: Status;
@@ -16,7 +22,9 @@ interface Registro {
   detalhes?: Record<string, unknown> | null;
 }
 
-/** Painel: exige login e perfil cadastrado (admin, Sec. Vendas ou imobiliária). */
+const MINUTOS_INATIVIDADE = 60;
+
+/** Painel: exige login e perfil cadastrado (admin, Sec. Vendas, imobiliária ou corretor). */
 export function Painel() {
   const [sessao, setSessao] = useState<Session | null | undefined>(undefined);
   const [perfil, setPerfil] = useState<Perfil | null | undefined>(undefined);
@@ -42,14 +50,33 @@ export function Painel() {
   if (perfil === undefined) return <Aviso texto="Carregando…" />;
   if (!perfil) {
     return (
-      <div className="aviso">
-        <p>O usuário {sessao.user.email} não tem acesso ao painel. Peça a liberação ao administrador.</p>
+      <TelaAcesso>
+        <h1>Acesso não liberado</h1>
+        <p className="dica">O usuário {sessao.user.email} não tem acesso ao painel. Peça a liberação ao administrador.</p>
         <button className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
-      </div>
+      </TelaAcesso>
     );
   }
   if (perfil.trocar_senha) return <TrocarSenha aoTrocar={() => setRecarga((n) => n + 1)} />;
   return <Casca perfil={perfil} />;
+}
+
+/** Tela dividida usada no login e na troca de senha: imagem do empreendimento + formulário. */
+function TelaAcesso({ children }: { children: ReactNode }) {
+  const { marca } = useMarca();
+  return (
+    <div className="acesso">
+      <div className="acesso-imagem" style={marca.imagem_login_url ? { backgroundImage: `url(${marca.imagem_login_url})` } : undefined}>
+        <div className="acesso-marca">
+          <Logo escuro />
+          {marca.cidade && <span>{marca.cidade}</span>}
+        </div>
+      </div>
+      <div className="acesso-form">
+        <div className="acesso-caixa">{children}</div>
+      </div>
+    </div>
+  );
 }
 
 function Login() {
@@ -67,14 +94,17 @@ function Login() {
   };
 
   return (
-    <form className="login" onSubmit={entrar}>
-      <h1>Painel de vendas</h1>
-      <label>E-mail<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-      <label>Senha<input type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
-      {erro && <p className="erro" role="alert">{erro}</p>}
-      <button className="botao principal" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
-      <p className="dica">Esqueceu a senha? Peça uma nova ao administrador.</p>
-    </form>
+    <TelaAcesso>
+      <form className="login" onSubmit={entrar}>
+        <h1>Entrar no painel</h1>
+        <p className="dica">Acesso para a equipe de vendas, imobiliárias e corretores.</p>
+        <label>E-mail<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+        <label>Senha<input type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
+        {erro && <p className="erro" role="alert">{erro}</p>}
+        <button className="botao principal largo" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
+        <p className="dica">Esqueceu a senha? Corretores pedem à imobiliária; imobiliárias pedem ao administrador.</p>
+      </form>
+    </TelaAcesso>
   );
 }
 
@@ -89,69 +119,133 @@ function TrocarSenha({ aoTrocar }: { aoTrocar: () => void }) {
     if (senha !== confirma) { setErro('As duas senhas não são iguais.'); return; }
     setSalvando(true);
     const { error } = await supabase.auth.updateUser({ password: senha });
-    if (error) { setSalvando(false); setErro('Não foi possível trocar a senha. Tente uma senha diferente.'); return; }
+    if (error) {
+      setSalvando(false);
+      setErro(/pwned|leak|weak/i.test(error.message)
+        ? 'Essa senha é fraca ou já apareceu em vazamentos na internet. Escolha outra.'
+        : 'Não foi possível trocar a senha. Tente uma senha diferente.');
+      return;
+    }
     await supabase.rpc('senha_trocada');
     setSalvando(false); aoTrocar();
   };
   return (
-    <form className="login" onSubmit={salvar}>
-      <h1>Crie sua senha</h1>
-      <p className="dica">Você entrou com uma senha provisória. Crie uma senha própria para continuar.</p>
-      <label>Nova senha<input type="password" autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
-      <label>Repita a nova senha<input type="password" autoComplete="new-password" value={confirma} onChange={(e) => setConfirma(e.target.value)} required /></label>
-      {erro && <p className="erro" role="alert">{erro}</p>}
-      <button className="botao principal" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar senha'}</button>
-      <button type="button" className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
-    </form>
+    <TelaAcesso>
+      <form className="login" onSubmit={salvar}>
+        <h1>Crie sua senha</h1>
+        <p className="dica">Você entrou com uma senha provisória. Crie uma senha própria, com pelo menos 8 caracteres.</p>
+        <label>Nova senha<input type="password" autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
+        <label>Repita a nova senha<input type="password" autoComplete="new-password" value={confirma} onChange={(e) => setConfirma(e.target.value)} required /></label>
+        {erro && <p className="erro" role="alert">{erro}</p>}
+        <button className="botao principal largo" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar senha'}</button>
+        <button type="button" className="botao largo" onClick={() => supabase.auth.signOut()}>Sair</button>
+      </form>
+    </TelaAcesso>
   );
 }
 
-/** Estrutura do painel: topo, menu e a página da vez. */
+const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor' };
+
+/** Estrutura do painel: menu lateral (no celular, barra inferior) e a página da vez. */
 function Casca({ perfil }: { perfil: Perfil }) {
   const rota = useRota();
-  const [nome, setNome] = useState('');
+  const { marca } = useMarca();
+  const { avisar } = useDialogos();
   const [imob, setImob] = useState('');
+  const [menuAberto, setMenuAberto] = useState(false);
   const equipe = perfil.papel === 'admin' || perfil.papel === 'vendas';
+  const admin = perfil.papel === 'admin';
   const gestor = perfil.papel === 'imobiliaria';
+  const pastasAtivas = marca.modulo_pastas;
 
   useEffect(() => {
-    supabase.from('config').select('nome_empreendimento').eq('id', 1).single()
-      .then(({ data }) => setNome((data as { nome_empreendimento: string } | null)?.nome_empreendimento ?? ''));
     if (!equipe) supabase.from('imobiliarias').select('nome').maybeSingle()
       .then(({ data }) => setImob((data as { nome: string } | null)?.nome ?? ''));
   }, [equipe]);
-  useTitulo(nome ? `Painel, ${nome}` : undefined);
+  useEffect(() => setMenuAberto(false), [rota]);
+  useTitulo(marca.nome_empreendimento ? `Painel, ${marca.nome_empreendimento}` : undefined);
 
-  const menu = equipe
-    ? [{ c: '/painel', r: 'Espelho' }, { c: '/painel/pastas', r: 'Pastas' }, ...(perfil.papel === 'admin' ? [{ c: '/painel/imobiliarias', r: 'Imobiliárias e logins' }] : [])]
-    : [{ c: '/painel', r: 'Pastas' }, ...(gestor ? [{ c: '/painel/corretores', r: 'Corretores' }] : []), { c: '/painel/espelho', r: 'Espelho' }];
-  const ativo = (c: string) => (c === '/painel' ? rota === '/painel' || (!equipe && rota.startsWith('/painel/pastas')) : rota.startsWith(c));
+  const sair = useCallback(() => {
+    supabase.auth.signOut();
+    avisar('Sessão encerrada por inatividade.');
+  }, [avisar]);
+  useSaidaPorInatividade(MINUTOS_INATIVIDADE, sair);
 
-  let pagina;
-  const idPasta = rota.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
-  if (idPasta) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
-  else if (rota === '/painel/pastas' || (!equipe && rota === '/painel')) pagina = <ListaPastas perfil={perfil} />;
-  else if (rota === '/painel/imobiliarias' && perfil.papel === 'admin') pagina = <Imobiliarias perfil={perfil} />;
-  else if (rota === '/painel/espelho' && !equipe) pagina = <EspelhoSomenteLeitura />;
-  else if (rota === '/painel/corretores' && gestor) pagina = <Corretores perfil={perfil} />;
-  else pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <ListaPastas perfil={perfil} />;
+  type Item = { c: string; r: string; i: ReactNode };
+  const menu: Item[] = equipe
+    ? [
+      { c: '/painel', r: 'Início', i: <Home size={18} /> },
+      { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
+      ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(admin ? [
+        { c: '/painel/imobiliarias', r: 'Imobiliárias e logins', i: <Building2 size={18} /> },
+        { c: '/painel/empreendimento', r: 'Empreendimento', i: <Settings size={18} /> },
+      ] : []),
+    ]
+    : [
+      ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
+      { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
+    ];
+  const inicial = menu[0].c;
+  const atual = rota === '/painel' ? inicial : rota;
+  const ativo = (c: string) => (c === '/painel' ? atual === '/painel' : atual.startsWith(c));
+
+  let pagina: ReactNode;
+  const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
+  if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
+  else if (atual === '/painel/pastas' && pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
+  else if (atual === '/painel/imobiliarias' && admin) pagina = <Imobiliarias perfil={perfil} />;
+  else if (atual === '/painel/empreendimento' && admin) pagina = <Empreendimento />;
+  else if (atual === '/painel/corretores' && gestor) pagina = <Corretores perfil={perfil} />;
+  else if (atual === '/painel/espelho') pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <EspelhoSomenteLeitura />;
+  else if (atual === '/painel' && equipe) pagina = <Inicio perfil={perfil} />;
+  else pagina = equipe ? <Inicio perfil={perfil} /> : pastasAtivas ? <ListaPastas perfil={perfil} /> : <EspelhoSomenteLeitura />;
+
+  const nomeUsuario = equipe ? perfil.nome || perfil.email : gestor ? imob : perfil.nome || perfil.email;
+  const subtitulo = equipe ? PAPEL[perfil.papel] : gestor ? 'Imobiliária' : `Corretor, ${imob}`;
+
+  const navegar = (c: string) => (e: React.MouseEvent) => { e.preventDefault(); ir(c); };
 
   return (
-    <div className="painel">
-      <header className="topo">
-        <h1 className="nome">{nome}</h1>
-        <nav className="menu" aria-label="Seções">
+    <div className={`app${menuAberto ? ' menu-aberto' : ''}`}>
+      <aside className="lateral" aria-label="Menu principal">
+        <div className="lateral-topo">
+          <a href={inicial} onClick={navegar(inicial)} className="lateral-logo"><Logo escuro /></a>
+          <button className="so-celular icone-botao" onClick={() => setMenuAberto(false)} aria-label="Fechar menu"><X size={20} /></button>
+        </div>
+        <nav className="lateral-menu">
           {menu.map((m) => (
-            <a key={m.c} href={m.c} className={ativo(m.c) ? 'ativo' : ''} aria-current={ativo(m.c) ? 'page' : undefined}
-              onClick={(e) => { e.preventDefault(); ir(m.c); }}>{m.r}</a>
+            <a key={m.c} href={m.c} className={ativo(m.c) ? 'ativo' : ''} aria-current={ativo(m.c) ? 'page' : undefined} onClick={navegar(m.c)}>
+              {m.i}<span>{m.r}</span>
+            </a>
           ))}
         </nav>
-        <div className="topo-acoes">
-          <span className="usuario">{equipe ? perfil.nome || perfil.email : gestor ? imob : `${perfil.nome || perfil.email}, ${imob}`}</span>
-          <button className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
+        {equipe && (
+          <div className="lateral-links">
+            <a href="/tv" target="_blank" rel="noreferrer"><Tv size={16} /><span>Modo TV</span></a>
+            <a href="/" target="_blank" rel="noreferrer"><ExternalLink size={16} /><span>Link público</span></a>
+          </div>
+        )}
+        <div className="lateral-usuario">
+          <div className="avatar" aria-hidden="true">{(nomeUsuario || '?').trim().charAt(0).toUpperCase()}</div>
+          <div className="usuario-dados">
+            <strong>{nomeUsuario}</strong>
+            <span>{subtitulo}</span>
+          </div>
+          <button className="icone-botao" onClick={() => supabase.auth.signOut()} aria-label="Sair" title="Sair"><LogOut size={18} /></button>
         </div>
-      </header>
-      {pagina}
+      </aside>
+      <div className="fundo-menu so-celular" onClick={() => setMenuAberto(false)} />
+
+      <div className="conteudo">
+        <header className="barra-celular so-celular">
+          <button className="icone-botao" onClick={() => setMenuAberto(true)} aria-label="Abrir menu"><Menu size={22} /></button>
+          <Logo className="logo-pequeno" />
+          <span />
+        </header>
+        <main>{pagina}</main>
+      </div>
     </div>
   );
 }
@@ -159,16 +253,22 @@ function Casca({ perfil }: { perfil: Perfil }) {
 function EspelhoSomenteLeitura() {
   const esp = useEspelho();
   return (
-    <section className="secao">
-      <div className="secao-topo"><h2>Espelho de unidades</h2><StatusConexao conectado={esp.conectado} /></div>
-      <Resumo unidades={esp.unidades} />
-      <Predio unidades={esp.unidades} recentes={esp.recentes} />
+    <section className="secao larga">
+      <div className="secao-topo">
+        <div><h2>Espelho de unidades</h2><p className="sub">Disponibilidade atualizada em tempo real.</p></div>
+        <StatusConexao conectado={esp.conectado} />
+      </div>
+      <div className="cartao espelho-cartao">
+        <Resumo unidades={esp.unidades} />
+        <Predio unidades={esp.unidades} recentes={esp.recentes} />
+      </div>
     </section>
   );
 }
 
 function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
   const esp = useEspelho();
+  const { confirmar, avisar } = useDialogos();
   const [selecionada, setSelecionada] = useState<Unidade | null>(null);
   const [historico, setHistorico] = useState<Registro[]>([]);
 
@@ -178,53 +278,49 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
       .order('criado_em', { ascending: false }).limit(20);
     setHistorico((data as Registro[]) ?? []);
   }, []);
-  // recarrega o histórico sempre que algo muda no espelho
   const ultimaMudanca = Math.max(0, ...Object.values(esp.recentes));
   useEffect(() => { carregarHistorico(); }, [carregarHistorico, ultimaMudanca]);
 
-  // mantém a unidade aberta no diálogo sincronizada com o tempo real
   const atual = selecionada ? esp.unidades.find((u) => u.id === selecionada.id) ?? selecionada : null;
 
   const alternarPublico = async () => {
     if (!esp.config) return;
     const ativar = !esp.config.publico_ativo;
-    if (!ativar && !confirm('Tirar o link público do ar? Quem estiver com o link aberto deixa de ver o espelho.')) return;
+    if (!ativar && !(await confirmar({ titulo: 'Tirar o link público do ar?', texto: 'Quem estiver com o link aberto deixa de ver o espelho. A equipe e as imobiliárias logadas continuam vendo.', confirmar: 'Tirar do ar', perigo: true }))) return;
     const { error } = await supabase.rpc('definir_publico', { p_ativo: ativar });
-    if (error) alert('Não foi possível alterar o link público. Tente novamente.');
+    if (error) avisar('Não foi possível alterar o link público. Tente novamente.', 'erro');
+    else avisar(ativar ? 'Link público no ar.' : 'Link público fora do ar.');
     esp.recarregar();
   };
 
   return (
-    <>
+    <section className="secao larga">
+      <div className="secao-topo">
+        <div><h2>Espelho de unidades</h2><p className="sub">Toque em uma unidade para alterar o status.</p></div>
+        <StatusConexao conectado={esp.conectado} />
+      </div>
       <div className="painel-corpo">
-        <section className="painel-espelho" aria-label="Espelho">
-          <div className="linha-status"><Resumo unidades={esp.unidades} /><StatusConexao conectado={esp.conectado} /></div>
-          <p className="dica">Toque em uma unidade para alterar o status.</p>
+        <div className="cartao espelho-cartao">
+          <Resumo unidades={esp.unidades} />
           <Predio unidades={esp.unidades} recentes={esp.recentes} aoSelecionar={setSelecionada} />
-        </section>
+        </div>
 
         <aside className="painel-lateral">
           {perfil.papel === 'admin' && esp.config && (
-            <div className="caixa">
-              <h2>Link público</h2>
-              <p>{esp.config.publico_ativo ? 'No ar. Qualquer pessoa com o link vê o espelho.' : 'Fora do ar. Só a equipe e as imobiliárias logadas veem o espelho.'}</p>
-              <div className="links">
-                <a href="/" target="_blank" rel="noreferrer">Abrir link público</a>
-                <a href="/tv" target="_blank" rel="noreferrer">Abrir modo TV</a>
-              </div>
-              <button className="botao" onClick={alternarPublico}>
-                {esp.config.publico_ativo ? 'Tirar do ar' : 'Colocar no ar'}
-              </button>
+            <div className="cartao">
+              <h3>Link público</h3>
+              <p className="sub">{esp.config.publico_ativo ? 'No ar. Qualquer pessoa com o link vê o espelho.' : 'Fora do ar. Só a equipe e as imobiliárias logadas veem o espelho.'}</p>
+              <button className="botao" onClick={alternarPublico}>{esp.config.publico_ativo ? 'Tirar do ar' : 'Colocar no ar'}</button>
             </div>
           )}
-          <div className="caixa">
-            <h2>Últimas alterações</h2>
+          <div className="cartao">
+            <h3>Últimas alterações</h3>
             {historico.length === 0 ? <p className="vazio">Nenhuma alteração ainda.</p> : (
               <ol className="historico">
                 {historico.map((h) => (
                   <li key={h.id}>
-                    <strong>{h.numero}</strong> {h.status_anterior ? rotuloStatus(h.status_anterior).toLowerCase() : ''} para{' '}
-                    <span className={`etiqueta s-${h.status_novo}`}>{rotuloStatus(h.status_novo).toLowerCase()}</span>
+                    <span><strong>{h.numero}</strong> {h.status_anterior ? rotuloStatus(h.status_anterior).toLowerCase() : ''} para{' '}
+                      <span className={`etiqueta s-${h.status_novo}`}>{rotuloStatus(h.status_novo).toLowerCase()}</span></span>
                     {h.motivo && <span className="motivo">“{h.motivo}”</span>}
                     <span className="quem">{h.usuario_email}, {formatarDataHora(h.criado_em)}</span>
                   </li>
@@ -239,11 +335,11 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
         <DialogoUnidade
           unidade={atual}
           aoFechar={() => setSelecionada(null)}
-          aoSalvar={(u) => { esp.atualizarLocal(u); setSelecionada(null); carregarHistorico(); }}
+          aoSalvar={(u) => { esp.atualizarLocal(u); setSelecionada(null); carregarHistorico(); avisar(`Unidade ${u.numero}: ${rotuloStatus(u.status).toLowerCase()}.`); }}
           aoConflito={() => esp.recarregar()}
         />
       )}
-    </>
+    </section>
   );
 }
 
