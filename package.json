@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "teste:proposta": "node --experimental-strip-types --no-warnings tests/proposta.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
