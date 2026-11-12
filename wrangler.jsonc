@@ -1,0 +1,10 @@
+// Publicação no Cloudflare (Workers com arquivos estáticos)
+{
+  "name": "espelho-vendas",
+  "compatibility_date": "2025-09-01",
+  "build": { "command": "npm run build" },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
