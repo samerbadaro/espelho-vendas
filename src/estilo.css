@@ -7,12 +7,14 @@
   --primaria-texto: #FFFFFF;
   --destaque: #94874A;
   --destaque-texto: #FFFFFF;
+  --apoio: #CFCBC2;
+  --apoio-texto: #1D1E19;
 
-  --fundo: #F2F3EF;
+  --fundo: color-mix(in srgb, var(--apoio) 16%, #FAFAF8);
   --superficie: #FFFFFF;
-  --superficie-2: #F7F8F5;
-  --borda: #E2E3DD;
-  --borda-forte: #CBCDC5;
+  --superficie-2: color-mix(in srgb, var(--apoio) 8%, #FCFCFB);
+  --borda: color-mix(in srgb, var(--apoio) 38%, #F0F0EE);
+  --borda-forte: color-mix(in srgb, var(--apoio) 60%, #C9C9C5);
   --tinta: #1D1E19;
   --tinta-2: #63665B;
   --tinta-3: #8E9186;
@@ -100,7 +102,7 @@ textarea { resize: vertical; }
 }
 .lateral-topo { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 18px; }
 .lateral-logo { color: inherit; text-decoration: none; }
-.lateral-logo .logo { max-height: 52px; max-width: 190px; }
+.lateral-logo .logo { max-height: 64px; max-width: 170px; }
 .lateral-menu, .lateral-links { display: flex; flex-direction: column; gap: 2px; }
 .lateral-menu a, .lateral-links a {
   display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 8px;
@@ -177,7 +179,7 @@ textarea { resize: vertical; }
 .predio-cabecalho { font-size: 0.6875rem; color: var(--tinta-3); text-align: center; font-variant-numeric: tabular-nums; }
 .rotulo-andar { display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; font-size: 0.75rem; color: var(--tinta-2); font-variant-numeric: tabular-nums; font-weight: 600; }
 .faixa {
-  grid-column: 2 / -1; background: var(--destaque); color: var(--destaque-texto); text-align: center;
+  grid-column: 2 / -1; background: var(--apoio); color: var(--apoio-texto); text-align: center;
   font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; height: calc(var(--linha-predio) * 0.78);
   display: flex; align-items: center; justify-content: center; border-radius: 4px;
 }
@@ -191,8 +193,8 @@ textarea { resize: vertical; }
 button.unidade { cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }
 button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relative; z-index: 1; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); }
 .bloco-vazio {
-  height: var(--linha-predio); border-radius: 4px; border: 1px dashed var(--destaque);
-  color: color-mix(in srgb, var(--destaque) 80%, black); display: flex; align-items: center; justify-content: center;
+  height: var(--linha-predio); border-radius: 4px; border: 1px dashed color-mix(in srgb, var(--apoio) 70%, black);
+  color: color-mix(in srgb, var(--apoio) 45%, black); display: flex; align-items: center; justify-content: center;
   font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
 }
 .unidade.mudou { animation: pulso 1.2s ease-out 4; position: relative; z-index: 2; }
@@ -237,7 +239,7 @@ button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relati
 }
 .acesso-imagem::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, color-mix(in srgb, var(--primaria) 85%, transparent), transparent 55%); }
 .acesso-marca { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; }
-.acesso-marca .logo { max-height: 72px; max-width: 280px; }
+.acesso-marca .logo { max-height: 130px; max-width: 300px; }
 .acesso-marca .logo-texto { font-size: 2rem; color: var(--primaria-texto); }
 .acesso-marca span { opacity: 0.8; }
 .acesso-form { display: grid; place-items: center; padding: 32px; background: var(--superficie); }
@@ -395,10 +397,10 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
 .tv .predio-cabecalho, .tv .rotulo-andar { color: #A9AB9F; font-size: clamp(0.75rem, 1.4vh, 1.1rem); }
 .tv .unidade { font-size: calc(var(--linha-predio) * 0.48); }
 .tv .faixa { font-size: calc(var(--linha-predio) * 0.4); }
-.tv .bloco-vazio { color: var(--destaque); font-size: calc(var(--linha-predio) * 0.4); }
+.tv .bloco-vazio { color: var(--apoio); border-color: color-mix(in srgb, var(--apoio) 55%, transparent); font-size: calc(var(--linha-predio) * 0.4); }
 .tv-painel { display: flex; flex-direction: column; gap: 4.5vh; justify-content: center; }
 .tv-marca { display: flex; flex-direction: column; gap: 1vh; }
-.tv-marca .logo { max-height: 16vh; max-width: 100%; }
+.tv-marca .logo { max-height: 18vh; max-width: 100%; width: auto; object-position: left center; align-self: flex-start; }
 .tv .nome { font-size: clamp(1.75rem, 2.6vw, 3.4rem); overflow-wrap: break-word; hyphens: manual; }
 .tv-cidade { color: #A9AB9F; font-size: clamp(1rem, 1.3vw, 1.4rem); }
 .resumo-grande { flex-direction: column; padding: 0; margin: 0; gap: 1.6vh; }

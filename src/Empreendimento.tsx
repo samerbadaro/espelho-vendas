@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ImageUp, Trash2 } from 'lucide-react';
 import { supabase } from './dados';
-import { useMarca, useDialogos, aplicarMarca, textoSobre, type Marca } from './ui';
+import { useMarca, useDialogos, aplicarMarca, textoSobre, FONTES, type Marca } from './ui';
 
-type Campos = Pick<Marca, 'nome_empreendimento' | 'cidade' | 'cor_primaria' | 'cor_destaque' | 'logo_url' | 'logo_escuro_url' | 'imagem_login_url' | 'modulo_pastas'>;
+type Campos = Pick<Marca, 'nome_empreendimento' | 'cidade' | 'cor_primaria' | 'cor_destaque' | 'cor_apoio' | 'fonte' | 'logo_url' | 'logo_escuro_url' | 'imagem_login_url' | 'modulo_pastas'>;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 
 /** Configuração do empreendimento (somente administrador): nome, marca e módulos. */
@@ -16,16 +16,16 @@ export function Empreendimento() {
   useEffect(() => {
     if (marca.nome_empreendimento && !f) setF({
       nome_empreendimento: marca.nome_empreendimento, cidade: marca.cidade ?? '', cor_primaria: marca.cor_primaria,
-      cor_destaque: marca.cor_destaque, logo_url: marca.logo_url, logo_escuro_url: marca.logo_escuro_url,
+      cor_destaque: marca.cor_destaque, cor_apoio: marca.cor_apoio, fonte: marca.fonte, logo_url: marca.logo_url, logo_escuro_url: marca.logo_escuro_url,
       imagem_login_url: marca.imagem_login_url, modulo_pastas: marca.modulo_pastas,
     });
   }, [marca, f]);
 
   // pré-visualização ao vivo das cores
   useEffect(() => {
-    if (f && HEX.test(f.cor_primaria) && HEX.test(f.cor_destaque)) aplicarMarca(f);
+    if (f && HEX.test(f.cor_primaria) && HEX.test(f.cor_destaque) && HEX.test(f.cor_apoio)) aplicarMarca(f);
     return () => aplicarMarca(marca);
-  }, [f?.cor_primaria, f?.cor_destaque]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [f?.cor_primaria, f?.cor_destaque, f?.cor_apoio, f?.fonte]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!f) return <section className="secao"><p className="vazio">Carregando…</p></section>;
   const muda = (k: keyof Campos, v: unknown) => setF((x) => (x ? { ...x, [k]: v } : x));
@@ -33,11 +33,11 @@ export function Empreendimento() {
   const salvar = async (e: FormEvent) => {
     e.preventDefault();
     if (f.nome_empreendimento.trim().length < 2) { avisar('Informe o nome do empreendimento.', 'erro'); return; }
-    if (!HEX.test(f.cor_primaria) || !HEX.test(f.cor_destaque)) { avisar('As cores precisam estar no formato #RRGGBB.', 'erro'); return; }
+    if (!HEX.test(f.cor_primaria) || !HEX.test(f.cor_destaque) || !HEX.test(f.cor_apoio)) { avisar('As cores precisam estar no formato #RRGGBB.', 'erro'); return; }
     setSalvando(true);
     const { error } = await supabase.from('config').update({
       nome_empreendimento: f.nome_empreendimento.trim(), cidade: f.cidade?.trim() || null,
-      cor_primaria: f.cor_primaria, cor_destaque: f.cor_destaque, logo_url: f.logo_url,
+      cor_primaria: f.cor_primaria, cor_destaque: f.cor_destaque, cor_apoio: f.cor_apoio, fonte: f.fonte, logo_url: f.logo_url,
       logo_escuro_url: f.logo_escuro_url, imagem_login_url: f.imagem_login_url,
       modulo_pastas: f.modulo_pastas, atualizado_em: new Date().toISOString(),
     }).eq('id', 1);
@@ -65,7 +65,13 @@ export function Empreendimento() {
           <h3>Identidade visual</h3>
           <div className="grade-campos">
             <CampoCor rotulo="Cor principal (menu e botões)" valor={f.cor_primaria} aoMudar={(v) => muda('cor_primaria', v)} />
-            <CampoCor rotulo="Cor de destaque (detalhes e faixas)" valor={f.cor_destaque} aoMudar={(v) => muda('cor_destaque', v)} />
+            <CampoCor rotulo="Cor de destaque (detalhes e realces)" valor={f.cor_destaque} aoMudar={(v) => muda('cor_destaque', v)} />
+            <CampoCor rotulo="Cor de apoio (faixas do prédio e fundos)" valor={f.cor_apoio} aoMudar={(v) => muda('cor_apoio', v)} />
+            <label>Fonte
+              <select value={f.fonte} onChange={(e) => muda('fonte', e.target.value)}>
+                {[...new Set([f.fonte, ...FONTES])].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
           </div>
           <div className="grade-imagens">
             <EnvioImagem rotulo="Logo para fundo claro" dica="PNG ou SVG com fundo transparente" valor={f.logo_url} aoMudar={(v) => muda('logo_url', v)} fundo="#FFFFFF" />

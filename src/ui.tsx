@@ -9,6 +9,8 @@ export interface Marca {
   cidade: string | null;
   cor_primaria: string;
   cor_destaque: string;
+  cor_apoio: string;
+  fonte: string;
   logo_url: string | null;
   logo_escuro_url: string | null;
   imagem_login_url: string | null;
@@ -17,7 +19,7 @@ export interface Marca {
 }
 
 const PADRAO: Marca = {
-  nome_empreendimento: '', cidade: null, cor_primaria: '#23251C', cor_destaque: '#94874A',
+  nome_empreendimento: '', cidade: null, cor_primaria: '#23251C', cor_destaque: '#94874A', cor_apoio: '#CFCBC2', fonte: 'Archivo',
   logo_url: null, logo_escuro_url: null, imagem_login_url: null, modulo_pastas: true, publico_ativo: true,
 };
 
@@ -31,27 +33,53 @@ export function textoSobre(hex: string) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#1B1C17' : '#FFFFFF';
 }
 
-export function aplicarMarca(m: Pick<Marca, 'cor_primaria' | 'cor_destaque'>) {
+export const FONTES = ['42dot Sans', 'Archivo', 'Manrope', 'DM Sans', 'Montserrat', 'Inter', 'Plus Jakarta Sans', 'Outfit'];
+
+function carregarFonte(nome: string) {
+  if (!/^[A-Za-z0-9 ]{2,40}$/.test(nome)) return;
+  const id = 'fonte-marca-' + nome.replace(/ /g, '-');
+  if (document.getElementById(id)) return;
+  const link = document.createElement('link');
+  link.id = id; link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(nome).replace(/%20/g, '+')}:wght@300..800&display=swap`;
+  document.head.appendChild(link);
+}
+
+export function aplicarMarca(m: Partial<Pick<Marca, 'cor_primaria' | 'cor_destaque' | 'cor_apoio' | 'fonte'>>) {
   const s = document.documentElement.style;
-  s.setProperty('--primaria', m.cor_primaria);
-  s.setProperty('--primaria-texto', textoSobre(m.cor_primaria));
-  s.setProperty('--destaque', m.cor_destaque);
-  s.setProperty('--destaque-texto', textoSobre(m.cor_destaque));
+  if (m.cor_primaria) { s.setProperty('--primaria', m.cor_primaria); s.setProperty('--primaria-texto', textoSobre(m.cor_primaria)); }
+  if (m.cor_destaque) { s.setProperty('--destaque', m.cor_destaque); s.setProperty('--destaque-texto', textoSobre(m.cor_destaque)); }
+  if (m.cor_apoio) { s.setProperty('--apoio', m.cor_apoio); s.setProperty('--apoio-texto', textoSobre(m.cor_apoio)); }
+  if (m.fonte) { carregarFonte(m.fonte); s.setProperty('--fonte', `'${m.fonte}', system-ui, sans-serif`); }
 }
 
 const MarcaCtx = createContext<{ marca: Marca; carregada: boolean; recarregar: () => void }>({
   marca: PADRAO, carregada: false, recarregar: () => {},
 });
 
+const CHAVE_CACHE = 'espelho-marca';
+function marcaGuardada(): Marca {
+  try {
+    const m = { ...PADRAO, ...JSON.parse(localStorage.getItem(CHAVE_CACHE) || '{}') } as Marca;
+    aplicarMarca(m);
+    return m;
+  } catch { return PADRAO; }
+}
+
 export function ProvedorMarca({ children }: { children: ReactNode }) {
-  const [marca, setMarca] = useState<Marca>(PADRAO);
+  // usa a última marca conhecida para não piscar as cores padrão ao abrir
+  const [marca, setMarca] = useState<Marca>(marcaGuardada);
   const [carregada, setCarregada] = useState(false);
   const recarregar = useCallback(() => {
     supabase.from('config')
-      .select('nome_empreendimento, cidade, cor_primaria, cor_destaque, logo_url, logo_escuro_url, imagem_login_url, modulo_pastas, publico_ativo')
+      .select('*')
       .eq('id', 1).single()
       .then(({ data }) => {
-        if (data) { const m = { ...PADRAO, ...(data as Partial<Marca>) }; setMarca(m); aplicarMarca(m); }
+        if (data) {
+          const m = { ...PADRAO, ...(data as Partial<Marca>) };
+          setMarca(m); aplicarMarca(m);
+          try { localStorage.setItem(CHAVE_CACHE, JSON.stringify(m)); } catch { /* navegador sem armazenamento */ }
+        }
         setCarregada(true);
       });
   }, []);
