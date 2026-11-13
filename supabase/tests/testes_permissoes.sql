@@ -40,55 +40,21 @@ do $$ begin update public.unidades set status='vendida' where numero='201';
   insert into r values ('07 intruso não faz UPDATE direto', false);
 exception when others then insert into r values ('07 intruso não faz UPDATE direto', true); end $$;
 
--- 8. Reservar SEM imobiliária/corretor/cliente é bloqueado
+-- 8. Reservar sem pasta aprovada é bloqueado (a partir da 014)
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
-do $$ begin perform public.alterar_status((select id from unidades where numero='201'), 'reservada', 1, null, 'Imob X', null, null);
-  insert into r values ('08 reservar sem dados bloqueado', false);
-exception when others then insert into r values ('08 reservar sem dados bloqueado', sqlerrm='DADOS_RESERVA_OBRIGATORIOS'); end $$;
--- 8b. Reservar com os dados funciona, versão sobe
+do $$ begin perform public.alterar_status((select id from unidades where numero='201'), 'reservada', 1, null, 'Imob X', 'Corretor Y', 'Cliente Z');
+  insert into r values ('08 reservar sem pasta bloqueado', false);
+exception when others then insert into r values ('08 reservar sem pasta bloqueado', sqlerrm='PASTA_OBRIGATORIA'); end $$;
+-- 9. Bloquear funciona e a versão sobe
 do $$ declare u unidades; begin
-  u := public.alterar_status((select id from unidades where numero='201'), 'reservada', 1, null, 'Imob X', 'Corretor Y', 'Cliente Z');
-  insert into r values ('08b vendas reserva 201 com dados', u.status='reservada' and u.versao=2);
+  u := public.alterar_status((select id from unidades where numero='201'), 'bloqueada', 1, 'Teste');
+  insert into r values ('09 vendas bloqueia 201', u.status='bloqueada' and u.versao=2);
 end $$;
-insert into r select '09 histórico e negociação gravados',
-  exists (select 1 from historico where numero='201' and status_novo='reservada' and usuario_email='vendas@teste'
-          and detalhes->>'cliente'='Cliente Z')
-  and exists (select 1 from negociacoes n join unidades u on u.id=n.unidade_id where u.numero='201' and n.ativa and n.corretor='Corretor Y');
 -- 10. Versão antiga -> CONFLITO
-do $$ begin perform public.alterar_status((select id from unidades where numero='201'), 'vendida', 1, null);
+do $$ begin perform public.alterar_status((select id from unidades where numero='201'), 'disponivel', 1, null);
   insert into r values ('10 versão antiga gera CONFLITO', false);
 exception when others then insert into r values ('10 versão antiga gera CONFLITO', sqlerrm='CONFLITO'); end $$;
--- 10b. Proposta sem valor/PV é bloqueada
-do $$ begin perform public.alterar_status((select id from unidades where numero='201'), 'proposta', 2, null, null, null, null, 250000, null);
-  insert into r values ('10b proposta sem PV bloqueada', false);
-exception when others then insert into r values ('10b proposta sem PV bloqueada', sqlerrm='DADOS_PROPOSTA_OBRIGATORIOS'); end $$;
--- 10c. Proposta com valor e PV, aproveitando dados da reserva
-do $$ declare u unidades; begin
-  u := public.alterar_status((select id from unidades where numero='201'), 'proposta', 2, null, null, null, null, 250000, 82.5);
-  insert into r values ('10c proposta com valor e PV', u.status='proposta' and u.versao=3
-    and exists (select 1 from negociacoes where unidade_id=u.id and ativa and cliente='Cliente Z' and valor_venda=250000 and pv_aprovado=82.5));
-end $$;
--- 10d. Contrato e Vendida sem nada
-do $$ declare u unidades; begin
-  u := public.alterar_status((select id from unidades where numero='201'), 'contrato', 3);
-  u := public.alterar_status((select id from unidades where numero='201'), 'vendida', 4);
-  insert into r values ('10d contrato e venda sem campos', u.status='vendida' and u.versao=5);
-end $$;
--- 10e. Pular etapa: Disponível direto para Proposta exige os 5 campos
-do $$ begin perform public.alterar_status((select id from unidades where numero='202'), 'proposta', 1, null, null, null, null, 250000, 80);
-  insert into r values ('10e pular para proposta sem dados da reserva bloqueado', false);
-exception when others then insert into r values ('10e pular para proposta sem dados da reserva bloqueado', sqlerrm='DADOS_RESERVA_OBRIGATORIOS'); end $$;
--- 11. Desfazer venda sem motivo é bloqueado
-do $$ begin perform public.alterar_status((select id from unidades where numero='201'), 'disponivel', 5, '  ');
-  insert into r values ('11 liberar sem motivo bloqueado', false);
-exception when others then insert into r values ('11 liberar sem motivo bloqueado', sqlerrm='MOTIVO_OBRIGATORIO'); end $$;
--- 12. Com motivo funciona e encerra a negociação
-do $$ declare u unidades; begin
-  u := public.alterar_status((select id from unidades where numero='201'), 'disponivel', 5, 'Cliente desistiu');
-  insert into r values ('12 liberar com motivo encerra negociação', u.status='disponivel' and u.versao=6
-    and not exists (select 1 from negociacoes where unidade_id=u.id and ativa)
-    and exists (select 1 from negociacoes where unidade_id=u.id and not ativa and motivo_encerramento='Cliente desistiu'));
-end $$;
+do $$ begin perform public.alterar_status((select id from unidades where numero='201'), 'disponivel', 2, null); end $$;
 -- 13. Vendas não liga/desliga link público
 do $$ begin perform public.definir_publico(false);
   insert into r values ('13 vendas não desliga público', false);

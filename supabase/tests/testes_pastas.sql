@@ -161,8 +161,9 @@ reset role;
 set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000b');
 select analisar_documento(v::uuid, 'aprovado') from ctx where k in ('doc_rg2', 'doc_end', 'doc_nasc', 'doc_pix') \g /dev/null
 insert into r(teste, ok) select 'Todos obrigatórios aprovados: pasta aprovada', (select status='aprovada' from pastas);
-select vincular_unidade((select v::uuid from ctx where k='pasta'), (select id from unidades where numero='1205')) \g /dev/null
-insert into r(teste, ok) select 'Equipe vincula unidade', (select u.numero='1205' from pastas p join unidades u on u.id=p.unidade_id);
+do $$ begin perform vincular_unidade((select v::uuid from ctx where k='pasta'), (select id from unidades where numero='1205'));
+  insert into r(teste, ok) values ('Vínculo manual de unidade desativado (014)', false);
+exception when others then insert into r(teste, ok) values ('Vínculo manual de unidade desativado (014)', sqlerrm='VINCULO_PELO_ESPELHO'); end $$;
 reset role;
 
 set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000d');

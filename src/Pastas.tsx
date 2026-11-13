@@ -362,28 +362,21 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
 }
 
 // ---------------------------------------------------------------------
-function VincularUnidade({ pasta, aoMudar }: { pasta: Pasta; aoMudar: () => void }) {
-  const [unidades, setUnidades] = useState<{ id: string; numero: string }[]>([]);
-  const [valor, setValor] = useState(pasta.unidade_id ?? '');
-  const [erro, setErro] = useState('');
+function VincularUnidade({ pasta }: { pasta: Pasta; aoMudar?: () => void }) {
+  const [numero, setNumero] = useState<string | null>(null);
   useEffect(() => {
-    supabase.from('unidades').select('id, numero').order('andar').order('posicao')
-      .then(({ data }) => setUnidades((data as { id: string; numero: string }[]) ?? []));
-  }, []);
-  const salvar = async (novo: string) => {
-    setValor(novo); setErro('');
-    const { error } = await supabase.rpc('vincular_unidade', { p_pasta: pasta.id, p_unidade: novo || null });
-    if (error) setErro('Não foi possível vincular a unidade.'); else aoMudar();
-  };
+    if (!pasta.unidade_id) { setNumero(null); return; }
+    supabase.from('unidades').select('numero').eq('id', pasta.unidade_id).maybeSingle()
+      .then(({ data }) => setNumero((data as { numero: string } | null)?.numero ?? null));
+  }, [pasta.unidade_id]);
   return (
     <div className="vinculo">
-      <label>Unidade vinculada
-        <select value={valor} onChange={(e) => salvar(e.target.value)}>
-          <option value="">Nenhuma</option>
-          {unidades.map((u) => <option key={u.id} value={u.id}>{u.numero}</option>)}
-        </select>
-      </label>
-      {erro && <span className="erro">{erro}</span>}
+      <span>Unidade: <strong>{pasta.unidade_id ? (numero ?? '…') : 'nenhuma'}</strong></span>
+      <span className="dica">
+        {pasta.status === 'aprovada'
+          ? 'A unidade é ligada pela reserva no espelho ou pelo funil de vendas.'
+          : 'A reserva fica disponível quando a documentação for aprovada.'}
+      </span>
     </div>
   );
 }

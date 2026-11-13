@@ -352,12 +352,21 @@ const EXIGE_MOTIVO = (de: Status, para: Status) =>
 interface Negociacao {
   imobiliaria: string | null; corretor: string | null; cliente: string | null;
   valor_venda: number | null; pv_aprovado: number | null;
+  pasta_id: string | null; pastas: { codigo: string; codigo_aprovacao: string | null } | null;
+}
+
+interface PastaLivre {
+  id: string; codigo: string; codigo_aprovacao: string | null; comprador_nome: string;
+  criado_por: string | null; imobiliarias: { nome: string } | null;
 }
 
 const ERROS: Record<string, string> = {
   CONFLITO: 'Outra pessoa alterou esta unidade agora há pouco. Feche, confira o status atual e tente de novo.',
   MOTIVO_OBRIGATORIO: 'Informe o motivo para desfazer a negociação.',
-  DADOS_RESERVA_OBRIGATORIOS: 'Preencha imobiliária, corretor e cliente.',
+  PASTA_OBRIGATORIA: 'Escolha a pasta do cliente. Só pastas com documentação aprovada podem reservar.',
+  PASTA_NAO_APROVADA: 'Esta pasta ainda não está com a documentação aprovada.',
+  PASTA_JA_TEM_UNIDADE: 'Esta pasta já está com outra unidade. Libere a outra unidade antes.',
+  UNIDADE_COM_OUTRA_PASTA: 'Esta unidade já está com outra pasta. Libere a unidade antes de trocar o cliente.',
   DADOS_PROPOSTA_OBRIGATORIOS: 'Preencha o valor da venda e o PV aprovado.',
   VALOR_INVALIDO: 'O valor da venda precisa ser maior que zero.',
   PV_INVALIDO: 'O PV aprovado não pode ser negativo.',
@@ -372,16 +381,14 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
 }) {
   const [novo, setNovo] = useState<Status | null>(null);
   const [motivo, setMotivo] = useState('');
-  const [imob, setImob] = useState('');
-  const [corretor, setCorretor] = useState('');
-  const [cliente, setCliente] = useState('');
+  const [pastaId, setPastaId] = useState('');
+  const [pastasLivres, setPastasLivres] = useState<PastaLivre[] | null>(null);
   const [valor, setValor] = useState('');
   const [pv, setPv] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [neg, setNeg] = useState<Negociacao | null>(null);
-  const [sugestoes, setSugestoes] = useState<{ imob: string[]; corretor: string[] }>({ imob: [], corretor: [] });
   const [versaoAberta] = useState(unidade.versao);
 
   useEffect(() => {
@@ -390,33 +397,24 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
       .eq('unidade_id', unidade.id).order('criado_em', { ascending: false }).limit(10)
       .then(({ data }) => setRegistros((data as Registro[]) ?? []));
     supabase.from('negociacoes')
-      .select('imobiliaria, corretor, cliente, valor_venda, pv_aprovado')
+      .select('imobiliaria, corretor, cliente, valor_venda, pv_aprovado, pasta_id, pastas(codigo, codigo_aprovacao)')
       .eq('unidade_id', unidade.id).eq('ativa', true).maybeSingle()
       .then(({ data }) => {
-        const n = (data as Negociacao) ?? null;
+        const n = (data as unknown as Negociacao) ?? null;
         setNeg(n);
         if (n) {
-          setImob(n.imobiliaria ?? ''); setCorretor(n.corretor ?? ''); setCliente(n.cliente ?? '');
           setValor(n.valor_venda != null ? n.valor_venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '');
           setPv(n.pv_aprovado != null ? n.pv_aprovado.toLocaleString('pt-BR') : '');
         }
       });
   }, [unidade.id, unidade.versao]);
 
-  // sugestões de imobiliárias e corretores já usados (evita grafias diferentes)
+  // pastas com documentação aprovada e sem unidade (só a equipe chega aqui)
   useEffect(() => {
-    Promise.all([
-      supabase.from('negociacoes').select('imobiliaria, corretor').limit(1000),
-      supabase.from('imobiliarias').select('nome').eq('ativa', true),
-    ]).then(([n, i]) => {
-      const lista = [
-        ...((n.data as { imobiliaria: string | null; corretor: string | null }[]) ?? []),
-        ...((i.data as { nome: string }[]) ?? []).map((x) => ({ imobiliaria: x.nome, corretor: null })),
-      ];
-      const unicos = (k: 'imobiliaria' | 'corretor') =>
-        [...new Set(lista.map((x) => x[k]).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      setSugestoes({ imob: unicos('imobiliaria'), corretor: unicos('corretor') });
-    });
+    supabase.from('pastas')
+      .select('id, codigo, codigo_aprovacao, comprador_nome, criado_por, imobiliarias(nome)')
+      .eq('status', 'aprovada').is('unidade_id', null).order('comprador_nome')
+      .then(({ data }) => setPastasLivres((data as unknown as PastaLivre[]) ?? []));
   }, []);
 
   useEffect(() => {
@@ -427,17 +425,17 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
 
   const mudouPorOutro = unidade.versao !== versaoAberta;
   const precisaMotivo = novo ? EXIGE_MOTIVO(unidade.status, novo) : false;
-  const reservaCompleta = Boolean(neg?.imobiliaria && neg?.corretor && neg?.cliente);
-  // campos da reserva: ao reservar, ou ao ir para proposta sem reserva registrada
-  const pedeReserva = novo === 'reservada' || (novo === 'proposta' && !reservaCompleta);
+  // em negociação, a unidade precisa estar ligada a uma pasta aprovada
+  const pedePasta = novo != null && EM_NEGOCIACAO.includes(novo) && !neg?.pasta_id;
   const pedeProposta = novo === 'proposta';
+  const pastaEscolhida = pastasLivres?.find((p) => p.id === pastaId);
 
   const salvar = async () => {
     if (!novo) return;
     const valorNum = lerNumero(valor);
     const pvNum = lerNumero(pv);
     if (precisaMotivo && !motivo.trim()) { setErro(ERROS.MOTIVO_OBRIGATORIO); return; }
-    if (pedeReserva && (!imob.trim() || !corretor.trim() || !cliente.trim())) { setErro(ERROS.DADOS_RESERVA_OBRIGATORIOS); return; }
+    if (pedePasta && !pastaId) { setErro(ERROS.PASTA_OBRIGATORIA); return; }
     if (pedeProposta) {
       if (valorNum == null || pvNum == null) { setErro(ERROS.DADOS_PROPOSTA_OBRIGATORIOS); return; }
       if (valorNum <= 0) { setErro(ERROS.VALOR_INVALIDO); return; }
@@ -446,11 +444,9 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
     setSalvando(true); setErro('');
     const { data, error } = await supabase.rpc('alterar_status', {
       p_unidade_id: unidade.id, p_status: novo, p_versao: versaoAberta, p_motivo: motivo.trim() || null,
-      p_imobiliaria: pedeReserva ? imob.trim() : null,
-      p_corretor: pedeReserva ? corretor.trim() : null,
-      p_cliente: pedeReserva ? cliente.trim() : null,
       p_valor: pedeProposta ? valorNum : null,
       p_pv: pedeProposta ? pvNum : null,
+      p_pasta: pedePasta ? pastaId : null,
     });
     setSalvando(false);
     if (error) {
@@ -480,7 +476,8 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
           <dl className="ficha negociacao">
             <div><dt>Imobiliária</dt><dd>{neg.imobiliaria || '—'}</dd></div>
             <div><dt>Corretor</dt><dd>{neg.corretor || '—'}</dd></div>
-            <div className="largo"><dt>Cliente</dt><dd>{neg.cliente || '—'}</dd></div>
+            <div><dt>Cliente</dt><dd>{neg.cliente || '—'}</dd></div>
+            <div><dt>Pasta</dt><dd>{neg.pastas ? (neg.pastas.codigo_aprovacao ?? neg.pastas.codigo) : 'Sem pasta'}</dd></div>
             <div><dt>Valor da venda</dt><dd>{formatarReais(neg.valor_venda)}</dd></div>
             <div><dt>PV aprovado</dt><dd>{formatarPV(neg.pv_aprovado)}</dd></div>
           </dl>
@@ -501,19 +498,28 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
           ))}
         </fieldset>
 
-        {pedeReserva && (
+        {pedePasta && (
           <div className="campos">
-            <label>Imobiliária
-              <input list="lista-imob" value={imob} onChange={(e) => setImob(e.target.value)} maxLength={120} autoComplete="off" />
+            <label className="largo">Pasta do cliente (documentação aprovada)
+              <select value={pastaId} onChange={(e) => { setPastaId(e.target.value); setErro(''); }} disabled={!pastasLivres?.length}>
+                <option value="">{pastasLivres == null ? 'Carregando…' : pastasLivres.length ? 'Escolha a pasta' : 'Nenhuma pasta disponível'}</option>
+                {pastasLivres?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {(p.codigo_aprovacao ?? p.codigo)} · {p.comprador_nome}{p.imobiliarias ? ` · ${p.imobiliarias.nome}` : ''}
+                  </option>
+                ))}
+              </select>
             </label>
-            <label>Corretor
-              <input list="lista-corretor" value={corretor} onChange={(e) => setCorretor(e.target.value)} maxLength={120} autoComplete="off" />
-            </label>
-            <label className="largo">Cliente
-              <input value={cliente} onChange={(e) => setCliente(e.target.value)} maxLength={160} autoComplete="off" placeholder="Nome do cliente" />
-            </label>
-            <datalist id="lista-imob">{sugestoes.imob.map((x) => <option key={x} value={x} />)}</datalist>
-            <datalist id="lista-corretor">{sugestoes.corretor.map((x) => <option key={x} value={x} />)}</datalist>
+            {pastasLivres?.length === 0 && (
+              <p className="dica largo">Nenhuma pasta com documentação aprovada e sem unidade. A reserva só pode ser feita depois que a documentação for aprovada.</p>
+            )}
+            {pastaEscolhida && (
+              <p className="dica largo">
+                Cliente {pastaEscolhida.comprador_nome}
+                {pastaEscolhida.imobiliarias ? `, ${pastaEscolhida.imobiliarias.nome}` : ''}
+                {pastaEscolhida.criado_por ? `, corretor ${pastaEscolhida.criado_por}` : ''}. A pasta vai para a etapa correspondente no funil.
+              </p>
+            )}
           </div>
         )}
 
@@ -529,7 +535,7 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
           </div>
         )}
 
-        {novo && (precisaMotivo || (!pedeReserva && !pedeProposta)) && (
+        {novo && (precisaMotivo || (!pedePasta && !pedeProposta)) && (
           <label className="campo-motivo">
             {precisaMotivo ? 'Motivo (obrigatório)' : 'Observação (opcional)'}
             <textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={300}
