@@ -46,6 +46,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 15. `supabase/migrations/015_varias_unidades.sql` (uma pasta com várias unidades; um card por unidade no funil)
 16. `supabase/migrations/016_permutante.sql` (status Permutante, que funciona como Bloqueada)
 17. `supabase/migrations/017_rodadas.sql` (rodadas de negócios: confirmação de clientes por imobiliária, com limite de vagas)
+18. `supabase/migrations/018_rodadas_convidados.sql` (nome completo de cada convidado; só o corretor edita os seus)
 
 ### Criar usuário da equipe
 

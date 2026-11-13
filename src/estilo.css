@@ -571,3 +571,8 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
   .tabela-rolagem { overflow: visible; }
   .lista-rodada tr { break-inside: avoid; }
 }
+.qtd-convidados { grid-column: 1 / -1; max-width: 260px; }
+.lista-convidados { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.lista-convidados label { display: flex; flex-direction: column; gap: 5px; font-size: 0.8125rem; font-weight: 600; color: var(--tinta-2); }
+.lista-convidados label:first-child { grid-column: 1 / -1; }
+@media (max-width: 640px) { .lista-convidados { grid-template-columns: 1fr; } }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, CalendarDays, Download, MapPin, Pencil, Plus, Printer, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Download, FileText, MapPin, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import { supabase } from './dados';
 import { formatarTelefone, ir, type Perfil } from './util';
 import { useDialogos } from './ui';
@@ -10,7 +10,7 @@ interface Rodada {
 }
 interface Vagas { rodada_id: string; clientes: number; pessoas: number }
 interface Inscricao {
-  id: string; rodada_id: string; cliente_nome: string; pessoas: number; telefone: string | null; observacao: string | null;
+  id: string; rodada_id: string; cliente_nome: string; pessoas: number; convidados: string[] | null; telefone: string | null; observacao: string | null;
   imobiliaria_id: string | null; corretor_id: string | null; corretor_nome: string | null; criado_em: string;
   imobiliarias: { nome: string } | null;
 }
@@ -27,17 +27,28 @@ const ERROS: Record<string, string> = {
   INSCRICOES_ENCERRADAS: 'As confirmações desta rodada estão encerradas. Fale com a Sec. Vendas.',
   RODADA_JA_ACONTECEU: 'Esta rodada já aconteceu.',
   PESSOAS_INVALIDO: 'Informe quantas pessoas vêm, de 1 a 20.',
+  NOME_CONVIDADO_OBRIGATORIO: 'Preencha o nome completo de todos os convidados.',
+  NOME_COMPLETO_OBRIGATORIO: 'Informe nome e sobrenome de cada convidado.',
   RODADA_LOTADA: 'As vagas desta rodada acabaram. Fale com a Sec. Vendas.',
   CLIENTE_JA_CONFIRMADO: 'Este cliente já está confirmado nesta rodada.',
   INSCRICAO_NAO_ENCONTRADA: 'Confirmação não encontrada.',
 };
 const mensagem = (e: { message: string } | null) => (e ? ERROS[e.message] ?? 'Não foi possível salvar. Tente novamente.' : '');
 
+/** Nomes de todos os convidados de uma confirmação (o primeiro é o cliente). */
+const convidadosDe = (i: Inscricao) => {
+  const l = i.convidados?.length ? [...i.convidados] : [i.cliente_nome];
+  while (l.length < i.pessoas) l.push('');
+  return l;
+};
+const ordenarPorCliente = (l: Inscricao[]) => [...l].sort((a, b) => a.cliente_nome.localeCompare(b.cliente_nome, 'pt-BR'));
+
 const dataLonga = (iso: string) => {
   const d = new Date(iso);
   const dia = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
   return `${dia.charAt(0).toUpperCase()}${dia.slice(1)}, às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 };
+const arquivo = (nome: string) => nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const paraCampoData = (iso: string) => {
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, '0');
@@ -271,6 +282,7 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
   const [editandoRodada, setEditandoRodada] = useState(false);
   const [editando, setEditando] = useState<Inscricao | null>(null);
   const [comTelefone, setComTelefone] = useState(false);
+  const [gerando, setGerando] = useState(false);
 
   const carregar = useCallback(async () => {
     const [r, v, l] = await Promise.all([
@@ -316,7 +328,7 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
   const realizada = new Date(rodada.data_hora) < new Date();
   const lotada = (vagas?.clientes ?? 0) >= rodada.limite_clientes;
   const podeConfirmar = equipe ? !lotada : rodada.inscricoes_abertas && !realizada && !lotada;
-  const podeAlterar = (i: Inscricao) => equipe || gestor || i.corretor_id === perfil.user_id;
+  const podeAlterar = (i: Inscricao) => equipe || i.corretor_id === perfil.user_id;
   const alteravelAgora = equipe || (rodada.inscricoes_abertas && !realizada);
 
   const cancelar = async (i: Inscricao) => {
@@ -333,17 +345,75 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
     avisar('Rodada excluída.'); ir('/painel/rodadas');
   };
 
+  // uma linha por participante, agrupado por cliente
+  const participantes = () => ordenarPorCliente(lista).flatMap((i) => convidadosDe(i).map((nome, k) => ({ i, nome, k })));
+
   const baixar = () => {
-    const cab = ['Cliente', 'Pessoas', ...(comTelefone ? ['Telefone'] : []), 'Imobiliária', 'Corretor', 'Observação', 'Confirmado em'];
-    const linhas = lista.map((i) => [
-      i.cliente_nome, i.pessoas, ...(comTelefone ? [formatarTelefone(i.telefone)] : []), i.imobiliarias?.nome ?? '',
-      i.corretor_nome ?? '', i.observacao ?? '', new Date(i.criado_em).toLocaleString('pt-BR'),
+    const cab = ['Participante', 'Tipo', 'Cliente', ...(comTelefone ? ['Telefone'] : []), 'Imobiliária', 'Corretor', 'Observação'];
+    const linhas = participantes().map(({ i, nome, k }) => [
+      nome || '(nome não informado)', k === 0 ? 'Cliente' : 'Acompanhante', i.cliente_nome,
+      ...(comTelefone ? [k === 0 ? formatarTelefone(i.telefone) : ''] : []),
+      i.imobiliarias?.nome ?? 'Direto', i.corretor_nome ?? '', k === 0 ? i.observacao ?? '' : '',
     ]);
     const csv = [cab, ...linhas].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `rodada-${rodada.nome.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-')}.csv`;
+    a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `convidados-${arquivo(rodada.nome)}.csv`;
     a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  const baixarPdf = async () => {
+    setGerando(true);
+    try {
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const larg = doc.internal.pageSize.getWidth();
+      const lista2 = participantes();
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+      doc.text(rodada.nome, 14, 18);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+      doc.text([dataLonga(rodada.data_hora), rodada.local ?? ''].filter(Boolean).join('  ·  '), 14, 24);
+      doc.text(`${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'} · ${lista2.length} ${lista2.length === 1 ? 'participante' : 'participantes'}`, 14, 29);
+      doc.text(`Gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`, larg - 14, 29, { align: 'right' });
+      doc.setTextColor(0);
+      let grupo = -1; let ultimo = '';
+      autoTable(doc, {
+        startY: 34,
+        head: [['#', 'Participante', 'Cliente', 'Imobiliária / corretor', 'Presença']],
+        body: lista2.map(({ i, nome, k }, n) => [
+          String(n + 1), nome || '(nome não informado)', k === 0 ? 'Cliente' : `Acomp. de ${i.cliente_nome}`,
+          `${i.imobiliarias?.nome ?? 'Direto'}${i.corretor_nome ? `\n${i.corretor_nome}` : ''}`, '',
+        ]),
+        styles: { font: 'helvetica', fontSize: 9, cellPadding: 2.2, valign: 'middle', lineColor: [220, 220, 215], lineWidth: 0.1 },
+        headStyles: { fillColor: [29, 30, 25], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 0: { cellWidth: 9, halign: 'right' }, 1: { cellWidth: 58, fontStyle: 'bold' }, 2: { cellWidth: 48 }, 4: { cellWidth: 22, halign: 'center' } },
+        didParseCell: (d) => {
+          if (d.section !== 'body') return;
+          const cli = lista2[d.row.index].i.id;
+          if (cli !== ultimo) { ultimo = cli; grupo++; }
+          if (grupo % 2 === 1) d.cell.styles.fillColor = [244, 244, 240];
+          if (d.column.index === 1 && lista2[d.row.index].k > 0) d.cell.styles.fontStyle = 'normal';
+        },
+        didDrawCell: (d) => {
+          if (d.section === 'body' && d.column.index === 4) {
+            const t = 4; doc.setDrawColor(60); doc.setLineWidth(0.3);
+            doc.rect(d.cell.x + (d.cell.width - t) / 2, d.cell.y + (d.cell.height - t) / 2, t, t);
+          }
+        },
+        didDrawPage: () => {
+          const alt = doc.internal.pageSize.getHeight();
+          doc.setFontSize(8); doc.setTextColor(130);
+          doc.text(`${rodada.nome} · página ${doc.getNumberOfPages()}`, larg - 14, alt - 8, { align: 'right' });
+          doc.setTextColor(0);
+        },
+        margin: { left: 14, right: 14, bottom: 14 },
+      });
+      doc.save(`convidados-${arquivo(rodada.nome)}.pdf`);
+    } catch {
+      avisar('Não foi possível gerar o PDF.', 'erro');
+    } finally {
+      setGerando(false);
+    }
   };
 
   const nomeImob = (x: string) => imobs.find((i) => i.id === x)?.nome ?? '';
@@ -390,8 +460,8 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
           {equipe && lista.length > 0 && (
             <div className="acoes-lista so-tela">
               <label className="check pequeno"><input type="checkbox" checked={comTelefone} onChange={(e) => setComTelefone(e.target.checked)} /> Incluir telefone</label>
-              <button className="botao pequeno" onClick={baixar}><Download size={14} /> Baixar lista</button>
-              <button className="botao pequeno" onClick={() => window.print()}><Printer size={14} /> Imprimir</button>
+              <button className="botao pequeno" onClick={baixar}><Download size={14} /> Planilha</button>
+              <button className="botao pequeno principal" onClick={baixarPdf} disabled={gerando}><FileText size={14} /> {gerando ? 'Gerando…' : 'PDF dos participantes'}</button>
             </div>
           )}
         </div>
@@ -412,7 +482,12 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
                 {lista.map((i, n) => (
                   <tr key={i.id}>
                     <td className="mono">{n + 1}</td>
-                    <td><strong>{i.cliente_nome}</strong></td>
+                    <td>
+                      <strong>{i.cliente_nome}</strong>
+                      {convidadosDe(i).length > 1 && (
+                        <small className="bloco">+ {convidadosDe(i).slice(1).map((n) => n || 'sem nome').join(', ')}</small>
+                      )}
+                    </td>
                     <td className="num">{i.pessoas}</td>
                     {(!equipe || comTelefone) && <td className="nowrap">{formatarTelefone(i.telefone) || '—'}</td>}
                     {(equipe || gestor) && <td>{i.imobiliarias?.nome ?? '—'}{i.corretor_nome ? <small className="bloco">{i.corretor_nome}</small> : null}</td>}
@@ -452,10 +527,35 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
   );
 }
 
+/** Quantidade de pessoas primeiro; um campo de nome completo para cada uma. */
+function CamposConvidados({ nomes, setNomes }: { nomes: string[]; setNomes: (n: string[]) => void }) {
+  const mudarQtd = (q: number) => {
+    const n = Math.max(1, Math.min(20, q || 1));
+    setNomes(Array.from({ length: n }, (_, k) => nomes[k] ?? ''));
+  };
+  return (
+    <>
+      <label className="qtd-convidados">Quantas pessoas vêm
+        <select value={nomes.length} onChange={(e) => mudarQtd(Number(e.target.value))}>
+          {Array.from({ length: 20 }, (_, k) => k + 1).map((n) => <option key={n} value={n}>{n} {n === 1 ? 'pessoa' : 'pessoas'}</option>)}
+        </select>
+        <small>Contando o cliente</small>
+      </label>
+      <div className="lista-convidados largo">
+        {nomes.map((n, k) => (
+          <label key={k}>{k === 0 ? 'Nome completo do cliente' : `Nome completo do acompanhante ${k}`}
+            <input value={n} maxLength={120} placeholder="Nome e sobrenome"
+              onChange={(e) => setNomes(nomes.map((x, j) => (j === k ? e.target.value : x)))} />
+          </label>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function FormCliente({ rodadaId, equipe, imobs, aoSalvar }: { rodadaId: string; equipe: boolean; imobs: Imob[]; aoSalvar: () => void }) {
   const { avisar } = useDialogos();
-  const [nome, setNome] = useState('');
-  const [pessoas, setPessoas] = useState('1');
+  const [nomes, setNomes] = useState<string[]>(['']);
   const [telefone, setTelefone] = useState('');
   const [obs, setObs] = useState('');
   const [imob, setImob] = useState('');
@@ -464,15 +564,16 @@ function FormCliente({ rodadaId, equipe, imobs, aoSalvar }: { rodadaId: string; 
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault(); setErro('');
+    if (nomes.some((n) => n.trim().split(/\s+/).length < 2)) { setErro(ERROS.NOME_COMPLETO_OBRIGATORIO); return; }
     setSalvando(true);
     const { error } = await supabase.rpc('confirmar_cliente_rodada', {
-      p_rodada: rodadaId, p_cliente: nome, p_pessoas: Number(pessoas), p_telefone: telefone, p_observacao: obs,
+      p_rodada: rodadaId, p_convidados: nomes, p_telefone: telefone, p_observacao: obs,
       p_imobiliaria: equipe && imob ? imob : null,
     });
     setSalvando(false);
     if (error) { setErro(mensagem(error)); return; }
-    avisar(`${nome.trim()} confirmado.`);
-    setNome(''); setPessoas('1'); setTelefone(''); setObs('');
+    avisar(`${nomes[0].trim()} confirmado${nomes.length > 1 ? ` com ${nomes.length - 1} ${nomes.length === 2 ? 'acompanhante' : 'acompanhantes'}` : ''}.`);
+    setNomes(['']); setTelefone(''); setObs('');
     aoSalvar();
   };
 
@@ -480,14 +581,8 @@ function FormCliente({ rodadaId, equipe, imobs, aoSalvar }: { rodadaId: string; 
     <form className="cartao so-tela" onSubmit={enviar}>
       <h3>Confirmar cliente</h3>
       <div className="campos campos-cliente">
-        <label className="largo">Nome do cliente
-          <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="Nome completo" />
-        </label>
-        <label>Quantas pessoas vêm
-          <input type="number" min={1} max={20} value={pessoas} onChange={(e) => setPessoas(e.target.value)} />
-          <small>Contando o cliente</small>
-        </label>
-        <label>Telefone (opcional)
+        <CamposConvidados nomes={nomes} setNomes={setNomes} />
+        <label>Telefone do cliente (opcional)
           <input value={formatarTelefone(telefone)} onChange={(e) => setTelefone(e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="tel" placeholder="(64) 99999-9999" />
         </label>
         {equipe && (
@@ -498,27 +593,27 @@ function FormCliente({ rodadaId, equipe, imobs, aoSalvar }: { rodadaId: string; 
             </select>
           </label>
         )}
-        <label className={equipe ? '' : 'largo'}>Observação (opcional)
+        <label className={equipe ? 'largo' : ''}>Observação (opcional)
           <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={200} />
         </label>
       </div>
       {erro && <p className="erro">{erro}</p>}
-      <button className="botao principal" disabled={salvando}><Plus size={16} /> {salvando ? 'Confirmando…' : 'Confirmar cliente'}</button>
+      <button className="botao principal" disabled={salvando}><Plus size={16} /> {salvando ? 'Confirmando…' : 'Confirmar presença'}</button>
     </form>
   );
 }
 
 function EditarCliente({ insc, aoFechar, aoSalvar }: { insc: Inscricao; aoFechar: () => void; aoSalvar: () => void }) {
-  const [nome, setNome] = useState(insc.cliente_nome);
-  const [pessoas, setPessoas] = useState(String(insc.pessoas));
+  const [nomes, setNomes] = useState<string[]>(convidadosDe(insc));
   const [telefone, setTelefone] = useState(insc.telefone ?? '');
   const [obs, setObs] = useState(insc.observacao ?? '');
   const [erro, setErro] = useState('');
 
   const salvar = async (e: FormEvent) => {
     e.preventDefault(); setErro('');
+    if (nomes.some((n) => n.trim().split(/\s+/).length < 2)) { setErro(ERROS.NOME_COMPLETO_OBRIGATORIO); return; }
     const { error } = await supabase.rpc('editar_cliente_rodada', {
-      p_id: insc.id, p_cliente: nome, p_pessoas: Number(pessoas), p_telefone: telefone, p_observacao: obs,
+      p_id: insc.id, p_convidados: nomes, p_telefone: telefone, p_observacao: obs,
     });
     if (error) { setErro(mensagem(error)); return; }
     aoSalvar();
@@ -527,12 +622,11 @@ function EditarCliente({ insc, aoFechar, aoSalvar }: { insc: Inscricao; aoFechar
   return (
     <div className="fundo-dialogo" onClick={aoFechar}>
       <form className="dialogo" role="dialog" aria-modal="true" aria-labelledby="ed-titulo" onClick={(e) => e.stopPropagation()} onSubmit={salvar}>
-        <h2 id="ed-titulo">Editar confirmação</h2>
+        <h2 id="ed-titulo">Editar convidados</h2>
         <div className="campos">
-          <label className="largo">Nome do cliente<input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} /></label>
-          <label>Quantas pessoas vêm<input type="number" min={1} max={20} value={pessoas} onChange={(e) => setPessoas(e.target.value)} /></label>
-          <label>Telefone<input value={formatarTelefone(telefone)} onChange={(e) => setTelefone(e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="tel" /></label>
-          <label className="largo">Observação<input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={200} /></label>
+          <CamposConvidados nomes={nomes} setNomes={setNomes} />
+          <label>Telefone do cliente<input value={formatarTelefone(telefone)} onChange={(e) => setTelefone(e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="tel" /></label>
+          <label>Observação<input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={200} /></label>
         </div>
         {erro && <p className="erro">{erro}</p>}
         <div className="dialogo-acoes">
