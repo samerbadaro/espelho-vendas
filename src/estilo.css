@@ -504,3 +504,66 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .unidade.mudou { outline: 3px solid var(--tinta); }
 }
+
+/* ---------------------------------------------------------------- carta proposta (v2) */
+.cp-tela { min-height: 100vh; background: #E9E8E3; padding: 0 0 48px; }
+.cp-barra {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; background: var(--superficie); border-bottom: 1px solid var(--borda); font-weight: 600;
+}
+.cp-folha {
+  width: 210mm; min-height: 297mm; margin: 24px auto 0; padding: 16mm 15mm; box-sizing: border-box;
+  background: #fff; color: #1D1E19; box-shadow: var(--sombra-alta); font-size: 9.5pt; line-height: 1.45;
+}
+.cp-topo {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  padding-bottom: 10px; border-bottom: 2px solid var(--primaria);
+}
+.cp-logo { height: 38px; width: auto; }
+.cp-topo h1 { margin: 0; font-size: 17pt; font-weight: 700; text-align: right; letter-spacing: -0.01em; }
+.cp-topo p { margin: 2px 0 0; text-align: right; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.cp-intro { margin: 12px 0 4px; }
+.cp-folha section { margin-top: 14px; }
+.cp-folha h2 {
+  margin: 0 0 6px; font-size: 10.5pt; font-weight: 700; color: var(--primaria);
+  padding-bottom: 3px; border-bottom: 1px solid var(--borda-forte);
+}
+.cp-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 14px; }
+.cp-campo { display: flex; flex-direction: column; min-width: 0; }
+.cp-campo span { font-size: 7.5pt; color: var(--tinta-2); }
+.cp-campo strong { font-weight: 600; overflow-wrap: anywhere; }
+.cp-largo { grid-column: span 2; }
+.cp-equipe { margin-top: 10px; }
+.cp-nota { margin: 0 0 6px; color: var(--tinta-2); font-size: 8.5pt; }
+.cp-tabela { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+.cp-tabela th {
+  text-align: left; font-weight: 600; font-size: 7.5pt; color: var(--tinta-2);
+  padding: 4px 6px; border-bottom: 1px solid var(--borda-forte);
+}
+.cp-tabela td { padding: 4px 6px; border-bottom: 1px solid #EAEAE6; vertical-align: top; }
+.cp-tabela td small { display: block; color: var(--tinta-2); font-size: 7.5pt; }
+.cp-tabela td > small:first-child { display: inline; }
+.cp-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cp-subtotal td { font-weight: 600; background: #F6F6F3; }
+.cp-tabela tfoot td { font-weight: 700; border-top: 2px solid var(--primaria); border-bottom: 0; padding-top: 6px; }
+.cp-obs { margin: 0; white-space: pre-wrap; }
+.cp-clausulas ol { margin: 0; padding-left: 16px; font-size: 8.5pt; color: #3A3C34; }
+.cp-clausulas li { margin-bottom: 4px; text-align: justify; }
+.cp-assinaturas { margin-top: 18px; }
+.cp-assinaturas > p { margin: 0 0 30px; }
+.cp-linhas { display: grid; grid-template-columns: 1fr 1fr; gap: 34px 28px; }
+.cp-linhas div { display: flex; flex-direction: column; font-weight: 600; }
+.cp-linhas span { border-top: 1px solid #1D1E19; margin-bottom: 4px; }
+.cp-linhas small { font-weight: 400; color: var(--tinta-2); font-size: 7.5pt; }
+.cp-aceite { margin-top: 28px; padding-top: 10px; border-top: 1px dashed var(--borda-forte); }
+.cp-aceite > strong { display: block; margin-bottom: 30px; font-size: 9pt; }
+.cp-bloco, .cp-tabela tr, .cp-assinaturas { break-inside: avoid; }
+
+@media print {
+  @page { size: A4; margin: 12mm 12mm 14mm; }
+  body { background: #fff !important; }
+  .cp-tela { background: #fff; padding: 0; min-height: 0; }
+  .cp-barra { display: none; }
+  .cp-folha { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  .cp-folha, .cp-folha * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
