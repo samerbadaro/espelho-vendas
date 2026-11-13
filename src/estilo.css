@@ -509,3 +509,65 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .unidade.mudou { outline: 3px solid var(--tinta); }
 }
+
+/* ---------------------------------------------------------------- rodadas de negócios */
+.rodadas-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 18px; }
+.rodadas-grade.passadas { opacity: 0.75; }
+.rodada-cartao {
+  text-align: left; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 6px;
+  background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-g); padding: 18px; box-shadow: var(--sombra);
+}
+.rodada-cartao:hover { border-color: var(--tinta-3); }
+.rodada-cartao:focus-visible { outline: 3px solid color-mix(in srgb, var(--destaque) 45%, transparent); outline-offset: 2px; }
+.rodada-cabeca { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+.rodada-cabeca h3 { margin: 0; font-size: 1.0625rem; }
+.rodada-info { display: flex; align-items: center; gap: 7px; margin: 2px 0; color: var(--tinta-2); font-size: 0.875rem; }
+.rodada-info svg { flex: none; }
+.rodada-obs { margin: -6px 0 18px; padding: 12px 14px; background: var(--superficie-2); border-radius: var(--raio); font-size: 0.875rem; white-space: pre-wrap; }
+.titulo-grupo { margin: 26px 0 12px; font-size: 1rem; color: var(--tinta-2); }
+.vazio-grande p { margin: 0; color: var(--tinta-2); }
+.vagas { margin-top: 10px; }
+.vagas-texto { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 0.875rem; margin-bottom: 6px; }
+.vagas-texto > span:last-child { color: var(--tinta-2); font-size: 0.8125rem; white-space: nowrap; }
+.vagas-barra { height: 8px; border-radius: 999px; background: var(--superficie-2); border: 1px solid var(--borda); overflow: hidden; }
+.vagas-barra span { display: block; height: 100%; background: var(--disponivel); border-radius: 999px; transition: width 0.3s; }
+.vagas-barra span.cheia { background: var(--vendida); }
+.sr-aberta    { --fundo-selo: #DFF1E5; --cor-selo: #21683F; }
+.sr-lotada    { --fundo-selo: #F8E2DF; --cor-selo: #8E2A23; }
+.sr-encerrada { --fundo-selo: #F6EBD3; --cor-selo: #7F5309; }
+.sr-realizada { --fundo-selo: #ECEDE8; --cor-selo: #55584D; }
+.acoes-topo { display: flex; align-items: center; gap: 10px; }
+.aviso-rodada { color: var(--tinta-2); }
+.acoes-lista { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 500; color: var(--tinta); cursor: pointer; margin: 6px 0; }
+.check.pequeno { font-size: 0.8125rem; color: var(--tinta-2); margin: 0 6px 0 0; }
+.grupo-imobs { border: 1px solid var(--borda); border-radius: var(--raio); padding: 10px 14px; margin: 0 0 12px; }
+.grupo-imobs legend { font-size: 0.8125rem; font-weight: 600; color: var(--tinta-2); padding: 0 4px; }
+.lista-check { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; max-height: 180px; overflow: auto; padding: 2px 0 0 24px; }
+.campos small { font-weight: 400; color: var(--tinta-3); }
+.lista-rodada .num { text-align: right; font-variant-numeric: tabular-nums; }
+.lista-rodada small.bloco { display: block; color: var(--tinta-2); }
+.so-impressao { display: none; }
+@media (max-width: 640px) { .lista-check { grid-template-columns: 1fr; } }
+@media print {
+  .lateral, .barra-celular, .so-tela, .avisos { display: none !important; }
+  .app, .conteudo, main { display: block !important; margin: 0 !important; padding: 0 !important; }
+  body { background: #fff !important; }
+  .rodada-detalhe { max-width: none; padding: 0; }
+  .rodada-detalhe .cartao { border: 0; box-shadow: none; padding: 0; }
+  .so-impressao { display: table-cell; }
+  .caixa-presenca { width: 70px; }
+  .caixa-presenca::after { content: ''; display: inline-block; width: 16px; height: 16px; border: 1.5px solid #333; border-radius: 3px; }
+  .lista-rodada { font-size: 10pt; display: table !important; width: 100%; }
+  .lista-rodada thead { display: table-header-group !important; }
+  .lista-rodada tbody, .lista-rodada tfoot { display: table-row-group !important; }
+  .lista-rodada tr { display: table-row !important; padding: 0 !important; }
+  .lista-rodada th, .lista-rodada td { display: table-cell !important; padding: 6px 8px !important; border-bottom: 1px solid #ccc !important; }
+  .lista-rodada th.so-tela, .lista-rodada td.so-tela { display: none !important; }
+  .lista-rodada td::before { content: none !important; }
+  .lista-rodada th:first-child, .lista-rodada td:first-child { width: 24px; }
+  .lista-rodada th:nth-child(2), .lista-rodada td:nth-child(2) { width: 34%; }
+  .lista-rodada .num { width: 50px; }
+  .tabela-rolagem { overflow: visible; }
+  .lista-rodada tr { break-inside: avoid; }
+}

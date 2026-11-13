@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban,
+  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -14,6 +14,7 @@ import { Imobiliarias, Corretores } from './Imobiliarias';
 import { Inicio } from './Inicio';
 import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
+import { Rodadas, DetalheRodada } from './Rodadas';
 import { useRota, ir, type Perfil } from './util';
 import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
 
@@ -178,6 +179,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       { c: '/painel', r: 'Início', i: <Home size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }, { c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
+      { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
       ...(admin ? [
         { c: '/painel/imobiliarias', r: 'Imobiliárias e logins', i: <Building2 size={18} /> },
         { c: '/painel/empreendimento', r: 'Empreendimento', i: <Settings size={18} /> },
@@ -185,6 +187,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
     ]
     : [
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
       ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
     ];
@@ -194,7 +197,10 @@ function Casca({ perfil }: { perfil: Perfil }) {
 
   let pagina: ReactNode;
   const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
-  if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
+  const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
+  if (idRodada) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
+  else if (atual === '/painel/rodadas') pagina = <Rodadas perfil={perfil} />;
+  else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
   else if (atual === '/painel/pastas' && pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
   else if (atual === '/painel/funil' && equipe && pastasAtivas) pagina = <Funil />;
   else if (atual === '/painel/imobiliarias' && admin) pagina = <Imobiliarias perfil={perfil} />;
