@@ -13,7 +13,7 @@ interface PastaResumo {
   id: string; codigo: string; comprador_nome: string; comprador_cpf: string; status: StatusPasta;
   criada_em: string; imobiliaria_id: string; criado_por: string | null;
   codigo_aprovacao: string | null; submetida_em: string | null;
-  imobiliarias: { nome: string } | null; unidades: { numero: string } | null;
+  imobiliarias: { nome: string } | null; unidades_numeros: string | null;
 }
 
 const ehEquipe = (p: Perfil) => p.papel === 'admin' || p.papel === 'vendas';
@@ -42,7 +42,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     supabase.from('pastas')
-      .select('id, codigo, codigo_aprovacao, submetida_em, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, imobiliarias(nome), unidades(numero)')
+      .select('id, codigo, codigo_aprovacao, submetida_em, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, imobiliarias(nome), unidades_numeros')
       .order('criada_em', { ascending: false })
       .then(({ data, error }) => {
         if (error) setErro('Não foi possível carregar as pastas. Recarregue a página.');
@@ -63,7 +63,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
       (aba === 'todas' || p.codigo_aprovacao)
       && (!t || p.comprador_nome.toLowerCase().includes(t) || p.codigo.toLowerCase().includes(t)
                 || (p.codigo_aprovacao ?? '').toLowerCase().includes(t)
-        || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades?.numero ?? '').includes(t)
+        || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades_numeros ?? '').includes(t)
         || (corretores[p.criado_por ?? ''] ?? p.criado_por ?? '').toLowerCase().includes(t))
       && (!status || p.status === status)
       && (!imob || p.imobiliaria_id === imob));
@@ -76,7 +76,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
     const cab = ['Pasta', 'Aprovação (PA)', 'Cliente', 'Corretor', 'Imobiliária', 'Unidade', 'Status', 'Data de criação', 'Data de submissão'];
     const linhas = filtradas.map((p) => [
       p.codigo, p.codigo_aprovacao ?? '', p.comprador_nome, nomeCriador(p), p.imobiliarias?.nome ?? '',
-      p.unidades?.numero ?? '', rotuloPasta(p.status), formatarData(p.criada_em), p.submetida_em ? formatarData(p.submetida_em) : '',
+      p.unidades_numeros ?? '', rotuloPasta(p.status), formatarData(p.criada_em), p.submetida_em ? formatarData(p.submetida_em) : '',
     ]);
     const csv = [cab, ...linhas].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -155,7 +155,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
                 <td className="nowrap" data-rotulo="CPF">{formatarCPF(p.comprador_cpf)}</td>
                 {equipe && <td data-rotulo="Imobiliária">{p.imobiliarias?.nome}</td>}
                 {verCriador && <td data-rotulo="Cadastrada por">{p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '—'}</td>}
-                <td data-rotulo="Unidade">{p.unidades?.numero ?? '—'}</td>
+                <td data-rotulo="Unidade">{p.unidades_numeros ?? '—'}</td>
                 <td><span className={`selo sp-${p.status}`}>{rotuloPasta(p.status)}</span></td>
                 <td data-rotulo="Cadastro">{formatarData(p.criada_em)}</td>
               </tr>
@@ -178,9 +178,9 @@ interface Pasta {
   conjuge_telefone: string | null; conjuge_email: string | null; conjuge_profissao: string | null;
   comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criada_em: string;
   codigo_aprovacao: string | null; submetida_em: string | null; submetida_por: string | null;
-  imobiliarias?: { nome: string } | null; unidades?: { numero: string } | null;
+  imobiliarias?: { nome: string } | null; unidades_numeros?: string | null;
 }
-type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criada_em' | 'imobiliarias' | 'unidades' | 'codigo_aprovacao' | 'submetida_em' | 'submetida_por'>;
+type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criada_em' | 'imobiliarias' | 'unidades_numeros' | 'codigo_aprovacao' | 'submetida_em' | 'submetida_por'>;
 
 const FORM_VAZIO: Form = {
   imobiliaria_id: '', comprador_nome: '', comprador_cpf: '', comprador_nascimento: null, comprador_telefone: '',
@@ -202,7 +202,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
 
   const carregar = useCallback(async () => {
     if (nova) return;
-    const { data, error } = await supabase.from('pastas').select('*, imobiliarias(nome), unidades(numero)').eq('id', id).maybeSingle();
+    const { data, error } = await supabase.from('pastas').select('*, imobiliarias(nome)').eq('id', id).maybeSingle();
     if (error || !data) { setErro('Pasta não encontrada ou sem permissão de acesso.'); return; }
     setPasta(data as Pasta);
     const p = data as Pasta;
@@ -290,7 +290,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       </div>
 
       {!nova && equipe && <VincularUnidade pasta={pasta!} aoMudar={() => setRecarga((n) => n + 1)} />}
-      {!nova && !equipe && pasta!.unidades && <p className="sub">Unidade vinculada: <strong>{pasta!.unidades.numero}</strong></p>}
+      {!nova && !equipe && pasta!.unidades_numeros && <p className="sub">{pasta!.unidades_numeros.includes(',') ? 'Unidades' : 'Unidade'}: <strong>{pasta!.unidades_numeros}</strong></p>}
 
       <form className="cartao" onSubmit={salvar}>
         <div className="cartao-topo">
@@ -363,18 +363,13 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
 
 // ---------------------------------------------------------------------
 function VincularUnidade({ pasta }: { pasta: Pasta; aoMudar?: () => void }) {
-  const [numero, setNumero] = useState<string | null>(null);
-  useEffect(() => {
-    if (!pasta.unidade_id) { setNumero(null); return; }
-    supabase.from('unidades').select('numero').eq('id', pasta.unidade_id).maybeSingle()
-      .then(({ data }) => setNumero((data as { numero: string } | null)?.numero ?? null));
-  }, [pasta.unidade_id]);
+  const lista = pasta.unidades_numeros;
   return (
     <div className="vinculo">
-      <span>Unidade: <strong>{pasta.unidade_id ? (numero ?? '…') : 'nenhuma'}</strong></span>
+      <span>{lista?.includes(',') ? 'Unidades' : 'Unidade'}: <strong>{lista ?? 'nenhuma'}</strong></span>
       <span className="dica">
         {pasta.status === 'aprovada'
-          ? 'A unidade é ligada pela reserva no espelho ou pelo funil de vendas.'
+          ? 'As unidades são ligadas pela reserva no espelho ou pelo funil de vendas.'
           : 'A reserva fica disponível quando a documentação for aprovada.'}
       </span>
     </div>

@@ -17,10 +17,28 @@ const ETAPAS: { valor: Etapa; rotulo: string }[] = [
   { valor: 'assinado', rotulo: 'Assinado / Vendido' },
 ];
 
-interface Card {
-  id: string; codigo: string; codigo_aprovacao: string | null; comprador_nome: string; etapa_venda: Etapa;
+interface PastaFunil {
+  id: string; codigo: string; codigo_aprovacao: string | null; comprador_nome: string;
   etapa_atualizada_em: string | null; submetida_em: string | null; criado_por: string | null; imobiliaria_id: string;
-  imobiliarias: { nome: string } | null; unidades: { numero: string } | null;
+  imobiliarias: { nome: string } | null; unidades_numeros: string | null;
+}
+
+/** Um card é uma pasta sem unidade (Pasta aprovada) ou uma unidade em negociação com a pasta. */
+interface Card {
+  chave: string;
+  pasta: PastaFunil;
+  unidade: { id: string; numero: string } | null;
+  etapa: Etapa;
+  desde: string | null;
+}
+
+const ETAPA_DO_STATUS: Record<string, Etapa> = {
+  reservada: 'reserva', proposta: 'contrato_confeccao', contrato: 'enviado_assinatura', vendida: 'assinado',
+};
+
+interface NegFunil {
+  unidade_id: string; atualizada_em: string | null; criada_em: string | null;
+  unidades: { numero: string; status: string } | null; pastas: PastaFunil | null;
 }
 
 function diasDesde(iso: string | null) {
@@ -39,11 +57,24 @@ export function Funil() {
   const [sobre, setSobre] = useState<Etapa | null>(null);
 
   const carregar = useCallback(async () => {
-    const { data, error } = await supabase.from('pastas')
-      .select('id, codigo, codigo_aprovacao, comprador_nome, etapa_venda, etapa_atualizada_em, submetida_em, criado_por, imobiliaria_id, imobiliarias(nome), unidades(numero)')
-      .eq('status', 'aprovada').order('submetida_em', { ascending: true });
-    if (error) { avisar('Não foi possível carregar o funil.', 'erro'); return; }
-    setCards((data as unknown as Card[]) ?? []);
+    const campos = 'id, codigo, codigo_aprovacao, comprador_nome, etapa_atualizada_em, submetida_em, criado_por, imobiliaria_id, imobiliarias(nome), unidades_numeros';
+    const [pa, ng] = await Promise.all([
+      supabase.from('pastas').select(campos).eq('status', 'aprovada').is('unidades_numeros', null).order('submetida_em', { ascending: true }),
+      supabase.from('negociacoes').select(`unidade_id, atualizada_em, criada_em, unidades(numero, status), pastas(${campos})`)
+        .eq('ativa', true).not('pasta_id', 'is', null),
+    ]);
+    if (pa.error || ng.error) { avisar('Não foi possível carregar o funil.', 'erro'); return; }
+    const livres: Card[] = ((pa.data as unknown as PastaFunil[]) ?? []).map((p) => ({
+      chave: p.id, pasta: p, unidade: null, etapa: 'aprovada', desde: p.etapa_atualizada_em ?? p.submetida_em,
+    }));
+    const emNegociacao: Card[] = ((ng.data as unknown as NegFunil[]) ?? [])
+      .filter((n) => n.pastas && n.unidades && ETAPA_DO_STATUS[n.unidades.status])
+      .map((n) => ({
+        chave: `${n.pastas!.id}:${n.unidade_id}`, pasta: n.pastas!, unidade: { id: n.unidade_id, numero: n.unidades!.numero },
+        etapa: ETAPA_DO_STATUS[n.unidades!.status], desde: n.atualizada_em ?? n.criada_em,
+      }))
+      .sort((a, b) => (a.desde ?? '').localeCompare(b.desde ?? ''));
+    setCards([...livres, ...emNegociacao]);
   }, [avisar]);
 
   useEffect(() => {
@@ -57,41 +88,50 @@ export function Funil() {
 
   const imobiliarias = useMemo(() => {
     const m = new Map<string, string>();
-    (cards ?? []).forEach((c) => c.imobiliarias && m.set(c.imobiliaria_id, c.imobiliarias.nome));
+    (cards ?? []).forEach((c) => c.pasta.imobiliarias && m.set(c.pasta.imobiliaria_id, c.pasta.imobiliarias.nome));
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
   }, [cards]);
-  const visiveis = (cards ?? []).filter((c) => !imob || c.imobiliaria_id === imob);
+  const visiveis = (cards ?? []).filter((c) => !imob || c.pasta.imobiliaria_id === imob);
 
   const ERROS: Record<string, string> = {
     SEM_UNIDADE: 'Escolha a unidade desta pasta.',
     UNIDADE_OCUPADA: 'Essa unidade já está em negociação com outro cliente no espelho.',
-    PASTA_JA_TEM_UNIDADE: 'Esta pasta já está em outra unidade. Volte o card para "Pasta aprovada" para trocar.',
+    UNIDADE_DE_OUTRA_PASTA: 'Essa unidade está com outro cliente.',
     PASTA_NAO_APROVADA: 'A documentação desta pasta não está mais aprovada.',
   };
 
   const executar = async (card: Card, etapa: Etapa, unidade?: string) => {
-    const { error } = await supabase.rpc('mover_etapa', { p_pasta: card.id, p_etapa: etapa, p_unidade: unidade ?? null });
+    const { error } = await supabase.rpc('mover_etapa', { p_pasta: card.pasta.id, p_etapa: etapa, p_unidade: unidade ?? card.unidade?.id ?? null });
     if (error) {
       const chave = Object.keys(ERROS).find((k) => error.message.includes(k));
       avisar(chave ? ERROS[chave] : 'Não foi possível mover a pasta. Tente novamente.', 'erro');
       return false;
     }
     await carregar();
-    avisar(`${card.comprador_nome}: ${ETAPAS.find((e) => e.valor === etapa)?.rotulo}. Espelho atualizado.`);
+    avisar(`${card.pasta.comprador_nome}: ${ETAPAS.find((e) => e.valor === etapa)?.rotulo}. Espelho atualizado.`);
     return true;
   };
 
-  const mover = async (id: string, etapa: Etapa) => {
-    const card = cards?.find((c) => c.id === id);
-    if (!card || card.etapa_venda === etapa) return;
-    const unid = card.unidades?.numero;
+  const mover = async (chave: string, etapa: Etapa) => {
+    const card = cards?.find((c) => c.chave === chave);
+    if (!card || card.etapa === etapa) return;
+    const unid = card.unidade?.numero;
+    const nome = card.pasta.comprador_nome;
     if (etapa === 'aprovada') {
-      if (unid && !(await confirmar({ titulo: `Voltar ${card.comprador_nome} para "Pasta aprovada"?`, texto: `A unidade ${unid} volta a ficar disponível no espelho.`, confirmar: 'Voltar e liberar unidade', perigo: true }))) return;
+      if (!unid) return;
+      const outras = (card.pasta.unidades_numeros ?? '').split(', ').filter((n) => n && n !== unid);
+      if (!(await confirmar({
+        titulo: `Liberar a unidade ${unid} de ${nome}?`,
+        texto: outras.length
+          ? `A ${unid} volta a ficar disponível no espelho. As outras unidades de ${nome} (${outras.join(', ')}) continuam como estão.`
+          : `A ${unid} volta a ficar disponível no espelho e a pasta volta para "Pasta aprovada".`,
+        confirmar: 'Liberar unidade', perigo: true,
+      }))) return;
       executar(card, etapa);
       return;
     }
     if (!unid) { setEscolha({ card, etapa }); return; }
-    if (etapa === 'assinado' && !(await confirmar({ titulo: `Marcar a unidade ${unid} como vendida?`, texto: `${card.comprador_nome} vai para "Assinado / Vendido" e a unidade aparece como vendida no espelho e na TV.`, confirmar: 'Marcar como vendida' }))) return;
+    if (etapa === 'assinado' && !(await confirmar({ titulo: `Marcar a unidade ${unid} como vendida?`, texto: `${nome} vai para "Assinado / Vendido" e a unidade aparece como vendida no espelho e na TV.`, confirmar: 'Marcar como vendida' }))) return;
     executar(card, etapa);
   };
 
@@ -105,7 +145,7 @@ export function Funil() {
   return (
     <section className="secao larga">
       <div className="secao-topo">
-        <div><h2>Funil de vendas</h2><p className="sub">Pastas com documentação aprovada. Arraste o card para mudar a etapa; o espelho acompanha.</p></div>
+        <div><h2>Funil de vendas</h2><p className="sub">Cada unidade em negociação é um card. Arraste o card para mudar a etapa; o espelho acompanha. Para outra unidade do mesmo cliente, reserve no espelho.</p></div>
         {imobiliarias.length > 1 && (
           <select value={imob} onChange={(e) => setImob(e.target.value)} aria-label="Filtrar por imobiliária" style={{ width: 'auto' }}>
             <option value="">Todas as imobiliárias</option>
@@ -121,7 +161,7 @@ export function Funil() {
       {cards === null ? <p className="vazio">Carregando…</p> : (
         <div className="kanban">
           {ETAPAS.map((et) => {
-            const lista = visiveis.filter((c) => c.etapa_venda === et.valor);
+            const lista = visiveis.filter((c) => c.etapa === et.valor);
             return (
               <div key={et.valor} className={`coluna k-${et.valor}${sobre === et.valor ? ' sobre' : ''}`}
                 onDragOver={(e) => { e.preventDefault(); setSobre(et.valor); }}
@@ -129,23 +169,26 @@ export function Funil() {
                 onDrop={soltar(et.valor)}>
                 <div className="coluna-topo"><div><h3>{et.rotulo}</h3><span className="coluna-espelho">Espelho: {ESPELHO[et.valor]}</span></div><span className="contagem">{lista.length}</span></div>
                 <div className="coluna-cards">
-                  {lista.length === 0 && <p className="coluna-vazia">Nenhuma pasta nesta etapa.</p>}
+                  {lista.length === 0 && <p className="coluna-vazia">Nenhum card nesta etapa.</p>}
                   {lista.map((c) => {
-                    const dias = diasDesde(c.etapa_atualizada_em ?? c.submetida_em);
+                    const dias = diasDesde(c.desde);
                     return (
-                      <article key={c.id} className={`kcard${arrastando === c.id ? ' arrastando' : ''}`} draggable
-                        onDragStart={(e) => { e.dataTransfer.setData('text/plain', c.id); e.dataTransfer.effectAllowed = 'move'; setArrastando(c.id); }}
+                      <article key={c.chave} className={`kcard${arrastando === c.chave ? ' arrastando' : ''}`} draggable
+                        onDragStart={(e) => { e.dataTransfer.setData('text/plain', c.chave); e.dataTransfer.effectAllowed = 'move'; setArrastando(c.chave); }}
                         onDragEnd={() => { setArrastando(null); setSobre(null); }}>
                         <div className="kcard-topo">
-                          <span className="mono">{c.codigo_aprovacao ?? c.codigo}</span>
-                          {c.unidades && <span className="kcard-unidade">Unid. {c.unidades.numero}</span>}
+                          <span className="mono">{c.pasta.codigo_aprovacao ?? c.pasta.codigo}</span>
+                          {c.unidade && <span className="kcard-unidade">Unid. {c.unidade.numero}</span>}
                           <GripVertical size={16} className="alca" aria-hidden="true" />
                         </div>
-                        <button className="kcard-nome" onClick={() => ir(`/painel/pastas/${c.id}`)}>{c.comprador_nome}</button>
-                        <p className="kcard-meta">{c.imobiliarias?.nome}{c.criado_por ? `, ${nomes[c.criado_por] ?? c.criado_por}` : ''}</p>
+                        <button className="kcard-nome" onClick={() => ir(`/painel/pastas/${c.pasta.id}`)}>{c.pasta.comprador_nome}</button>
+                        <p className="kcard-meta">{c.pasta.imobiliarias?.nome}{c.pasta.criado_por ? `, ${nomes[c.pasta.criado_por] ?? c.pasta.criado_por}` : ''}</p>
+                        {c.unidade && (c.pasta.unidades_numeros ?? '').includes(',') && (
+                          <p className="kcard-meta">Também com: {(c.pasta.unidades_numeros ?? '').split(', ').filter((n) => n !== c.unidade!.numero).join(', ')}</p>
+                        )}
                         <div className="kcard-pe">
                           {dias !== null && <span className="kcard-dias"><Clock size={13} /> {dias === 0 ? 'hoje' : `${dias} ${dias === 1 ? 'dia' : 'dias'}`}</span>}
-                          <select value={c.etapa_venda} onChange={(e) => mover(c.id, e.target.value as Etapa)} aria-label={`Mover ${c.comprador_nome} para outra etapa`}>
+                          <select value={c.etapa} onChange={(e) => mover(c.chave, e.target.value as Etapa)} aria-label={`Mover ${c.pasta.comprador_nome} para outra etapa`}>
                             {ETAPAS.map((x) => <option key={x.valor} value={x.valor}>{x.rotulo}</option>)}
                           </select>
                         </div>
@@ -176,7 +219,7 @@ function EscolherUnidade({ card, etapa, aoFechar, aoConfirmar }: {
   return (
     <div className="fundo-dialogo" onClick={aoFechar}>
       <div className="dialogo confirmacao" role="dialog" aria-modal="true" aria-labelledby="esc-titulo" onClick={(e) => e.stopPropagation()}>
-        <h2 id="esc-titulo">Qual unidade de {card.comprador_nome}?</h2>
+        <h2 id="esc-titulo">Qual unidade de {card.pasta.comprador_nome}?</h2>
         <p>A pasta vai para “{ETAPAS.find((x) => x.valor === etapa)?.rotulo}” e a unidade fica como “{ESPELHO[etapa]}” no espelho.</p>
         <label className="campo-motivo" style={{ marginTop: 14 }}>Unidades disponíveis
           <select value={valor} onChange={(e) => setValor(e.target.value)} autoFocus>

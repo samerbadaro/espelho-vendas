@@ -11,7 +11,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false) \g /dev/null
 do $$ declare p pastas; begin
   p := mover_etapa((select id from pastas where comprador_cpf='12345678901'), 'contrato_confeccao', (select id from unidades where numero='1205'));
-  raise notice '%  Equipe move pasta aprovada para Contrato em confecção', case when p.etapa_venda='contrato_confeccao' and exists(select 1 from historico_pastas where acao='Etapa da venda alterada') then 'OK    ' else 'FALHOU' end;
+  raise notice '%  Equipe move pasta aprovada para Contrato em confecção', case when (select status from unidades where numero='1205')='proposta' and exists(select 1 from historico_pastas where acao='Etapa da venda alterada') then 'OK    ' else 'FALHOU' end;
 end $$;
 do $$ begin perform mover_etapa((select id from pastas where comprador_cpf='22233344455'), 'reserva'); raise notice 'FALHOU  Pasta não aprovada não entra no funil';
 exception when others then raise notice '%  Pasta não aprovada não entra no funil (%)', case when sqlerrm='PASTA_NAO_APROVADA' then 'OK    ' else 'FALHOU' end, sqlerrm; end $$;

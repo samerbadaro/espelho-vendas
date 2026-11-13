@@ -25,12 +25,11 @@ begin
   select * into pa from pastas where id=p;
   raise notice '%  Reserva com pasta: unidade reservada, dados vêm da pasta, funil em Reserva', case when u.status='reservada'
     and exists(select 1 from negociacoes where unidade_id=u501 and ativa and pasta_id=p and cliente='Maria Teste' and imobiliaria is not null and corretor is not null)
-    and pa.etapa_venda='reserva' and pa.unidade_id=u501 then 'OK    ' else 'FALHOU' end;
+    and pa.unidades_numeros='501' then 'OK    ' else 'FALHOU' end;
   raise notice '%  Histórico do espelho guarda a pasta', case when exists(select 1 from historico where unidade_id=u501 and status_novo='reservada' and detalhes ? 'pasta') then 'OK    ' else 'FALHOU' end;
 
-  begin perform alterar_status((select id from unidades where numero='502'), 'reservada', (select versao from unidades where numero='502'), p_pasta => p);
-    raise notice 'FALHOU  mesma pasta em duas unidades';
-  exception when others then raise notice '%  A mesma pasta não reserva duas unidades (%)', case when sqlerrm='PASTA_JA_TEM_UNIDADE' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
+  perform alterar_status((select id from unidades where numero='502'), 'reservada', (select versao from unidades where numero='502'), p_pasta => p);
+  raise notice '%  A mesma pasta reserva uma segunda unidade (502)', case when (select unidades_numeros from pastas where id=p)='501, 502' then 'OK    ' else 'FALHOU' end;
 
   begin perform alterar_status(u501, 'proposta', u.versao, p_pasta => inc); raise notice 'FALHOU  trocar pasta';
   exception when others then raise notice '%  Não troca a pasta de uma unidade em negociação (%)', case when sqlerrm='UNIDADE_COM_OUTRA_PASTA' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
@@ -39,18 +38,18 @@ begin
   exception when others then raise notice '%  Proposta continua pedindo valor e PV (%)', case when sqlerrm='DADOS_PROPOSTA_OBRIGATORIOS' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
 
   u := alterar_status(u501, 'proposta', u.versao, null, null, null, null, 300000, 85);
-  raise notice '%  Proposta no espelho: funil em Contrato em confecção', case when u.status='proposta'
-    and (select etapa_venda from pastas where id=p)='contrato_confeccao' then 'OK    ' else 'FALHOU' end;
+  raise notice '%  Proposta na 501 não mexe na 502', case when u.status='proposta'
+    and (select status from unidades where numero='502')='reservada' then 'OK    ' else 'FALHOU' end;
   u := alterar_status(u501, 'contrato', u.versao);
-  raise notice '%  Contrato no espelho: funil em Enviado para assinatura', case when (select etapa_venda from pastas where id=p)='enviado_assinatura' then 'OK    ' else 'FALHOU' end;
+  raise notice '%  Contrato no espelho: funil em Enviado para assinatura', case when u.status='contrato' then 'OK    ' else 'FALHOU' end;
   u := alterar_status(u501, 'vendida', u.versao);
-  raise notice '%  Vendida no espelho: funil em Assinado', case when (select etapa_venda from pastas where id=p)='assinado' then 'OK    ' else 'FALHOU' end;
+  raise notice '%  Vendida no espelho: funil em Assinado', case when u.status='vendida' then 'OK    ' else 'FALHOU' end;
 
   begin perform alterar_status(u501, 'disponivel', u.versao); raise notice 'FALHOU  liberar sem motivo';
   exception when others then raise notice '%  Liberar sem motivo é bloqueado (%)', case when sqlerrm='MOTIVO_OBRIGATORIO' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
   u := alterar_status(u501, 'disponivel', u.versao, 'Cliente desistiu');
-  raise notice '%  Liberar devolve a pasta para Pasta aprovada, sem unidade', case when u.status='disponivel'
-    and (select etapa_venda='aprovada' and unidade_id is null from pastas where id=p)
+  raise notice '%  Liberar a 501 deixa só a 502 na pasta', case when u.status='disponivel'
+    and (select unidades_numeros from pastas where id=p)='502'
     and not exists(select 1 from negociacoes where unidade_id=u501 and ativa) then 'OK    ' else 'FALHOU' end;
 
   u := alterar_status(u501, 'reservada', u.versao, p_pasta => p);

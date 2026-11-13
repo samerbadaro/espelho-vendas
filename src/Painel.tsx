@@ -357,7 +357,7 @@ interface Negociacao {
 
 interface PastaLivre {
   id: string; codigo: string; codigo_aprovacao: string | null; comprador_nome: string;
-  criado_por: string | null; imobiliarias: { nome: string } | null;
+  criado_por: string | null; imobiliarias: { nome: string } | null; unidades_numeros: string | null;
 }
 
 const ERROS: Record<string, string> = {
@@ -409,11 +409,11 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
       });
   }, [unidade.id, unidade.versao]);
 
-  // pastas com documentação aprovada e sem unidade (só a equipe chega aqui)
+  // pastas com documentação aprovada (um cliente pode comprar mais de uma unidade)
   useEffect(() => {
     supabase.from('pastas')
-      .select('id, codigo, codigo_aprovacao, comprador_nome, criado_por, imobiliarias(nome)')
-      .eq('status', 'aprovada').is('unidade_id', null).order('comprador_nome')
+      .select('id, codigo, codigo_aprovacao, comprador_nome, criado_por, imobiliarias(nome), unidades_numeros')
+      .eq('status', 'aprovada').order('comprador_nome')
       .then(({ data }) => setPastasLivres((data as unknown as PastaLivre[]) ?? []));
   }, []);
 
@@ -505,19 +505,20 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
                 <option value="">{pastasLivres == null ? 'Carregando…' : pastasLivres.length ? 'Escolha a pasta' : 'Nenhuma pasta disponível'}</option>
                 {pastasLivres?.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {(p.codigo_aprovacao ?? p.codigo)} · {p.comprador_nome}{p.imobiliarias ? ` · ${p.imobiliarias.nome}` : ''}
+                    {(p.codigo_aprovacao ?? p.codigo)} · {p.comprador_nome}{p.imobiliarias ? ` · ${p.imobiliarias.nome}` : ''}{p.unidades_numeros ? ` · já com ${p.unidades_numeros}` : ''}
                   </option>
                 ))}
               </select>
             </label>
             {pastasLivres?.length === 0 && (
-              <p className="dica largo">Nenhuma pasta com documentação aprovada e sem unidade. A reserva só pode ser feita depois que a documentação for aprovada.</p>
+              <p className="dica largo">Nenhuma pasta com documentação aprovada. A reserva só pode ser feita depois que a documentação for aprovada.</p>
             )}
             {pastaEscolhida && (
               <p className="dica largo">
                 Cliente {pastaEscolhida.comprador_nome}
                 {pastaEscolhida.imobiliarias ? `, ${pastaEscolhida.imobiliarias.nome}` : ''}
-                {pastaEscolhida.criado_por ? `, corretor ${pastaEscolhida.criado_por}` : ''}. A pasta vai para a etapa correspondente no funil.
+                {pastaEscolhida.criado_por ? `, corretor ${pastaEscolhida.criado_por}` : ''}.
+                {pastaEscolhida.unidades_numeros ? ` Esta pasta já tem ${pastaEscolhida.unidades_numeros}; esta unidade vira um novo card no funil.` : ' A unidade aparece como card no funil.'}
               </p>
             )}
           </div>
