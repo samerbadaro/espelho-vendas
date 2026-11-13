@@ -58,7 +58,7 @@ export function Inicio({ perfil }: { perfil: Perfil }) {
           <Kpi valor={c.disponivel} rotulo="Disponíveis" cor="disponivel" />
           <Kpi valor={negociacao} rotulo="Em negociação" detalhe={`${c.reservada} reservadas, ${c.proposta} propostas, ${c.contrato} em contrato`} cor="reservada" />
           <Kpi valor={c.vendida} rotulo="Vendidas" cor="vendida" />
-          <Kpi valor={total} rotulo="Total de unidades" detalhe={c.bloqueada ? `${c.bloqueada} bloqueadas` : undefined} />
+          <Kpi valor={total} rotulo="Total de unidades" detalhe={[c.bloqueada && `${c.bloqueada} bloqueadas`, c.permutante && `${c.permutante} permutantes`].filter(Boolean).join(', ') || undefined} />
         </div>
         {total > 0 && (
           <>

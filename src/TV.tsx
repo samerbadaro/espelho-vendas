@@ -1,12 +1,33 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useEspelho, rotuloStatus } from './dados';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEspelho, rotuloStatus, type Unidade } from './dados';
 import { Predio, Resumo } from './Predio';
 import { Aviso, StatusConexao, useAgora, useTitulo } from './Publico';
 import { Logo, useMarca } from './ui';
 
+/**
+ * Na TV do salão só existem dois estados: disponível ou vendida.
+ * Reservada, proposta, contrato, bloqueada e permutante aparecem como vendida.
+ */
+const paraTV = (u: Unidade): Unidade => (u.status === 'disponivel' ? u : { ...u, status: 'vendida' });
+
 /** Modo TV do salão de vendas: tela cheia, leitura à distância, sem interação. */
 export function TV() {
-  const { unidades, config, carregando, erro, conectado, recentes } = useEspelho();
+  const { unidades: reais, config, carregando, erro, conectado, recentes: recentesReais } = useEspelho();
+  const unidades = useMemo(() => reais.map(paraTV), [reais]);
+
+  // Só destaca na TV o que mudou do ponto de vista da TV (ex.: reservada -> proposta não aparece)
+  const vistoNaTV = useRef<Map<string, string>>(new Map());
+  const [recentes, setRecentes] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const visto = vistoNaTV.current;
+    const novos: Record<string, number> = {};
+    unidades.forEach((u) => {
+      const antes = visto.get(u.id);
+      if (antes !== undefined && antes !== u.status && recentesReais[u.id]) novos[u.id] = recentesReais[u.id];
+      visto.set(u.id, u.status);
+    });
+    if (Object.keys(novos).length) setRecentes((r) => ({ ...r, ...novos }));
+  }, [unidades, recentesReais]);
   const agora = useAgora(15_000);
   const { marca } = useMarca();
   useTitulo(config?.nome_empreendimento);
@@ -37,7 +58,7 @@ export function TV() {
           {marca.logo_escuro_url || marca.logo_url ? <Logo escuro /> : <h1 className="nome">{config?.nome_empreendimento}</h1>}
           {marca.cidade && <span className="tv-cidade">{marca.cidade}</span>}
         </div>
-        <Resumo unidades={unidades} grande />
+        <Resumo unidades={unidades} grande apenas={['disponivel', 'vendida']} />
         {mostrarUltima && (
           <p className={`tv-ultima s-borda-${ultima!.u.status}`} key={ultima!.quando}>
             Unidade {ultima!.u.numero} agora está {rotuloStatus(ultima!.u.status).toLowerCase()}

@@ -88,11 +88,11 @@ export function Predio({ unidades, recentes, aoSelecionar }: Props) {
 }
 
 /** Legenda com contagem por status. */
-export function Resumo({ unidades, grande }: { unidades: Unidade[]; grande?: boolean }) {
+export function Resumo({ unidades, grande, apenas }: { unidades: Unidade[]; grande?: boolean; apenas?: Status[] }) {
   const c = contar(unidades);
   return (
     <ul className={`resumo${grande ? ' resumo-grande' : ''}`} aria-label="Legenda e totais">
-      {STATUS.map((s) => (
+      {STATUS.filter((s) => !apenas || apenas.includes(s.valor)).map((s) => (
         <li key={s.valor}>
           <span className={`amostra s-${s.valor}`} aria-hidden="true" />
           <span className="resumo-qtd">{c[s.valor as Status]}</span>

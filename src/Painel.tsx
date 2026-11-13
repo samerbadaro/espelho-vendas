@@ -347,7 +347,7 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
 
 const EM_NEGOCIACAO: Status[] = ['reservada', 'proposta', 'contrato', 'vendida'];
 const EXIGE_MOTIVO = (de: Status, para: Status) =>
-  EM_NEGOCIACAO.includes(de) && (para === 'disponivel' || para === 'bloqueada');
+  EM_NEGOCIACAO.includes(de) && (para === 'disponivel' || para === 'bloqueada' || para === 'permutante');
 
 interface Negociacao {
   imobiliaria: string | null; corretor: string | null; cliente: string | null;

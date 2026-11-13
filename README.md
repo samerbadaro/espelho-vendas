@@ -44,6 +44,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 13. `supabase/migrations/013_funil_espelho.sql` (funil ligado ao espelho: mover o card muda o status da unidade)
 14. `supabase/migrations/014_reserva_com_pasta.sql` (reserva no espelho exige pasta com documentação aprovada)
 15. `supabase/migrations/015_varias_unidades.sql` (uma pasta com várias unidades; um card por unidade no funil)
+16. `supabase/migrations/016_permutante.sql` (status Permutante, que funciona como Bloqueada)
 
 ### Criar usuário da equipe
 

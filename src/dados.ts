@@ -7,7 +7,7 @@ const chave = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 export const configurado = Boolean(url && chave);
 export const supabase = createClient(url || 'http://localhost', chave || 'sem-chave');
 
-export type Status = 'disponivel' | 'reservada' | 'proposta' | 'contrato' | 'vendida' | 'bloqueada';
+export type Status = 'disponivel' | 'reservada' | 'proposta' | 'contrato' | 'vendida' | 'bloqueada' | 'permutante';
 
 export interface Unidade {
   id: string;
@@ -33,6 +33,7 @@ export const STATUS: { valor: Status; rotulo: string; plural: string }[] = [
   { valor: 'contrato', rotulo: 'Contrato em assinatura', plural: 'Contratos em assinatura' },
   { valor: 'vendida', rotulo: 'Vendida', plural: 'Vendidas' },
   { valor: 'bloqueada', rotulo: 'Bloqueada', plural: 'Bloqueadas' },
+  { valor: 'permutante', rotulo: 'Permutante', plural: 'Permutantes' },
 ];
 export const rotuloStatus = (s: Status) => STATUS.find((x) => x.valor === s)?.rotulo ?? s;
 
@@ -146,7 +147,7 @@ export function useEspelho() {
 }
 
 export function contar(unidades: Unidade[]) {
-  const c: Record<Status, number> = { disponivel: 0, reservada: 0, proposta: 0, contrato: 0, vendida: 0, bloqueada: 0 };
+  const c: Record<Status, number> = { disponivel: 0, reservada: 0, proposta: 0, contrato: 0, vendida: 0, bloqueada: 0, permutante: 0 };
   unidades.forEach((u) => c[u.status]++);
   return c;
 }
