@@ -718,3 +718,6 @@ small.bloco { display: block; color: var(--tinta-2); }
 /* módulos (Empreendimento) */
 .lista-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px 28px; margin-top: 14px; }
 .interruptor.desativado { opacity: 0.55; cursor: not-allowed; }
+.lista-recepcao .pessoa { flex: 1; min-width: 0; }
+.lista-recepcao .editar-pessoa { color: var(--tinta-2); flex-shrink: 0; }
+.lista-recepcao .editar-pessoa:hover { color: var(--tinta); }
