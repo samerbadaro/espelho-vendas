@@ -84,8 +84,11 @@ do $$ declare i rodada_inscricoes; begin
   raise notice '%  Nova vaga aceita o cliente', case when i.id is not null then 'OK    ' else 'FALHOU' end;
   perform cancelar_cliente_rodada(i.id);
   raise notice '%  Cancelar devolve a vaga', case when exists(select 1 from rodadas_vagas() where rodada_id=(select v from rid where k='so_a') and clientes=2) then 'OK    ' else 'FALHOU' end;
-  i := editar_cliente_rodada((select id from rodada_inscricoes where cliente_nome='João da Silva'), array['João da Silva','Maria da Silva','Pedro da Silva','Lia da Silva'], null, 'Vem com os filhos');
-  raise notice '%  Corretor altera os convidados (4 pessoas)', case when i.pessoas=4 and i.convidados[4]='Lia da Silva' then 'OK    ' else 'FALHOU' end;
+  begin perform editar_cliente_rodada((select id from rodada_inscricoes where cliente_nome='João da Silva'), array['João da Silva','Maria da Silva','Pedro da Silva','Lia da Silva']);
+    raise notice 'FALHOU  4 pessoas';
+  exception when others then raise notice '%  Máximo de 3 pessoas por cliente (%)', case when sqlerrm='PESSOAS_INVALIDO' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
+  i := editar_cliente_rodada((select id from rodada_inscricoes where cliente_nome='João da Silva'), array['João da Silva','Lia da Silva'], null, 'Vem com a esposa');
+  raise notice '%  Corretor altera os convidados (2 pessoas)', case when i.pessoas=2 and i.convidados[2]='Lia da Silva' then 'OK    ' else 'FALHOU' end;
 end $$;
 
 -- Inscrições encerradas: corretor não confirma, Sec. Vendas ainda consegue
