@@ -26,7 +26,7 @@ const ERROS: Record<string, string> = {
   RODADA_NAO_ENCONTRADA: 'Rodada não encontrada ou não liberada para a sua imobiliária.',
   INSCRICOES_ENCERRADAS: 'As confirmações desta rodada estão encerradas. Fale com a Sec. Vendas.',
   RODADA_JA_ACONTECEU: 'Esta rodada já aconteceu.',
-  PESSOAS_INVALIDO: 'Informe quantas pessoas vêm, de 1 a 20.',
+  PESSOAS_INVALIDO: 'Cada cliente pode trazer no máximo 3 pessoas, contando com ele.',
   NOME_CONVIDADO_OBRIGATORIO: 'Preencha o nome completo de todos os convidados.',
   NOME_COMPLETO_OBRIGATORIO: 'Informe nome e sobrenome de cada convidado.',
   RODADA_LOTADA: 'As vagas desta rodada acabaram. Fale com a Sec. Vendas.',
@@ -527,19 +527,22 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
   );
 }
 
+/** Cliente + até 2 acompanhantes. */
+const MAX_PESSOAS = 3;
+
 /** Quantidade de pessoas primeiro; um campo de nome completo para cada uma. */
 function CamposConvidados({ nomes, setNomes }: { nomes: string[]; setNomes: (n: string[]) => void }) {
   const mudarQtd = (q: number) => {
-    const n = Math.max(1, Math.min(20, q || 1));
+    const n = Math.max(1, Math.min(MAX_PESSOAS, q || 1));
     setNomes(Array.from({ length: n }, (_, k) => nomes[k] ?? ''));
   };
   return (
     <>
       <label className="qtd-convidados">Quantas pessoas vêm
         <select value={nomes.length} onChange={(e) => mudarQtd(Number(e.target.value))}>
-          {Array.from({ length: 20 }, (_, k) => k + 1).map((n) => <option key={n} value={n}>{n} {n === 1 ? 'pessoa' : 'pessoas'}</option>)}
+          {Array.from({ length: Math.max(MAX_PESSOAS, nomes.length) }, (_, k) => k + 1).map((n) => <option key={n} value={n} disabled={n > MAX_PESSOAS && n !== nomes.length}>{n} {n === 1 ? 'pessoa' : 'pessoas'}</option>)}
         </select>
-        <small>Contando o cliente</small>
+        <small>Contando o cliente (máximo {MAX_PESSOAS})</small>
       </label>
       <div className="lista-convidados largo">
         {nomes.map((n, k) => (
