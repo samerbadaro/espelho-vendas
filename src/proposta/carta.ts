@@ -30,7 +30,7 @@ const pct = (v: number) => `${(Math.round(v * 10000) / 100).toLocaleString('pt-B
 const hex = (h: string): [number, number, number] => { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 
 /** Logo (inclusive SVG) convertido em PNG para o PDF. */
-async function logoPng(url: string): Promise<{ dados: string; w: number; h: number } | null> {
+export async function logoPng(url: string): Promise<{ dados: string; w: number; h: number } | null> {
   try {
     const img = new Image();
     img.crossOrigin = 'anonymous';

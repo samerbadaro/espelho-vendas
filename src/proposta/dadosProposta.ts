@@ -1,7 +1,7 @@
 // Carrega do banco os parâmetros comerciais, a tabela de vendas e as unidades,
 // no formato do motor, e grava as propostas.
 import { supabase } from '../dados';
-import type { ConfigEmpreendimento, Periodicidade, Serie, SerieTabela, Unidade, Resultado } from './motor';
+import { hojeISO, resolverCaptacao, type ConfigEmpreendimento, type Periodicidade, type Serie, type SerieCaptacao, type SerieTabela, type Unidade, type Resultado } from './motor';
 
 export interface Comercial {
   mes_tabela: string; mes_entrega: string; taxa_vp: number; comissao_pct: number; parte_sinal: number;
@@ -12,49 +12,110 @@ export interface Comercial {
   alcada_automatica?: boolean; alcada_auto_pv?: number; alcada_vendas_pv?: number;
 }
 
-export interface UnidadeComercial extends Unidade { id: string; status: string; versao: number; andar: number | null }
+export interface UnidadeComercial extends Unidade { id: string; status: string; versao: number; andar: number | null; tipologia: string | null }
 
-export interface Contexto { cfg: ConfigEmpreendimento; comercial: Comercial; unidades: UnidadeComercial[]; nome: string; logoUrl: string | null; corDestaque: string }
+export type SituacaoTabela = 'rascunho' | 'agendada' | 'vigente' | 'encerrada';
+export interface TabelaResumo {
+  id: string; nome: string; mes_referencia: string; vigente_desde: string | null; situacao: SituacaoTabela;
+  origem: string; observacao: string | null; unidades: number; vgv: number; criada_por: string | null; criada_em: string;
+  ativada_por: string | null; atualizada_em: string; base_id: string | null;
+}
+export const ROTULO_SITUACAO: Record<SituacaoTabela, string> = { rascunho: 'Rascunho', agendada: 'Agendada', vigente: 'Vigente', encerrada: 'Encerrada' };
 
-export async function carregarContexto(): Promise<Contexto | { erro: string }> {
-  const [c, p, s, u, cfgMarca] = await Promise.all([
+export interface Contexto {
+  cfg: ConfigEmpreendimento; comercial: Comercial; unidades: UnidadeComercial[]; nome: string; logoUrl: string | null; corDestaque: string;
+  tabela: TabelaResumo; vigente: TabelaResumo | null; proxima: TabelaResumo | null; mesVenda: string;
+}
+
+export interface CaptacaoBanco { numero: number; nome: string; series: SerieCaptacao[] }
+
+/** Captações de uma tabela, como cadastradas (quantidade fixa ou automática). */
+export async function carregarCaptacoes(tabelaId: string): Promise<CaptacaoBanco[]> {
+  const [c, s] = await Promise.all([
+    supabase.from('captacoes').select('numero, nome').eq('tabela_id', tabelaId).order('numero'),
+    supabase.from('captacoes_series').select('captacao, ordem, rotulo, periodicidade, percentual, qtd, base, meses, fim_meses').eq('tabela_id', tabelaId).order('ordem'),
+  ]);
+  const series = (s.data ?? []) as { captacao: number; rotulo: string; periodicidade: Periodicidade; percentual: number; qtd: number | null; base: 'venda' | 'entrega'; meses: number; fim_meses: number | null }[];
+  return ((c.data ?? []) as { numero: number; nome: string }[]).map((x) => ({
+    numero: x.numero, nome: x.nome,
+    series: series.filter((y) => y.captacao === x.numero).map((y) => ({
+      rotulo: y.rotulo, periodicidade: y.periodicidade, percentual: Number(y.percentual), qtd: y.qtd, fimMeses: y.fim_meses,
+      inicio: { base: y.base, meses: y.meses },
+    })),
+  }));
+}
+
+/** Mês da venda: o mês da data (hoje, ou a da proposta), nunca antes do mês de referência da tabela. */
+export const mesDaVenda = (t: Pick<TabelaResumo, 'mes_referencia'>, data: string) => {
+  const a = t.mes_referencia.slice(0, 7), b = data.slice(0, 7);
+  return a > b ? a : b;
+};
+
+/**
+ * Parâmetros, tabela de vendas e unidades, no formato do motor.
+ * Sem tabelaId, usa a vigente. A data define o mês da venda (quantidade de parcelas da captação).
+ */
+export async function carregarContexto(op: { tabelaId?: string | null; data?: string; proxima?: boolean } = {}): Promise<Contexto | { erro: string }> {
+  const [c, t, u, cfgMarca] = await Promise.all([
     supabase.from('comercial').select('*').eq('id', 1).maybeSingle(),
-    supabase.from('precos_tipo').select('tipo, preco_m2'),
-    supabase.from('tabelas_series').select('tabela, ordem, rotulo, periodicidade, qtd, percentual, base, meses').order('ordem'),
-    supabase.from('unidades').select('id, numero, andar, area_privativa, tipo_preco, peso, tabela, status, versao').order('andar').order('posicao'),
+    supabase.from('tabelas_preco_resumo').select('*').neq('situacao', 'rascunho').order('vigente_desde', { ascending: false }),
+    supabase.from('unidades').select('id, numero, andar, area_privativa, tipologia, status, versao').order('andar').order('posicao'),
     supabase.from('config').select('nome_empreendimento, logo_url, cor_destaque').eq('id', 1).maybeSingle(),
   ]);
-  const erro = c.error || p.error || s.error || u.error;
-  if (erro) return { erro: erro.message.includes('does not exist') ? 'O banco ainda não tem a estrutura de propostas (migração 101).' : erro.message };
+  const erro = c.error || t.error || u.error;
+  if (erro) return { erro: erro.message.includes('does not exist') ? 'O banco ainda não tem a tabela de vendas (migração 110).' : erro.message };
   if (!c.data) return { erro: 'Parâmetros comerciais não cadastrados.' };
   const comercial = c.data as Comercial;
-
-  const tabelas: Record<string, SerieTabela[]> = {};
-  for (const x of (s.data ?? []) as { tabela: string; rotulo: string; periodicidade: Periodicidade; qtd: number; percentual: number; base: 'venda' | 'entrega'; meses: number }[]) {
-    (tabelas[x.tabela] ??= []).push({ rotulo: x.rotulo, periodicidade: x.periodicidade, qtd: x.qtd, percentual: Number(x.percentual), inicio: { base: x.base, meses: x.meses } });
+  const publicadas = (t.data ?? []) as TabelaResumo[];
+  const vigente = publicadas.find((x) => x.situacao === 'vigente') ?? null;
+  const proxima = publicadas.find((x) => x.situacao === 'agendada') ?? null;
+  let tabela = op.proxima ? proxima : op.tabelaId ? publicadas.find((x) => x.id === op.tabelaId) ?? null : vigente;
+  if (!tabela && op.tabelaId) {
+    const { data } = await supabase.from('tabelas_preco_resumo').select('*').eq('id', op.tabelaId).maybeSingle();
+    tabela = (data as TabelaResumo | null) ?? null;
   }
-  const precoM2PorTipo = Object.fromEntries(((p.data ?? []) as { tipo: string; preco_m2: number }[]).map((x) => [x.tipo, Number(x.preco_m2)]));
+  if (!tabela) return { erro: 'Nenhuma tabela de vendas vigente. Cadastre e ative uma tabela em "Tabela de vendas".' };
+
+  const [itens, caps] = await Promise.all([
+    supabase.from('tabelas_preco_itens').select('unidade_id, preco, captacao').eq('tabela_id', tabela.id),
+    carregarCaptacoes(tabela.id),
+  ]);
+  if (itens.error) return { erro: itens.error.message };
+  const mesVenda = mesDaVenda(tabela, op.data ?? hojeISO());
+  const mesEntrega = comercial.mes_entrega.slice(0, 7);
+  const tabelas: Record<string, SerieTabela[]> = {};
+  const nomesTabelas: Record<string, string> = {};
+  for (const cap of caps) { tabelas[String(cap.numero)] = resolverCaptacao(cap.series, mesVenda, mesEntrega); nomesTabelas[String(cap.numero)] = cap.nome; }
+
+  const porUnidade = new Map(((itens.data ?? []) as { unidade_id: string; preco: number; captacao: number }[]).map((x) => [x.unidade_id, x]));
   const unidades: UnidadeComercial[] = ((u.data ?? []) as {
-    id: string; numero: string; andar: number | null; area_privativa: number | null; tipo_preco: string | null; peso: number | null; tabela: string | null; status: string; versao: number;
+    id: string; numero: string; andar: number | null; area_privativa: number | null; tipologia: string | null; status: string; versao: number;
   }[])
-    .filter((x) => x.area_privativa && x.tipo_preco && x.peso && x.tabela && tabelas[x.tabela] && precoM2PorTipo[x.tipo_preco])
-    .map((x) => ({ id: x.id, numero: x.numero, area: Number(x.area_privativa), tipo: x.tipo_preco!, peso: Number(x.peso), tabela: x.tabela!, status: x.status, versao: x.versao, andar: x.andar }));
-  if (!unidades.length) return { erro: 'Nenhuma unidade com preço configurado (tipo, peso e tabela).' };
+    .filter((x) => porUnidade.has(x.id) && tabelas[String(porUnidade.get(x.id)!.captacao)])
+    .map((x) => {
+      const it = porUnidade.get(x.id)!;
+      return {
+        id: x.id, numero: x.numero, area: Number(x.area_privativa ?? 0), tipo: x.tipologia ?? '', peso: 1, tabela: String(it.captacao),
+        preco: Number(it.preco), status: x.status, versao: x.versao, andar: x.andar, tipologia: x.tipologia,
+      };
+    });
+  if (!unidades.length) return { erro: `A tabela "${tabela.nome}" não tem unidades com preço.` };
 
   const marca = cfgMarca.data as { nome_empreendimento: string; logo_url: string | null; cor_destaque: string | null } | null;
   const nome = marca?.nome_empreendimento || 'Empreendimento';
   const cfg: ConfigEmpreendimento = {
     nome,
-    mesTabela: comercial.mes_tabela.slice(0, 7),
-    mesEntrega: comercial.mes_entrega.slice(0, 7),
+    mesTabela: mesVenda,
+    mesEntrega,
     taxaVP: Number(comercial.taxa_vp),
-    precoM2PorTipo,
+    precoM2PorTipo: {},
     tabelas,
+    nomesTabelas,
     unidades,
     comissao: { percentual: Number(comercial.comissao_pct), parteDoSinal: Number(comercial.parte_sinal) },
     limiteVariacaoCaptacao: Number(comercial.limite_captacao),
   };
-  return { cfg, comercial, unidades, nome, logoUrl: marca?.logo_url ?? null, corDestaque: marca?.cor_destaque ?? '#94874A' };
+  return { cfg, comercial, unidades, nome, logoUrl: marca?.logo_url ?? null, corDestaque: marca?.cor_destaque ?? '#94874A', tabela, vigente, proxima, mesVenda };
 }
 
 export type StatusProposta = 'rascunho' | 'enviada' | 'aprovada' | 'recusada' | 'devolvida' | 'cancelada';
@@ -71,7 +132,7 @@ export const rotuloProposta = (s: StatusProposta) => STATUS_PROPOSTA.find((x) =>
 export interface PropostaSalva {
   id: string; codigo: string; unidade_id: string; pasta_id: string | null; imobiliaria_id: string | null;
   criado_por_id: string | null; criado_por: string | null; criado_por_nome?: string | null; data_proposta: string; status: StatusProposta;
-  series: Omit<Serie, 'id'>[]; resumo: Resumo; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
+  series: Omit<Serie, 'id'>[]; resumo: Resumo; tabela_id?: string | null; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
   motivo_analise: string | null; analisada_por: string | null; analisada_em: string | null; enviada_em: string | null;
   versao: number; criada_em: string; atualizada_em: string; alcada?: Alcada | null;
 }
@@ -126,6 +187,21 @@ const ERROS: Record<string, string> = {
   PASTA_FORA_DA_FILA: 'Esta pasta não está na fila de escolha.',
   LIMITE_DE_UNIDADES_DA_PASTA: 'Esta pasta já atingiu o limite de unidades reservadas.',
   INICIO_OBRIGATORIO: 'Informe a data e a hora de início da fila.',
+  TABELA_ENCERRADA: 'A tabela desta proposta não está mais vigente. Clique em "Atualizar para a tabela vigente" e revise os valores.',
+  TABELA_NAO_VIGENTE: 'A proposta só pode ir para a tabela vigente.',
+  TABELA_JA_VIGENTE: 'Tabela vigente ou encerrada não muda. Crie uma nova tabela a partir dela.',
+  TABELA_INCOMPLETA: 'Há unidades sem preço nesta tabela.',
+  TABELA_SEM_CAPTACAO: 'Cadastre ao menos uma captação.',
+  CAPTACAO_NAO_SOMA_100: 'Cada captação precisa somar 100%.',
+  CAPTACAO_EM_USO: 'Há unidades ligadas à captação removida. Troque a captação delas antes.',
+  CAPTACAO_INEXISTENTE: 'Captação não cadastrada nesta tabela.',
+  CAPTACOES_1_A_3: 'São de 1 a 3 captações por tabela.',
+  JA_EXISTE_TABELA_AGENDADA: 'Já existe outra tabela agendada. Cancele o agendamento dela antes.',
+  TABELA_AGENDADA: 'Cancele o agendamento antes de excluir.',
+  TABELA_COM_PROPOSTAS: 'Esta tabela já tem propostas e não pode ser excluída.',
+  REAJUSTE_INVALIDO: 'Percentual de reajuste inválido.',
+  PRECO_INVALIDO: 'Preço inválido.',
+  ARQUIVO_VAZIO: 'O arquivo não tem linhas.',
   PERMUTA_SEM_OBSERVACAO: 'Descreva a permuta nas observações da proposta antes de enviar.',
 };
 export const traduzirErro = (msg: string) => ERROS[Object.keys(ERROS).find((k) => msg.includes(k)) ?? ''] ?? msg;

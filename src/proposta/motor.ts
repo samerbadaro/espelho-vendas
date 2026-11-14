@@ -24,7 +24,8 @@ export interface Unidade {
   area: number;
   tipo: string;
   peso: number;
-  tabela: string;
+  tabela: string; // captação da unidade (chave em cfg.tabelas)
+  preco?: number; // preço da unidade na tabela de vendas (quando há tabela por unidade)
 }
 
 export interface SerieTabela {
@@ -32,6 +33,16 @@ export interface SerieTabela {
   periodicidade: Periodicidade;
   qtd: number;
   percentual: number; // do preço da unidade, somando a série inteira
+  inicio: { base: 'venda' | 'entrega'; meses: number };
+}
+
+/** Série da captação como cadastrada: quantidade fixa ou automática até a entrega (+ fimMeses). */
+export interface SerieCaptacao {
+  rotulo: string;
+  periodicidade: Periodicidade;
+  percentual: number;
+  qtd: number | null;
+  fimMeses: number | null;
   inicio: { base: 'venda' | 'entrega'; meses: number };
 }
 
@@ -45,6 +56,7 @@ export interface ConfigEmpreendimento {
   unidades: Unidade[];
   comissao: { percentual: number; parteDoSinal: number };
   limiteVariacaoCaptacao: number; // ex.: -0.15
+  nomesTabelas?: Record<string, string>; // nome de cada captação
 }
 
 export interface Serie {
@@ -107,8 +119,18 @@ const centavosAcima = (v: number) => Math.ceil(Math.round(v * 1e6) / 1e4) / 100;
 // ---------------------------------------------------------------------
 // Preço e tabela
 // ---------------------------------------------------------------------
-/** Preço da unidade = R$/m² do tipo × peso do andar × área ÷ peso médio do tipo. */
+/** Quantidade de parcelas e 1º mês de cada série, para uma venda no mês indicado. */
+export function resolverCaptacao(series: SerieCaptacao[], mesVenda: string, mesEntrega: string): SerieTabela[] {
+  return series.map((s) => {
+    const inicio = somarMeses(s.inicio.base === 'venda' ? mesVenda : mesEntrega, s.inicio.meses);
+    const qtd = s.qtd ?? Math.max(1, Math.floor(mesesEntre(inicio, somarMeses(mesEntrega, s.fimMeses ?? 0)) / PASSO[s.periodicidade]) + 1);
+    return { rotulo: s.rotulo, periodicidade: s.periodicidade, qtd, percentual: s.percentual, inicio: s.inicio };
+  });
+}
+
+/** Preço da unidade: o da tabela de vendas; sem ele, R$/m² do tipo × peso do andar × área ÷ peso médio do tipo. */
 export function precoUnidade(cfg: ConfigEmpreendimento, u: Unidade) {
+  if (u.preco != null) return u.preco;
   const doTipo = cfg.unidades.filter((x) => x.tipo === u.tipo);
   const pesoMedio = doTipo.reduce((s, x) => s + x.peso, 0) / doTipo.length;
   return (cfg.precoM2PorTipo[u.tipo] * u.peso * u.area) / pesoMedio;

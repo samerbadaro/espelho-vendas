@@ -148,3 +148,10 @@ Testes: `npm run testar:proposta` (motor × planilha) e `psql -d espelho -f supa
 Decisões de 14/11/2026: **um banco por incorporadora** (o subdomínio escolhe o banco); dentro dela, vários empreendimentos; imobiliárias e corretores veem todos os empreendimentos, com bloqueio opcional por empreendimento; pastas numeradas por empreendimento com sigla (DH-PA-001).
 
 - Etapa A (`109_empreendimentos.sql`, testes `testes_empreendimentos.sql`): tabela de empreendimentos, campo `empreendimento_id` nas tabelas de lançamento (preenchido com o empreendimento padrão), bloqueio por imobiliária. Nenhuma tela muda.
+- Tabela de vendas (`110_tabelas_preco.sql`, testes `testes_tabelas.sql`; tela em Painel → Tabela de vendas):
+  - versões de tabela (rascunho → agendada → vigente → encerrada); a vigente é a última cuja data de início já passou (sem rotina agendada);
+  - preço por unidade e até 3 captações por tabela; parcelas mensais/semestrais em quantidade automática até a entrega, recalculadas pelo mês da venda;
+  - arquivo base em Excel para baixar/carregar (preço, captação, área, tipologia), com prévia antes de gravar;
+  - reajuste por % em todas, nas filtradas ou nas selecionadas; agendar a próxima tabela para um dia (0h de Brasília) ou ativar na hora;
+  - propostas guardam a tabela; depois da virada, rascunhos da tabela antiga precisam ser atualizados para a vigente antes do envio; consulta da próxima tabela na tela da proposta;
+  - PDF da tabela (todas as unidades ou só as disponíveis).

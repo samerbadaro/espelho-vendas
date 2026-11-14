@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, FileDown, Plus, Send } from 'lucide-react';
+import { ArrowLeft, Eye, FileDown, Plus, RefreshCw, Send } from 'lucide-react';
 import { supabase } from '../dados';
 import { ir, type Perfil } from '../util';
 import { useDialogos } from '../ui';
@@ -102,32 +102,43 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   const [analise, setAnalise] = useState<null | 'devolvida' | 'recusada' | 'cancelada'>(null);
   const [motivo, setMotivo] = useState('');
   const [chaveEditor, setChaveEditor] = useState(0);
+  // normal: tabela da proposta (nova: a vigente) · consulta: próxima tabela, só para ver · atualizar: trazer a proposta para a vigente
+  const [modo, setModo] = useState<'normal' | 'consulta' | 'atualizar'>('normal');
 
   const carregar = useCallback(async () => {
-    const c = await carregarContexto();
+    let p: PropostaSalva | null = null;
+    if (id !== 'nova') {
+      const { data, error } = await supabase.from('propostas').select('*').eq('id', id).maybeSingle();
+      if (error || !data) { setErro(error ? traduzirErro(error.message) : 'Proposta não encontrada.'); return; }
+      p = data as PropostaSalva;
+    }
+    const c = await carregarContexto(
+      modo === 'consulta' ? { proxima: true } : modo === 'atualizar' || !p ? {} : { tabelaId: p.tabela_id, data: p.data_proposta },
+    );
     if ('erro' in c) { setErro(c.erro); return; }
+    setErro('');
     setCtx(c);
     const { data: ps } = await supabase.from('pastas').select('id, codigo, comprador_nome, status, imobiliaria_id').order('criada_em', { ascending: false });
     setPastas((ps ?? []) as PastaResumo[]);
-    if (id === 'nova') {
+    if (!p) {
       const q = new URLSearchParams(window.location.search);
       const un = q.get('unidade');
-      setUnidadeId(c.unidades.find((u) => u.numero === un || u.id === un)?.id ?? c.unidades.find((u) => u.status === 'disponivel')?.id ?? c.unidades[0].id);
-      setPastaId(q.get('pasta') ?? '');
+      setUnidadeId((atual) => c.unidades.find((u) => u.id === atual)?.id ?? c.unidades.find((u) => u.numero === un || u.id === un)?.id
+        ?? c.unidades.find((u) => u.status === 'disponivel')?.id ?? c.unidades[0].id);
+      setPastaId((atual) => atual || (q.get('pasta') ?? ''));
+      setChaveEditor((k) => k + 1);
       return;
     }
-    const { data, error } = await supabase.from('propostas').select('*').eq('id', id).maybeSingle();
-    if (error || !data) { setErro(error ? traduzirErro(error.message) : 'Proposta não encontrada.'); return; }
-    const p = data as PropostaSalva;
     setProposta(p); setUnidadeId(p.unidade_id); setPastaId(p.pasta_id ?? ''); setObs(p.observacoes ?? '');
     setChaveEditor((k) => k + 1);
     const { data: h } = await supabase.from('historico_propostas').select('acao, usuario_email, criado_em, detalhes').eq('proposta_id', id).order('criado_em', { ascending: false });
     setHistorico((h ?? []) as never);
-  }, [id]);
+  }, [id, modo]);
   useEffect(() => { carregar(); }, [carregar]);
 
   const unidade = useMemo(() => ctx?.unidades.find((u) => u.id === unidadeId), [ctx, unidadeId]);
   const editavel = !proposta || proposta.status === 'rascunho' || proposta.status === 'devolvida';
+  const consulta = modo === 'consulta';
   const seriesIniciais = useMemo(() => (proposta && proposta.unidade_id === unidadeId ? doBanco(proposta.series) : undefined), [proposta, unidadeId]);
 
   if (erro) return <section className="secao"><p className="erro">{erro}</p><button className="botao" onClick={() => ir('/painel/propostas')}>Voltar</button></section>;
@@ -139,6 +150,8 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   const pvPct = estado ? Math.round((estado.resultado.proposta.vpl / estado.resultado.tabela.vpl) * 10000) / 100 : 0;
   const alcada = alcadaPrevista(ctx.comercial, pvPct, (estado?.resultado.comissao.naoCoberta ?? 1) <= 0.005);
   const faltaPermuta = temPermuta && !obs.trim();
+  const tabelaEncerrada = !!proposta && editavel && modo === 'normal' && !!ctx.vigente && proposta.tabela_id !== ctx.vigente.id;
+  const dataVigencia = (t: { vigente_desde: string | null }) => t.vigente_desde ? new Date(t.vigente_desde).toLocaleDateString('pt-BR') : '—';
 
   const salvar = async (): Promise<string | null> => {
     if (!estado) return null;
@@ -147,12 +160,14 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
       unidade_id: unidadeId, pasta_id: pastaId || null, observacoes: obs.trim() || null,
       series: paraBanco(estado.series), resumo: resumoDe(estado.resultado),
       comissao_pct: estado.comissaoPct, parte_sinal: estado.parteSinal,
+      ...(modo === 'atualizar' ? { tabela_id: ctx.tabela.id } : {}),
     };
     const r = proposta
       ? await supabase.from('propostas').update(campos).eq('id', proposta.id).select('id').single()
       : await supabase.from('propostas').insert(campos).select('id').single();
     setSalvando(false);
     if (r.error) { avisar(traduzirErro(r.error.message), 'erro'); return null; }
+    if (modo === 'atualizar') setModo('normal');
     return (r.data as { id: string }).id;
   };
 
@@ -164,6 +179,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   };
 
   const enviar = async () => {
+    if (tabelaEncerrada) { avisar('A tabela desta proposta foi encerrada. Atualize para a tabela vigente antes de enviar.', 'erro'); return; }
     if (faltaPermuta) { avisar('Descreva a permuta nas observações antes de enviar.', 'erro'); return; }
     if (temErro) { avisar('Corrija os erros da grade (vencimentos, parcelas) antes de enviar.', 'erro'); return; }
     if (!pastaId) { avisar('Vincule a pasta do comprador antes de enviar.', 'erro'); return; }
@@ -231,10 +247,32 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
           {editavel && estado && <span className={`chip-alcada a-${alcada}`} title="Quem aprova esta proposta, pelo PV e pela comissão">Aprovação: {ROTULO_ALCADA[alcada]}</span>}
           {!editavel && proposta?.alcada && proposta.status === 'enviada' && <span className={`chip-alcada a-${proposta.alcada}`}>Aguardando: {ROTULO_ALCADA[proposta.alcada]}</span>}
           <button className="botao" onClick={carta} disabled={!estado}><FileDown size={16} /> Carta proposta</button>
-          {editavel && <button className="botao" onClick={aoSalvar} disabled={salvando || !estado}>Salvar rascunho</button>}
-          {editavel && <button className="botao principal" onClick={enviar} disabled={salvando || !estado}><Send size={16} /> Enviar para análise</button>}
+          {editavel && !consulta && <button className="botao" onClick={aoSalvar} disabled={salvando || !estado}>Salvar rascunho</button>}
+          {editavel && !consulta && <button className="botao principal" onClick={enviar} disabled={salvando || !estado || tabelaEncerrada}><Send size={16} /> Enviar para análise</button>}
         </div>
       </div>
+
+      {consulta ? (
+        <div className="cartao aviso-tabela consulta">
+          <span><strong>Consulta da tabela {ctx.tabela.nome}</strong>, que passa a valer em {dataVigencia(ctx.tabela)}. Dá para simular e gerar a carta, mas salvar e enviar só depois da virada.</span>
+          <button className="botao pequeno" onClick={() => setModo('normal')}>Voltar à tabela vigente</button>
+        </div>
+      ) : tabelaEncerrada ? (
+        <div className="cartao aviso-tabela encerrada">
+          <span>Esta proposta foi feita na tabela <strong>{ctx.tabela.nome}</strong>, que não está mais vigente. Para enviar, traga para a tabela <strong>{ctx.vigente?.nome}</strong>: preço e fluxo de tabela mudam, revise as parcelas e salve.</span>
+          <button className="botao pequeno principal" onClick={() => setModo('atualizar')}><RefreshCw size={14} /> Atualizar para a tabela vigente</button>
+        </div>
+      ) : modo === 'atualizar' ? (
+        <div className="cartao aviso-tabela consulta">
+          <span>Proposta aberta na tabela vigente <strong>{ctx.tabela.nome}</strong>, com a data de hoje. Ajuste as parcelas e salve para confirmar a troca.</span>
+          <button className="botao pequeno" onClick={() => setModo('normal')}>Desfazer</button>
+        </div>
+      ) : ctx.proxima && editavel ? (
+        <div className="cartao aviso-tabela proxima">
+          <span>Nova tabela <strong>{ctx.proxima.nome}</strong> a partir de {dataVigencia(ctx.proxima)}. Até lá, as propostas seguem a tabela atual ({ctx.tabela.nome}).</span>
+          <button className="botao pequeno" onClick={() => setModo('consulta')}><Eye size={14} /> Consultar a nova tabela</button>
+        </div>
+      ) : null}
 
       {proposta?.motivo_analise && (proposta.status === 'devolvida' || proposta.status === 'recusada' || proposta.status === 'cancelada') && (
         <div className={`cartao aviso-prop ${proposta.status}`}><strong>{rotuloProposta(proposta.status)}:</strong> {proposta.motivo_analise}</div>
@@ -271,12 +309,12 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
       <div className="prop-bloco prop-unidade">
         <label>
           <span>Unidade</span>
-          <select value={unidadeId} onChange={(e) => trocarUnidade(e.target.value)} disabled={!editavel}>
+          <select value={unidadeId} onChange={(e) => trocarUnidade(e.target.value)} disabled={!editavel || modo === 'atualizar'}>
             {ctx.unidades.map((u) => <option key={u.id} value={u.id}>{u.numero}{u.status !== 'disponivel' ? ` (${statusEspelho(u.status)})` : ''}</option>)}
           </select>
         </label>
         <div><span>Área</span><strong>{unidade.area.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m²</strong></div>
-        <div><span>Tabela</span><strong>{unidade.tabela}</strong></div>
+        <div><span>Tabela · captação</span><strong>{ctx.tabela.nome} · {ctx.cfg.nomesTabelas?.[unidade.tabela] ?? unidade.tabela}</strong></div>
         <div><span>Preço de tabela</span><strong>{fmtReal(precoUnidade(ctx.cfg, unidade))}</strong></div>
         <div><span>Entrega</span><strong>{fmtData(ctx.comercial.mes_entrega).slice(3)}</strong></div>
         <label className="prop-pasta">
@@ -294,7 +332,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
       <EditorProposta
         key={`${unidadeId}-${chaveEditor}`}
         cfg={ctx.cfg} unidade={unidade} hoje={hoje}
-        dataMinima={proposta?.data_proposta ?? hoje}
+        dataMinima={modo !== 'normal' ? hoje : proposta?.data_proposta ?? hoje}
         dias={ctx.comercial.dias_vencimento}
         seriesIniciais={seriesIniciais ?? aplicarModelo(ctx.cfg, unidade, 'tabela', { dia: 10, hoje })}
         comissaoInicial={proposta?.comissao_pct} parteInicial={proposta?.parte_sinal}

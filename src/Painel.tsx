@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import type { Session } from '@supabase/supabase-js';
 import {
   Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
-  FileSignature, BarChart3, ListOrdered,
+  FileSignature, BarChart3, ListOrdered, Table2,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -13,6 +13,7 @@ import { Aviso, StatusConexao, useTitulo } from './Publico';
 import { ListaPastas, DetalhePasta } from './Pastas';
 import { Imobiliarias, Corretores } from './Imobiliarias';
 import { Paineis } from './Paineis';
+import { TabelaVendas } from './TabelaVendas';
 import { EscolhaUnidades, useSituacaoFila } from './Fila';
 import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
@@ -333,6 +334,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
+      { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
@@ -346,6 +348,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(fila?.ativa ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
+      { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
@@ -364,6 +367,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   if (atual === '/painel/escolha') pagina = <EscolhaUnidades perfil={perfil} />;
   else if (idProposta) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
   else if (atual === '/painel/propostas') pagina = <ListaPropostas perfil={perfil} />;
+  else if (atual === '/painel/tabela') pagina = <TabelaVendas perfil={perfil} />;
   else if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
   else if ((atual === '/painel/meeting' || atual === '/painel/recepcao') && equipe && meetingAtivo) pagina = <MeetingPainel perfil={perfil} />;
   else if (idRodada && rodadasAtivas) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
