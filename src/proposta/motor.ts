@@ -228,6 +228,8 @@ export interface Opcoes {
   dataMinima: string;
   comissaoPercentual?: number;
   parteDoSinal?: number;
+  /** Dias de vencimento permitidos (ex.: 5, 10, 15, 20). O ato que vence na data da proposta fica de fora. */
+  diasVencimento?: number[];
 }
 
 export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], op: Opcoes): Resultado {
@@ -247,6 +249,9 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
     if (!(s.qtd >= 1) || !Number.isInteger(s.qtd)) avisos.push({ nivel: 'erro', texto: 'Número de parcelas inválido.', serieId: s.id });
     if (!(s.valor > 0)) avisos.push({ nivel: 'erro', texto: 'Valor da parcela deve ser maior que zero.', serieId: s.id });
     if (s.vencimento < op.dataMinima) avisos.push({ nivel: 'erro', texto: `Vencimento anterior a ${fmtData(op.dataMinima)}.`, serieId: s.id });
+    const diaVenc = Number(s.vencimento.slice(8, 10));
+    if (op.diasVencimento?.length && s.vencimento !== op.dataMinima && !op.diasVencimento.includes(diaVenc))
+      avisos.push({ nivel: 'alerta', texto: `Vencimento no dia ${String(diaVenc).padStart(2, '0')}: use dia ${op.diasVencimento.map((d) => String(d).padStart(2, '0')).join(', ').replace(/, (\d+)$/, ' ou $1')}.`, serieId: s.id });
     const fim = dataDaParcela(s, Math.max(0, Math.floor(s.qtd) - 1));
     if (s.periodicidade !== 'Financiamento' && indiceMes(fim) > indiceMes(limitePreChaves))
       avisos.push({ nivel: 'alerta', texto: 'Parcela no período do financiamento (depois da entrega).', serieId: s.id });
@@ -345,35 +350,34 @@ export function aplicarModelo(cfg: ConfigEmpreendimento, u: Unidade, modelo: Mod
   const fin = daTabela.find((s) => s._ref.periodicidade === 'Financiamento');
   const preChavesTabela = tab.filter((s) => s.periodicidade !== 'Financiamento').reduce((s, x) => s + x.percentual, 0);
 
+  // Mensais / semestrais / anuais: o sinal segue a tabela; "até as chaves" define quanto do
+  // preço é pago direto (sinal incluso) e o resto fica no financiamento. A série principal
+  // é calculada para o PV ficar zero; com 100% até as chaves não há financiamento.
+  const pct = Math.min(1, Math.max(0, op.preChaves ?? preChavesTabela));
+  let principal: Serie;
   if (modelo === 'entrega') {
-    // mensais até a entrega absorvem semestrais e única; financiamento igual à tabela
     const mensal = daTabela.find((s) => s._ref.periodicidade === 'Mensais');
-    if (!mensal) return limpar(daTabela);
-    const fim = somarMeses(cfg.mesEntrega, 0);
-    const qtd = Math.max(1, mesesEntre(mensal.vencimento, fim) + 1);
-    const saldo = preco * preChavesTabela - totalSinal;
-    return limpar([...sinais, { ...mensal, qtd, valor: centavosAcima(saldo / qtd) }, ...(fin ? [fin] : [])]);
+    const venc = mensal?.vencimento ?? vencimentoValido(somarMeses(mesHoje, 1), op.dia, op.hoje);
+    const qtd = Math.max(1, mesesEntre(venc, cfg.mesEntrega) + 1);
+    principal = { id: novoId(), qtd, periodicidade: 'Mensais', vencimento: venc, valor: 0 };
+  } else {
+    const semestral = tab.find((s) => s.periodicidade === 'Semestrais');
+    const mesPrimeira = semestral ? mesInicio(semestral) : somarMeses(mesHoje, 6);
+    const passo = modelo === 'anuais' ? 12 : 6;
+    const vencimento = vencimentoValido(mesPrimeira, op.dia, op.hoje);
+    const qtd = Math.max(1, Math.floor(mesesEntre(vencimento, cfg.mesEntrega) / passo) + 1);
+    principal = { id: novoId(), qtd, periodicidade: modelo === 'anuais' ? 'Anuais' : 'Semestrais', vencimento, valor: 0 };
   }
-
-  // semestrais ou anuais
-  const pct = op.preChaves ?? preChavesTabela;
-  const semestral = tab.find((s) => s.periodicidade === 'Semestrais');
-  const mesPrimeira = semestral ? mesInicio(semestral) : somarMeses(mesHoje, 6);
-  const passo = modelo === 'anuais' ? 12 : 6;
-  const vencimento = vencimentoValido(mesPrimeira, op.dia, op.hoje);
-  const qtd = Math.max(1, Math.floor(mesesEntre(vencimento, cfg.mesEntrega) / passo) + 1);
-  const saldoPre = preco * pct - totalSinal;
+  principal.valor = centavosAcima(Math.max(0, preco * pct - totalSinal) / principal.qtd);
   const restoFin = preco * (1 - pct);
-  const lista: (Serie & { _ref?: SerieTabela })[] = [
-    ...sinais,
-    { id: novoId(), qtd, periodicidade: modelo === 'anuais' ? 'Anuais' : 'Semestrais', vencimento, valor: centavosAcima(saldoPre / qtd) },
-  ];
+  const lista: Serie[] = [...limpar(sinais), principal];
   if (restoFin > 0.005)
     lista.push({
       id: novoId(), qtd: 1, periodicidade: 'Financiamento',
       vencimento: fin?.vencimento ?? dataNoMes(somarMeses(cfg.mesEntrega, 1), op.dia), valor: centavosAcima(restoFin),
     });
-  return limpar(lista);
+  const pvZero = redistribuir(cfg, u, lista, principal.id);
+  return 'erro' in pvZero ? lista : pvZero;
 }
 
 // ---------------------------------------------------------------------

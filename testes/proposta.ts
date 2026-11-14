@@ -53,3 +53,25 @@ console.log('ok — motor da proposta confere com a planilha');
   assert.equal(c2.naoCoberta, 0, 'depois de aumentar o sinal a comissão fica coberta');
   console.log('ok — comissão: sinal 6% destaca no máximo 4,20%; precisa de 7,50%');
 }
+
+// Até as chaves: 100% → sem financiamento e PV zero nas mensais; 90% → 10% no financiamento
+{
+  const hoje = '2026-11-13';
+  const preco = M.precoUnidade(C, u);
+  for (const pct of [1, 0.9, 0.4]) {
+    for (const modelo of ['entrega', 'semestrais', 'anuais'] as const) {
+      const s = M.aplicarModelo(C, u, modelo, { dia: 10, hoje, preChaves: pct });
+      const fin = s.find((x) => x.periodicidade === 'Financiamento');
+      if (pct === 1) assert.equal(fin, undefined, `${modelo} 100%: sem financiamento`);
+      else perto(fin!.valor, preco * (1 - pct), 0.01, `${modelo} ${pct}: financiamento`);
+      const r = M.calcular(C, u, s, { dataMinima: hoje, diasVencimento: [5, 10, 15, 20] });
+      assert.ok(r.diferencaVPL >= 0 && r.diferencaVPL < 1, `${modelo} ${pct}: PV zero (${r.diferencaVPL})`);
+      assert.ok(!r.avisos.some((a) => a.texto.startsWith('Vencimento no dia')), `${modelo}: dias permitidos`);
+    }
+  }
+  const s = M.aplicarModelo(C, u, 'tabela', { dia: 10, hoje });
+  s[2] = { ...s[2], vencimento: '2027-03-12' };
+  const r = M.calcular(C, u, s, { dataMinima: hoje, diasVencimento: [5, 10, 15, 20] });
+  assert.ok(r.avisos.some((a) => a.texto === 'Vencimento no dia 12: use dia 05, 10, 15 ou 20.'), 'avisa dia 12');
+  console.log('ok — até as chaves 100%/90%/40% com PV zero; aviso de dia de vencimento');
+}

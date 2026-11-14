@@ -55,8 +55,8 @@ export function EditorProposta({
   const [verFluxo, setVerFluxo] = useState(false);
 
   const r = useMemo(
-    () => calcular(CFG, unidade, series, { dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal }),
-    [CFG, unidade, series, dataMinima, comissaoPct, parteSinal],
+    () => calcular(CFG, unidade, series, { dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal, diasVencimento: dias }),
+    [CFG, unidade, series, dataMinima, comissaoPct, parteSinal, dias],
   );
   useEffect(() => { aoMudar?.({ series, comissaoPct, parteSinal, resultado: r }); }, [r]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -106,7 +106,7 @@ export function EditorProposta({
             </div>
           </div>
           <div className="grupo">
-            <span>Até as chaves (semestrais/anuais)</span>
+            <span title="Quanto do preço é pago direto até as chaves (sinal incluso). O resto vai para o financiamento. Vale para Mensais, Semestrais e Anuais.">Até as chaves</span>
             <div className="pct">
               <CelulaNumero rotulo="Percentual até as chaves" valor={(preChaves ?? preChavesTabela) * 100} casas={1}
                 aoMudar={(n) => setPreChaves(Math.min(100, Math.max(0, n)) / 100)} />
@@ -218,6 +218,17 @@ export function EditorProposta({
         </section>
       </div>
 
+      <section className="prop-bloco">
+        <div className="titulo-linha">
+          <h2>Fluxo acumulado: tabela × proposta</h2>
+          <div className="legenda-grafico">
+            <span><Traco tipo="tabela" />Tabela</span>
+            <span><Traco tipo="proposta" />Proposta</span>
+          </div>
+        </div>
+        <GraficoFluxo cfg={CFG} tabela={r.tabela.parcelas} proposta={r.proposta.parcelas} />
+      </section>
+
       {/* ===== Comissão ===== */}
       <section className="prop-bloco">
         <div className="titulo-linha">
@@ -308,3 +319,83 @@ function FluxoMensal({ cfg: CFG, tabela, proposta }: { cfg: ConfigEmpreendimento
     </div>
   );
 }
+
+// ---------------------------------------------------------------------
+// Gráfico do fluxo acumulado (como o da aba PV da planilha):
+// tabela em âmbar tracejado, proposta em azul contínuo; passe o mouse
+// para ver os valores do mês.
+// ---------------------------------------------------------------------
+function GraficoFluxo({ cfg, tabela, proposta }: { cfg: ConfigEmpreendimento; tabela: { mes: number; valor: number }[]; proposta: { mes: number; valor: number }[] }) {
+  const [foco, setFoco] = useState<number | null>(null);
+  const dados = useMemo(() => {
+    const ini = Math.min(0, ...proposta.map((p) => p.mes));
+    const fim = Math.max(1, ...tabela.map((p) => p.mes), ...proposta.map((p) => p.mes));
+    const linhas: { m: number; t: number; p: number }[] = [];
+    let t = 0, p = 0;
+    for (let m = ini; m <= fim; m++) {
+      t += tabela.filter((x) => x.mes === m).reduce((s, x) => s + x.valor, 0);
+      p += proposta.filter((x) => x.mes === m).reduce((s, x) => s + x.valor, 0);
+      linhas.push({ m, t, p });
+    }
+    return linhas;
+  }, [tabela, proposta]);
+
+  const W = 900, H = 260, e = 64, d = 16, topo = 12, base = 30;
+  const maxV = Math.max(1, ...dados.map((x) => Math.max(x.t, x.p)));
+  const passoY = [50_000, 100_000, 200_000, 250_000, 500_000, 1_000_000, 2_000_000].find((v) => maxV / v <= 5) ?? 5_000_000;
+  const topoY = Math.ceil(maxV / passoY) * passoY;
+  const x = (i: number) => e + (i / Math.max(1, dados.length - 1)) * (W - e - d);
+  const y = (v: number) => topo + (1 - v / topoY) * (H - topo - base);
+  const caminho = (k: 't' | 'p') => dados.map((pt, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(pt[k]).toFixed(1)}`).join('');
+  const rotuloV = (v: number) => (v >= 1_000_000 ? `${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : `${Math.round(v / 1000)} mil`);
+  const marcasX = dados.map((pt, i) => ({ pt, i })).filter(({ pt }) => pt.m % 6 === 0);
+  const sel = foco != null ? dados[foco] : null;
+
+  const mover = (ev: React.PointerEvent<SVGRectElement>) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    const px = ((ev.clientX - r.left) / r.width) * (W - e - d);
+    setFoco(Math.max(0, Math.min(dados.length - 1, Math.round((px / (W - e - d)) * (dados.length - 1)))));
+  };
+
+  return (
+    <div className="grafico-fluxo">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Fluxo acumulado da tabela e da proposta, mês a mês">
+        {Array.from({ length: Math.round(topoY / passoY) + 1 }, (_, k) => k * passoY).map((v) => (
+          <g key={v}>
+            <line x1={e} x2={W - d} y1={y(v)} y2={y(v)} className="grade-linha" />
+            <text x={e - 8} y={y(v) + 4} textAnchor="end" className="eixo">{v === 0 ? '0' : rotuloV(v)}</text>
+          </g>
+        ))}
+        {marcasX.map(({ pt, i }) => (
+          <text key={pt.m} x={x(i)} y={H - 10} textAnchor="middle" className="eixo">{fmtMes(somarMeses(cfg.mesTabela, pt.m)).replace(/\/(\d\d)(\d\d)$/, '/$2')}</text>
+        ))}
+        <path d={caminho('t')} className="serie tabela" />
+        <path d={caminho('p')} className="serie proposta" />
+        {sel && foco != null && (
+          <g>
+            <line x1={x(foco)} x2={x(foco)} y1={topo} y2={H - base} className="mira" />
+            <circle cx={x(foco)} cy={y(sel.t)} r={4.5} className="ponto tabela" />
+            <circle cx={x(foco)} cy={y(sel.p)} r={4.5} className="ponto proposta" />
+          </g>
+        )}
+        <rect x={e} y={topo} width={W - e - d} height={H - topo - base} fill="transparent"
+          onPointerMove={mover} onPointerDown={mover} onPointerLeave={() => setFoco(null)} />
+      </svg>
+      {sel && foco != null && (
+        <div className="dica-grafico" style={{ left: `${(x(foco) / W) * 100}%` }}>
+          <strong>{fmtMes(somarMeses(cfg.mesTabela, sel.m))}</strong>
+          <span><Traco tipo="tabela" />Tabela <b>{fmtReal(sel.t)}</b></span>
+          <span><Traco tipo="proposta" />Proposta <b>{fmtReal(sel.p)}</b></span>
+          <span className="dif">Diferença <b>{sel.p - sel.t >= 0 ? '+' : ''}{fmtReal(sel.p - sel.t)}</b></span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const Traco = ({ tipo }: { tipo: 'tabela' | 'proposta' }) => (
+  <svg width="22" height="8" aria-hidden="true" className="traco-svg">
+    <line x1="1" x2="21" y1="4" y2="4" stroke={tipo === 'tabela' ? '#B0730F' : '#2F63A8'} strokeWidth="2.5"
+      strokeDasharray={tipo === 'tabela' ? '5 3' : undefined} strokeLinecap="round" />
+  </svg>
+);
