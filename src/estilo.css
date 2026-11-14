@@ -730,3 +730,48 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
 .medalha.m2 { background: #E4E6E8; color: #4A5056; }
 .medalha.m3 { background: #EFD9C7; color: #7A4A22; }
 @media (max-width: 640px) { .funil-barras li { grid-template-columns: 1fr 48px 40px; } .funil-barras .funil-trilho { grid-column: 1 / -1; grid-row: 2; } }
+
+/* ===== Meeting: página pública de inscrição ===== */
+body[data-pagina=meeting] { background: var(--fundo, #F4F3EE); }
+.meeting-pub { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding-bottom: 32px; }
+.meeting-topo { width: 100%; background: var(--primaria); color: var(--primaria-texto); padding: 32px 20px 72px; text-align: center; display: grid; justify-items: center; gap: 10px; }
+.meeting-topo .meeting-logo { max-height: 56px; max-width: 220px; margin-bottom: 8px; }
+.meeting-topo h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.25rem); line-height: 1.15; max-width: 720px; }
+.meeting-info { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; font-size: 0.9375rem; opacity: 0.92; }
+.meeting-info span { display: inline-flex; align-items: center; gap: 6px; }
+.meeting-info span::first-letter { text-transform: uppercase; }
+.meeting-cartao { width: min(560px, calc(100% - 32px)); margin-top: -48px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 16px; box-shadow: var(--sombra-alta); padding: 24px; }
+.meeting-cartao h1, .meeting-cartao h2 { margin: 0 0 12px; }
+.meeting-desc { white-space: pre-line; color: var(--tinta-2); margin: 0 0 18px; padding-bottom: 18px; border-bottom: 1px solid var(--borda); }
+.meeting-form { display: grid; gap: 14px; }
+.meeting-form label { display: grid; gap: 6px; font-weight: 600; font-size: 0.875rem; color: var(--tinta-2); }
+.meeting-form label small { font-weight: 400; color: var(--tinta-3); }
+.meeting-form input { font: inherit; font-size: 1rem; padding: 12px 12px; border: 1px solid var(--borda-forte); border-radius: var(--raio); background: var(--superficie); color: var(--tinta); }
+.meeting-form input:focus { outline: 2px solid var(--destaque); outline-offset: 1px; border-color: transparent; }
+.meeting-form .botao.grande { padding: 14px; font-size: 1rem; justify-content: center; }
+.meeting-form .dica { text-align: center; margin: 0; }
+.meeting-mel { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.meeting-vagas { margin: -6px 0 0; color: var(--proposta); font-weight: 600; font-size: 0.875rem; }
+.meeting-fechado { padding: 18px; text-align: center; background: var(--superficie-2); border-radius: var(--raio); font-weight: 600; color: var(--tinta-2); }
+.meeting-ok { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 8px 0; }
+.meeting-ok h2 { margin: 4px 0 0; }
+.meeting-ok p { margin: 0; }
+.meeting-check { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; background: var(--disponivel); color: #fff; }
+.meeting-codigo { display: grid; gap: 2px; padding: 12px 22px; margin: 8px 0; border: 1px dashed var(--borda-forte); border-radius: var(--raio); }
+.meeting-codigo span { font-size: 0.75rem; color: var(--tinta-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.meeting-codigo strong { font-size: 1.75rem; letter-spacing: 0.16em; font-variant-numeric: tabular-nums; }
+.meeting-rodape { margin-top: 24px; color: var(--tinta-3); font-size: 0.8125rem; }
+
+/* ===== Meeting: painel ===== */
+.meeting-painel .secao + .recepcao { margin-top: -8px; }
+.meeting-resumo .meeting-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 14px; }
+.meeting-resumo .meeting-link code { background: var(--superficie-2); border: 1px solid var(--borda); border-radius: var(--raio); padding: 6px 10px; font-size: 0.8125rem; word-break: break-all; }
+.busca-simples { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--borda-forte); border-radius: var(--raio); padding: 0 10px; background: var(--superficie); color: var(--tinta-3); }
+.busca-simples input { border: 0; outline: none; padding: 8px 0; font: inherit; min-width: 240px; background: transparent; color: var(--tinta); }
+.dialogo.largo { width: min(640px, 100%); }
+.campo-prefixo { display: flex; align-items: stretch; border: 1px solid var(--borda-forte); border-radius: var(--raio); overflow: hidden; }
+.campo-prefixo > span { background: var(--superficie-2); color: var(--tinta-3); padding: 0 8px; display: flex; align-items: center; font-weight: 400; font-size: 0.8125rem; white-space: nowrap; }
+.campo-prefixo input { border: 0 !important; border-radius: 0 !important; flex: 1; min-width: 0; }
+
+.campos .interruptor { flex-direction: row; align-items: center; }
+.busca-simples input { border: 0 !important; box-shadow: none !important; outline: none; }

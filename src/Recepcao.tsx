@@ -14,10 +14,11 @@ interface Participante {
 const chave = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
 
-export function Recepcao() {
+/** Confirmação de presença. Com `eventoFixo`, mostra só aquele meeting (aba do Meeting). */
+export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
   const { avisar } = useDialogos();
   const [eventos, setEventos] = useState<Evento[] | null>(null);
-  const [eventoId, setEventoId] = useState('');
+  const [eventoId, setEventoId] = useState(eventoFixo ?? '');
   const [lista, setLista] = useState<Participante[]>([]);
   const [busca, setBusca] = useState('');
   const [aba, setAba] = useState<'aguardando' | 'confirmados'>('aguardando');
@@ -30,9 +31,9 @@ export function Recepcao() {
       .then(({ data }) => {
         const l = (data as Evento[]) ?? [];
         setEventos(l);
-        if (l.length) setEventoId(l[0].id);
+        if (l.length && !eventoFixo) setEventoId(l[0].id);
       });
-  }, []);
+  }, [eventoFixo]);
 
   const carregar = useCallback(async () => {
     if (!eventoId) return;
@@ -102,8 +103,8 @@ export function Recepcao() {
     <section className="secao recepcao">
       <div className="secao-topo">
         <div>
-          <h2>Recepção</h2>
-          {eventos.length > 1 ? (
+          <h2>{eventoFixo ? 'Confirmação de presença' : 'Recepção'}</h2>
+          {eventos.length > 1 && !eventoFixo ? (
             <select className="seletor-evento" value={eventoId} onChange={(e) => setEventoId(e.target.value)} aria-label="Evento">
               {eventos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
             </select>

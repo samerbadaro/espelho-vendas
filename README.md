@@ -131,3 +131,9 @@ Testes: `npm run testar:proposta` (motor × planilha) e `psql -d espelho -f supa
 - **Painéis** (`028`, menu "Painéis"): visão geral, vendas (VSO, funil), rankings de imobiliárias e corretores (unidades e VGV), carteira de recebíveis (propostas aprovadas) e propostas.
 - Testes: `supabase/tests/testes_alcadas_fila.sql` (22).
 - Atualização do banco de testes: `supabase/v2/atualizar_v2_alcadas_fila_paineis.sql`.
+
+### Meeting (v2)
+
+- Menu **Meeting** (antes "Recepção"): criar o meeting, abrir/fechar inscrições, vagas, link público, inscritos (exportar) e **Confirmação de presença**.
+- Página pública de inscrição: `/meeting/<endereço>` (sem login): nome completo, e-mail, celular, imobiliária. Não aceita e-mail nem celular repetidos no mesmo meeting.
+- Banco: `029_meeting.sql`. Testes: `supabase/tests/testes_meeting.sql` (16).

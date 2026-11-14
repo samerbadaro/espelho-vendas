@@ -17,7 +17,7 @@ import { EscolhaUnidades, useSituacaoFila } from './Fila';
 import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
 import { Rodadas, DetalheRodada } from './Rodadas';
-import { Recepcao } from './Recepcao';
+import { MeetingPainel } from './Meeting';
 import { Portal } from './Portal';
 import { ListaPropostas, PaginaProposta } from './proposta/Propostas';
 import { useRota, ir, type Perfil } from './util';
@@ -189,7 +189,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(pastasAtivas ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       { c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> },
       { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
-      { c: '/painel/recepcao', r: 'Recepção', i: <ClipboardCheck size={18} /> },
+      { c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> },
       ...(admin ? [
         { c: '/painel/imobiliarias', r: 'Imobiliárias e logins', i: <Building2 size={18} /> },
         { c: '/painel/empreendimento', r: 'Empreendimento', i: <Settings size={18} /> },
@@ -217,7 +217,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (idProposta) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
   else if (atual === '/painel/propostas') pagina = <ListaPropostas perfil={perfil} />;
   else if (catPortal) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
-  else if (atual === '/painel/recepcao' && equipe) pagina = <Recepcao />;
+  else if ((atual === '/painel/meeting' || atual === '/painel/recepcao') && equipe) pagina = <MeetingPainel perfil={perfil} />;
   else if (idRodada) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
   else if (atual === '/painel/rodadas') pagina = <Rodadas perfil={perfil} />;
   else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
