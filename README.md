@@ -6,7 +6,6 @@ Espelho de unidades em tempo real, para uso interno da Launch.
 |---|---|---|
 | `/` | Link público (corretores e clientes, no celular) | Não |
 | `/tv` | TV do salão de vendas | Não |
-| `/proposta` | **v2, em testes**: simulador de proposta (tabela × proposta, PV, comissão). Ainda não grava no banco | Não |
 | `/painel` | Sec. Vendas e administradores: espelho, pastas, imobiliárias e logins. Imobiliárias: as próprias pastas e o espelho | Sim |
 
 O sistema não guarda nenhum dado pessoal de comprador.
@@ -103,11 +102,21 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 - `src/ui.tsx`: marca, confirmações, avisos e saída por inatividade
 - `src/estilo.css`: visual
 
-## Proposta (v2, em testes)
+## Propostas (v2, em testes)
 
-- `src/proposta/motor.ts`: cálculo puro — preço da unidade, fluxo da tabela e da proposta, VPL, captação, comissão pelo sinal, validações, modelos de preenchimento (tabela, mensais até a entrega, semestrais, anuais) e "PV zero" (atingir meta numa série).
-- `src/proposta/compactoStudio.ts`: dados do empreendimento tirados da planilha `Compacto_Studio.xlsm` (vão para o banco da v2).
-- `src/proposta/Proposta.tsx`: a tela.
-- Conferência com a planilha: `node --experimental-strip-types testes/proposta.ts`
+Painel → **Propostas**. O corretor monta a proposta (grade como a planilha, botões de preenchimento, "⟲ ajustar" para PV zero), vincula a pasta e envia. A Sec. Vendas aprova, devolve para ajuste ou recusa; aprovar leva a unidade para **Proposta recebida** no espelho, com o valor e o PV. A **carta proposta** sai em PDF com os dados da pasta.
 
-Regras: nenhum vencimento antes de hoje (ou da data em que a proposta foi salva); financiamento entra no VPL no mês seguinte à entrega (securitizado), como na planilha.
+- `supabase/migrations/019_propostas.sql`: parâmetros comerciais, tabelas de venda, propostas, envio e análise.
+- `supabase/migrations/020_dados_comerciais_duohaus.sql`: dados da planilha `Compacto_Studio.xlsm` (preço do m² por tipo, Tabelas 1 e 2, peso e tabela de cada unidade).
+- `supabase/v2/instalar_v2.sql`: as migrações 001 a 020 num arquivo só, para um projeto novo do Supabase.
+- `src/proposta/motor.ts`: cálculo (preço, fluxo, VPL, captação, comissão pelo sinal, validações, modelos, PV zero).
+- `src/proposta/Proposta.tsx` (editor), `Propostas.tsx` (lista e página), `carta.ts` (PDF), `dadosProposta.ts` (banco).
+
+Regras: nenhum vencimento antes da data da proposta (o dia em que foi criada, no horário de Brasília); proposta enviada só volta a ser editada se a equipe devolver; uma proposta aprovada por unidade; o financiamento entra no VPL no mês seguinte à entrega (securitizado), como na planilha.
+
+Testes: `npm run testar:proposta` (motor × planilha) e `psql -d espelho -f supabase/tests/testes_propostas.sql` (15 testes do banco).
+
+### Ambiente de testes da v2
+
+- `.env.v2` e `wrangler.v2.jsonc`: URL e chave publishable do projeto de testes do Supabase.
+- Build: `npm run build:v2`. Deploy: `npx wrangler deploy -c wrangler.v2.jsonc` (Worker `espelho-vendas-v2`, separado da produção).

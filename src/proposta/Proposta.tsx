@@ -1,19 +1,16 @@
-import { useMemo, useState } from 'react';
-import { COMPACTO_STUDIO as CFG } from './compactoStudio';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  aplicarModelo, calcular, dataDaParcela, fmtData, fmtMes, fmtNum, fmtPct, fmtReal, hojeISO, mesesEntre, novoId,
-  PERIODICIDADES, precoUnidade, redistribuir, somarMeses, type Modelo, type Periodicidade, type Serie,
+  aplicarModelo, calcular, dataDaParcela, fmtData, fmtMes, fmtNum, fmtPct, fmtReal, mesesEntre, novoId,
+  PERIODICIDADES, redistribuir, somarMeses, type ConfigEmpreendimento, type Modelo, type Periodicidade, type Resultado,
+  type Serie, type Unidade,
 } from './motor';
 import './proposta.css';
 
 // =====================================================================
-// Tela de proposta (v2, em testes) — simples como a planilha:
-// uma grade de séries editável, botões de preenchimento e o comparativo
-// tabela × proposta calculado na hora.
+// Editor da proposta — simples como a planilha: uma grade de séries
+// editável, botões de preenchimento e o comparativo tabela × proposta
+// calculado na hora.
 // =====================================================================
-
-const DIAS = [5, 10, 15, 20];
-
 /** Número em pt-BR: "1.234,56" ↔ 1234.56 */
 function lerNumero(s: string) {
   const limpo = s.replace(/[^\d,.-]/g, '');
@@ -37,34 +34,34 @@ function CelulaNumero({ valor, casas = 2, aoMudar, rotulo }: { valor: number; ca
   );
 }
 
-export function Proposta() {
-  const hoje = hojeISO();
-  const [numero, setNumero] = useState('1804');
-  const unidade = CFG.unidades.find((u) => u.numero === numero)!;
-  const preChavesTabela = CFG.tabelas[unidade.tabela].filter((s) => s.periodicidade !== 'Financiamento').reduce((s, x) => s + x.percentual, 0);
+export interface EstadoEditor { series: Serie[]; comissaoPct: number; parteSinal: number; resultado: Resultado }
 
-  const [dia, setDia] = useState(10);
+export function EditorProposta({
+  cfg, unidade, hoje, dataMinima, dias, seriesIniciais, comissaoInicial, parteInicial,
+  somenteLeitura = false, podeEditarComissao = false, aoMudar,
+}: {
+  cfg: ConfigEmpreendimento; unidade: Unidade; hoje: string; dataMinima: string; dias: number[];
+  seriesIniciais?: Serie[]; comissaoInicial?: number | null; parteInicial?: number | null;
+  somenteLeitura?: boolean; podeEditarComissao?: boolean; aoMudar?: (e: EstadoEditor) => void;
+}) {
+  const CFG = cfg;
+  const preChavesTabela = CFG.tabelas[unidade.tabela].filter((s) => s.periodicidade !== 'Financiamento').reduce((s, x) => s + x.percentual, 0);
+  const [dia, setDia] = useState(dias.includes(10) ? 10 : dias[0] ?? 10);
   const [preChaves, setPreChaves] = useState<number | null>(null); // null = o da tabela
-  const [series, setSeries] = useState<Serie[]>(() => aplicarModelo(CFG, unidade, 'tabela', { dia: 10, hoje }));
-  const [comissaoPct, setComissaoPct] = useState(CFG.comissao.percentual);
-  const [parteSinal, setParteSinal] = useState(CFG.comissao.parteDoSinal);
+  const [series, setSeries] = useState<Serie[]>(() => seriesIniciais ?? aplicarModelo(CFG, unidade, 'tabela', { dia, hoje }));
+  const [comissaoPct, setComissaoPct] = useState(comissaoInicial ?? CFG.comissao.percentual);
+  const [parteSinal, setParteSinal] = useState(parteInicial ?? CFG.comissao.parteDoSinal);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [verFluxo, setVerFluxo] = useState(false);
 
   const r = useMemo(
-    () => calcular(CFG, unidade, series, { dataMinima: hoje, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal }),
-    [unidade, series, hoje, comissaoPct, parteSinal],
+    () => calcular(CFG, unidade, series, { dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal }),
+    [CFG, unidade, series, dataMinima, comissaoPct, parteSinal],
   );
+  useEffect(() => { aoMudar?.({ series, comissaoPct, parteSinal, resultado: r }); }, [r]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const modelo = (m: Modelo, d = dia) => {
-    setSeries(aplicarModelo(CFG, unidade, m, { dia: d, hoje, preChaves: preChaves ?? preChavesTabela }));
-    setMensagem(null);
-  };
-  const trocarUnidade = (n: string) => {
-    setNumero(n);
-    const u = CFG.unidades.find((x) => x.numero === n)!;
-    setPreChaves(null);
-    setSeries(aplicarModelo(CFG, u, 'tabela', { dia, hoje }));
+  const modelo = (m: Modelo) => {
+    setSeries(aplicarModelo(CFG, unidade, m, { dia, hoje, preChaves: preChaves ?? preChavesTabela }));
     setMensagem(null);
   };
   const mudar = (id: string, campo: Partial<Serie>) => setSeries((l) => l.map((s) => (s.id === id ? { ...s, ...campo } : s)));
@@ -72,7 +69,7 @@ export function Proposta() {
   const adicionar = () => {
     const ultima = series[series.length - 1];
     const venc = ultima ? dataDaParcela(ultima, ultima.qtd) : hoje;
-    setSeries((l) => [...l, { id: novoId(), qtd: 1, periodicidade: 'Mensais', vencimento: venc < hoje ? hoje : venc, valor: 0 }]);
+    setSeries((l) => [...l, { id: novoId(), qtd: 1, periodicidade: 'Mensais', vencimento: venc < dataMinima ? dataMinima : venc, valor: 0 }]);
   };
   const pvZero = (id: string) => {
     const res = redistribuir(CFG, unidade, series, id);
@@ -85,60 +82,39 @@ export function Proposta() {
   const positivo = r.diferencaVPL >= -0.005;
   const outrosErros = r.avisos.some((a) => a.nivel === 'erro' && !a.texto.startsWith('PV negativo'));
   const estado = !positivo ? 'ruim' : outrosErros ? 'pendente' : 'bom';
+  const ro = somenteLeitura;
 
   return (
     <div className="prop">
-      <header className="prop-topo">
-        <div>
-          <div className="prop-selo">v2 · em testes</div>
-          <h1>Proposta — {CFG.nome}</h1>
-        </div>
-        <div className="prop-data">Data da proposta <strong>{fmtData(hoje)}</strong></div>
-      </header>
-
-      {/* ===== Unidade ===== */}
-      <section className="prop-bloco prop-unidade">
-        <label>
-          <span>Unidade</span>
-          <select value={numero} onChange={(e) => trocarUnidade(e.target.value)}>
-            {CFG.unidades.map((u) => <option key={u.numero} value={u.numero}>{u.numero}</option>)}
-          </select>
-        </label>
-        <div><span>Área</span><strong>{fmtNum(unidade.area)} m²</strong></div>
-        <div><span>Tipo</span><strong>{unidade.tipo}</strong></div>
-        <div><span>Tabela</span><strong>{unidade.tabela}</strong></div>
-        <div><span>Preço de tabela</span><strong>{fmtReal(precoUnidade(CFG, unidade))}</strong></div>
-        <div><span>Entrega</span><strong>{fmtMes(CFG.mesEntrega)}</strong></div>
-      </section>
-
-      {/* ===== Botões de preenchimento ===== */}
-      <section className="prop-bloco prop-ferramentas">
-        <div className="grupo">
-          <span>Vencimento</span>
-          <div className="segmentos">
-            {DIAS.map((d) => (
-              <button key={d} className={d === dia ? 'ativo' : ''} onClick={() => setDia(d)}>dia {String(d).padStart(2, '0')}</button>
-            ))}
+      {!ro && (
+        <section className="prop-bloco prop-ferramentas">
+          <div className="grupo">
+            <span>Vencimento</span>
+            <div className="segmentos">
+              {dias.map((d) => (
+                <button key={d} className={d === dia ? 'ativo' : ''} onClick={() => setDia(d)}>dia {String(d).padStart(2, '0')}</button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="grupo">
-          <span>Preencher</span>
-          <div className="botoes">
-            <button className="botao pequeno" onClick={() => modelo('tabela')}>Modelo da tabela</button>
-            <button className="botao pequeno" onClick={() => modelo('entrega')}>Mensais até a entrega</button>
-            <button className="botao pequeno" onClick={() => modelo('semestrais')}>Semestrais</button>
-            <button className="botao pequeno" onClick={() => modelo('anuais')}>Anuais</button>
+          <div className="grupo">
+            <span>Preencher</span>
+            <div className="botoes">
+              <button className="botao pequeno" onClick={() => modelo('tabela')}>Modelo da tabela</button>
+              <button className="botao pequeno" onClick={() => modelo('entrega')}>Mensais até a entrega</button>
+              <button className="botao pequeno" onClick={() => modelo('semestrais')}>Semestrais</button>
+              <button className="botao pequeno" onClick={() => modelo('anuais')}>Anuais</button>
+            </div>
           </div>
-        </div>
-        <div className="grupo">
-          <span>Até as chaves (semestrais/anuais)</span>
-          <div className="pct">
-            <CelulaNumero rotulo="Percentual até as chaves" valor={(preChaves ?? preChavesTabela) * 100} casas={1}
-              aoMudar={(n) => setPreChaves(Math.min(100, Math.max(0, n)) / 100)} />
-            <em>%</em>
+          <div className="grupo">
+            <span>Até as chaves (semestrais/anuais)</span>
+            <div className="pct">
+              <CelulaNumero rotulo="Percentual até as chaves" valor={(preChaves ?? preChavesTabela) * 100} casas={1}
+                aoMudar={(n) => setPreChaves(Math.min(100, Math.max(0, n)) / 100)} />
+              <em>%</em>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ===== Grade de séries ===== */}
       <section className="prop-bloco">
@@ -147,7 +123,7 @@ export function Proposta() {
             <thead>
               <tr>
                 <th>Nº parc.</th><th>Periodicidade</th><th>1º vencimento</th><th className="dir">Valor da parcela</th>
-                <th className="dir">Total da série</th><th>Último venc.</th><th className="dir">% do total</th><th>PV zero</th><th />
+                <th className="dir">Total da série</th><th>Último venc.</th><th className="dir">% do total</th>{!ro && <><th>PV zero</th><th /></>}
               </tr>
             </thead>
             <tbody>
@@ -156,28 +132,41 @@ export function Proposta() {
                 const totalSerie = s.valor * s.qtd;
                 return (
                   <tr key={s.id} className={av.some((a) => a.nivel === 'erro') ? 'com-erro' : av.length ? 'com-alerta' : ''} title={av.map((a) => a.texto).join('\n')}>
-                    <td className="estreita"><CelulaNumero rotulo="Número de parcelas" valor={s.qtd} casas={0} aoMudar={(n) => mudar(s.id, { qtd: Math.max(1, Math.round(n)) })} /></td>
-                    <td>
-                      <select className="celula" value={s.periodicidade} onChange={(e) => mudar(s.id, { periodicidade: e.target.value as Periodicidade })}>
-                        {PERIODICIDADES.map((p) => <option key={p.valor} value={p.valor}>{p.rotulo}</option>)}
-                      </select>
-                    </td>
-                    <td><input className="celula" type="date" min={hoje} value={s.vencimento} onChange={(e) => mudar(s.id, { vencimento: e.target.value })} /></td>
-                    <td><CelulaNumero rotulo="Valor da parcela" valor={s.valor} aoMudar={(n) => mudar(s.id, { valor: Math.max(0, n) })} /></td>
+                    {ro ? (
+                      <>
+                        <td className="dir mono">{s.qtd}</td>
+                        <td className="mono">{PERIODICIDADES.find((p) => p.valor === s.periodicidade)?.rotulo}</td>
+                        <td className="mono">{fmtData(s.vencimento)}</td>
+                        <td className="dir mono">{fmtNum(s.valor)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="estreita"><CelulaNumero rotulo="Número de parcelas" valor={s.qtd} casas={0} aoMudar={(n) => mudar(s.id, { qtd: Math.max(1, Math.round(n)) })} /></td>
+                        <td>
+                          <select className="celula" value={s.periodicidade} onChange={(e) => mudar(s.id, { periodicidade: e.target.value as Periodicidade })}>
+                            {PERIODICIDADES.map((p) => <option key={p.valor} value={p.valor}>{p.rotulo}</option>)}
+                          </select>
+                        </td>
+                        <td><input className="celula" type="date" min={dataMinima} value={s.vencimento} onChange={(e) => mudar(s.id, { vencimento: e.target.value })} /></td>
+                        <td><CelulaNumero rotulo="Valor da parcela" valor={s.valor} aoMudar={(n) => mudar(s.id, { valor: Math.max(0, n) })} /></td>
+                      </>
+                    )}
                     <td className="dir mono">{fmtNum(totalSerie)}</td>
                     <td className="mono">{s.vencimento ? fmtData(dataDaParcela(s, s.qtd - 1)) : '—'}</td>
                     <td className="dir mono">{r.proposta.total > 0 ? fmtPct(totalSerie / r.proposta.total) : '—'}</td>
-                    <td><button className="mini" onClick={() => pvZero(s.id)} title="Recalcula a parcela desta série para o PV ficar igual ao da tabela">⟲ ajustar</button></td>
-                    <td><button className="mini x" onClick={() => remover(s.id)} aria-label="Remover série">✕</button></td>
+                    {!ro && <>
+                      <td><button className="mini" onClick={() => pvZero(s.id)} title="Recalcula a parcela desta série para o PV ficar igual ao da tabela">⟲ ajustar</button></td>
+                      <td><button className="mini x" onClick={() => remover(s.id)} aria-label="Remover série">✕</button></td>
+                    </>}
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={4}><button className="mini" onClick={adicionar}>+ adicionar série</button></td>
+                <td colSpan={4}>{!ro && <button className="mini" onClick={adicionar}>+ adicionar série</button>}</td>
                 <td className="dir mono forte">{fmtNum(r.proposta.total)}</td>
-                <td /><td className="dir mono">100%</td><td colSpan={2} />
+                <td /><td className="dir mono">100%</td>{!ro && <td colSpan={2} />}
               </tr>
             </tfoot>
           </table>
@@ -234,8 +223,14 @@ export function Proposta() {
         <div className="titulo-linha">
           <h2>Comissão</h2>
           <div className="params">
-            <label>Comissão <span className="pct"><CelulaNumero rotulo="Percentual de comissão" valor={comissaoPct * 100} aoMudar={(n) => setComissaoPct(Math.max(0, n) / 100)} /><em>%</em></span></label>
-            <label>Do sinal para a imobiliária <span className="pct"><CelulaNumero rotulo="Parte do sinal para comissão" valor={parteSinal * 100} casas={0} aoMudar={(n) => setParteSinal(Math.min(100, Math.max(0, n)) / 100)} /><em>%</em></span></label>
+            {podeEditarComissao && !ro ? (
+              <>
+                <label>Comissão <span className="pct"><CelulaNumero rotulo="Percentual de comissão" valor={comissaoPct * 100} aoMudar={(n) => setComissaoPct(Math.max(0, n) / 100)} /><em>%</em></span></label>
+                <label>Do sinal para a imobiliária <span className="pct"><CelulaNumero rotulo="Parte do sinal para comissão" valor={parteSinal * 100} casas={0} aoMudar={(n) => setParteSinal(Math.min(100, Math.max(0, n)) / 100)} /><em>%</em></span></label>
+              </>
+            ) : (
+              <span>{fmtPct(comissaoPct, 2)} · {fmtPct(parteSinal, 0)} do sinal para a imobiliária</span>
+            )}
           </div>
         </div>
         <p className="dica">
@@ -257,13 +252,13 @@ export function Proposta() {
       {/* ===== Fluxo mensal ===== */}
       <section className="prop-bloco">
         <button className="mini" onClick={() => setVerFluxo((v) => !v)}>{verFluxo ? '▾' : '▸'} Fluxo mês a mês (tabela × proposta)</button>
-        {verFluxo && <FluxoMensal tabela={r.tabela.parcelas} proposta={r.proposta.parcelas} />}
+        {verFluxo && <FluxoMensal cfg={CFG} tabela={r.tabela.parcelas} proposta={r.proposta.parcelas} />}
       </section>
     </div>
   );
 }
 
-function FluxoMensal({ tabela, proposta }: { tabela: { mes: number; valor: number }[]; proposta: { mes: number; valor: number }[] }) {
+function FluxoMensal({ cfg: CFG, tabela, proposta }: { cfg: ConfigEmpreendimento; tabela: { mes: number; valor: number }[]; proposta: { mes: number; valor: number }[] }) {
   const ultimo = Math.max(0, ...tabela.map((p) => p.mes), ...proposta.map((p) => p.mes));
   const primeiro = Math.min(0, ...proposta.map((p) => p.mes));
   const soma = (l: { mes: number; valor: number }[], m: number) => l.filter((p) => p.mes === m).reduce((s, p) => s + p.valor, 0);

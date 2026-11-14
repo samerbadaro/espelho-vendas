@@ -576,3 +576,6 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
 .lista-convidados label { display: flex; flex-direction: column; gap: 5px; font-size: 0.8125rem; font-weight: 600; color: var(--tinta-2); }
 .lista-convidados label:first-child { grid-column: 1 / -1; }
 @media (max-width: 640px) { .lista-convidados { grid-template-columns: 1fr; } }
+
+/* ===== Faixa de ambiente de testes ===== */
+.faixa-ambiente { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 100; background: #B0730F; color: #fff; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 12px; border-radius: 0 0 6px 6px; pointer-events: none; }
