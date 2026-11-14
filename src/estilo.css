@@ -774,3 +774,22 @@ small.bloco { display: block; color: var(--tinta-2); }
 .sim-rolagem { overflow-x: auto; margin: 0 -6px; padding: 0 6px; }
 .sim-rolagem .sim-tabela { min-width: 640px; }
 .sim-pct .sim-passo { flex-shrink: 0; } .sim-pct input[type=range] { flex: 1; min-width: 100px; }
+.sim-fluxos { margin-top: 16px; }
+.sim-posicao { border: 1px solid var(--borda-forte); border-radius: 12px; padding: 16px 18px; background: var(--superficie-2); display: flex; flex-direction: column; gap: 12px; }
+.sim-posicao-topo strong { display: block; font-size: 1.25rem; }
+.sim-posicao-topo span { color: var(--tinta-2); font-size: 0.8125rem; }
+.sim-precos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sim-preco { text-align: left; background: var(--superficie); border: 1px solid var(--borda-forte); border-radius: 10px; padding: 12px 14px; cursor: pointer; font: inherit; color: var(--tinta); display: flex; flex-direction: column; gap: 2px; }
+.sim-preco span { color: var(--tinta-2); font-size: 0.8125rem; }
+.sim-preco strong { font-size: 1.0625rem; font-variant-numeric: tabular-nums; }
+.sim-preco:hover, .sim-preco:focus-visible { border-color: var(--destaque); }
+.segmentado.mini button { padding: 5px 10px; font-size: 0.8125rem; }
+.sim-conf { width: 100%; border-collapse: collapse; margin: 8px 0 4px; }
+.sim-conf th { text-align: left; font-weight: 500; font-size: 0.8125rem; color: var(--tinta-2); padding: 4px 6px; }
+.sim-conf td { padding: 4px 6px; }
+.sim-conf td:first-child { font-size: 0.875rem; white-space: nowrap; }
+.sim-conf input { width: 100%; }
+.sim-conf-fin td { font-weight: 600; padding-top: 10px; }
+/* registros do portal */
+.registros-abas { display: flex; gap: 6px; margin: 4px 0 14px; flex-wrap: wrap; }
+.tabela-registros td small { display: block; color: var(--tinta-2); }
