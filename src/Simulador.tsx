@@ -28,6 +28,8 @@ const QTD_MAX: Record<K, number> = { ato: 1, sinal: 3, mensais: 43, periodicas: 
 const PERIODICAS_MAX: Record<Periodo, number> = { semestral: 7, anual: 3 };
 const PAR: Partial<Record<K, K>> = { mensais: 'periodicas', periodicas: 'mensais' };
 const PASSO = 0.5;
+/** A única nunca passa de 5% do preço. */
+export const UNICA_MAX = 5;
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -71,24 +73,35 @@ export function calcular(preco: number, pct: Record<K, number>, qtd: Record<K, n
   return { linhas, captacao: r2(100 - fin), fin };
 }
 
-/** Mensais e periódicas se compensam: sobe uma, desce a outra; só depois mexe no financiamento. */
+/**
+ * Mensais e periódicas se compensam. Ao subir uma, o percentual sai, nesta ordem:
+ * da outra série, da única e, só depois, do financiamento.
+ * Ao descer, devolve na ordem inversa: outra série e única até o padrão; o resto vai para o financiamento.
+ * A única fica limitada a UNICA_MAX.
+ */
 export function ajustarPct(p: Record<K, number>, k: K, valor: number, padrao: Record<K, number>) {
-  const novo = Math.max(0, Math.min(100, r2(valor)));
+  const teto = k === 'unica' ? UNICA_MAX : 100;
+  const novo = Math.max(0, Math.min(teto, r2(valor)));
   let delta = r2(novo - p[k]);
   if (delta === 0) return p;
   const n = { ...p };
   const par = PAR[k];
-  const livre = Math.max(0, r2(100 - soma(p)));
+  const fontes: K[] = par ? [par, 'unica'] : [];
   if (delta > 0) {
-    const doPar = par ? Math.min(delta, n[par]) : 0;
-    const doFin = Math.min(r2(delta - doPar), livre);
-    if (par) n[par] = r2(n[par] - doPar);
-    n[k] = r2(n[k] + doPar + doFin);
+    for (const f of fontes) {
+      const tira = Math.min(delta, n[f]);
+      n[f] = r2(n[f] - tira); n[k] = r2(n[k] + tira); delta = r2(delta - tira);
+    }
+    const livre = Math.max(0, r2(100 - soma(n)));
+    n[k] = r2(n[k] + Math.min(delta, livre));
   } else {
     delta = -delta;
-    const proPar = par ? Math.min(delta, Math.max(0, r2(padrao[par] - n[par]))) : 0;
-    if (par) n[par] = r2(n[par] + proPar);
     n[k] = r2(n[k] - delta);
+    for (const f of fontes) {
+      const alvo = f === 'unica' ? Math.min(padrao.unica, UNICA_MAX) : padrao[f];
+      const devolve = Math.min(delta, Math.max(0, r2(alvo - n[f])));
+      n[f] = r2(n[f] + devolve); delta = r2(delta - devolve);
+    }
   }
   return n;
 }
@@ -233,7 +246,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
                   </td>
                   <td>
                     <span className="sim-pct">
-                      <input type="range" min={0} max={100} step={PASSO} value={pct[k]} onChange={(e) => mudaPct(k, Number(e.target.value))} aria-label={`Percentual de ${ROTULO[k]}`} />
+                      <input type="range" min={0} max={k === 'unica' ? UNICA_MAX : 100} step={PASSO} value={pct[k]} onChange={(e) => mudaPct(k, Number(e.target.value))} aria-label={`Percentual de ${ROTULO[k]}`} />
                       <span className="sim-passo">
                         <button onClick={() => mudaPct(k, pct[k] - PASSO)} aria-label={`Diminuir ${ROTULO[k]}`}><Minus size={14} /></button>
                         <input type="number" step={PASSO} value={pct[k]} onChange={(e) => mudaPct(k, Number(e.target.value))} aria-label={`Percentual de ${ROTULO[k]}`} />
@@ -258,7 +271,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
 
       {problema && <p className="erro" role="alert">{problema}</p>}
       <div className="sim-rodape">
-        <p className="dica">Mensais e {periodo === 'anual' ? 'anuais' : 'semestrais'} se compensam: ao subir uma, a outra desce; só depois o financiamento muda. Valores nominais, sem correção.</p>
+        <p className="dica">Ao subir mensais ou {periodo === 'anual' ? 'anuais' : 'semestrais'}, o valor sai primeiro da outra série, depois da única e só então do financiamento. Única limitada a {UNICA_MAX}%. Valores nominais, sem correção.</p>
         <div className="acoes-linha">
           {configurar}
           <button className="botao" disabled={!!problema || !!gerando} onClick={() => baixar('pdf')}><FileDown size={16} /> {gerando === 'pdf' ? 'Gerando…' : 'Baixar PDF'}</button>
@@ -300,6 +313,7 @@ function ConfigurarSimulador({ conf, aoFechar }: { conf: ConfSimulador; aoFechar
       poente: { a_partir: lerBR(f.poente.a_partir), medio: lerBR(f.poente.medio), captacao: Number(f.poente.captacao.replace(',', '.')), pct: f.poente.pct },
       nascente: { a_partir: lerBR(f.nascente.a_partir), medio: lerBR(f.nascente.medio), captacao: Number(f.nascente.captacao.replace(',', '.')), pct: f.nascente.pct },
     };
+    if (p.poente.pct.unica > UNICA_MAX || p.nascente.pct.unica > UNICA_MAX) { setErro(`A única não pode passar de ${UNICA_MAX}% do preço.`); return; }
     const { error } = await supabase.rpc('salvar_simulador', { p });
     if (error) { setErro(ERROS_CONF[error.message] ?? 'Não foi possível salvar. Confira se a migração 026 foi aplicada.'); return; }
     recarregar(); avisar('Simulador atualizado.'); aoFechar();
