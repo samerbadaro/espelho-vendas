@@ -142,3 +142,9 @@ Testes: `npm run testar:proposta` (motor × planilha) e `psql -d espelho -f supa
 - Menu **Meeting** (antes "Recepção"): criar o meeting, abrir/fechar inscrições, vagas, link público, inscritos (exportar) e **Confirmação de presença**.
 - Página pública de inscrição: `/meeting/<endereço>` (sem login): nome completo, e-mail, celular, imobiliária. Não aceita e-mail nem celular repetidos no mesmo meeting.
 - Banco: `108_meeting.sql`. Testes: `supabase/tests/testes_meeting.sql` (16).
+
+### Vários empreendimentos (Fase 1, em andamento)
+
+Decisões de 14/11/2026: **um banco por incorporadora** (o subdomínio escolhe o banco); dentro dela, vários empreendimentos; imobiliárias e corretores veem todos os empreendimentos, com bloqueio opcional por empreendimento; pastas numeradas por empreendimento com sigla (DH-PA-001).
+
+- Etapa A (`109_empreendimentos.sql`, testes `testes_empreendimentos.sql`): tabela de empreendimentos, campo `empreendimento_id` nas tabelas de lançamento (preenchido com o empreendimento padrão), bloqueio por imobiliária. Nenhuma tela muda.
