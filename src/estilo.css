@@ -674,3 +674,15 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
   .portal-lista li { flex-wrap: wrap; }
   .portal-lista .portal-acoes { width: 100%; justify-content: flex-start; padding-left: 58px; }
 }
+
+/* filtros do funil */
+.funil-filtros { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -6px 0 16px; }
+.funil-filtros select { width: auto; }
+.busca-funil {
+  flex: 1; min-width: 260px; max-width: 560px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  background: var(--superficie); border: 1px solid var(--borda-forte); border-radius: var(--raio);
+}
+.busca-funil:focus-within { border-color: var(--primaria); }
+.busca-funil svg { color: var(--tinta-2); flex: none; }
+.busca-funil input, .busca-funil input:focus { flex: 1; min-width: 0; border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 10px 0; font: inherit; outline: 0; }
+.funil-contagem { color: var(--tinta-2); font-size: 0.875rem; }

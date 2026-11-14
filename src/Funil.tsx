@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
-import { Clock, GripVertical } from 'lucide-react';
+import { Clock, GripVertical, Search, X } from 'lucide-react';
 import { supabase } from './dados';
 import { ir } from './util';
 import { useDialogos } from './ui';
@@ -53,6 +53,7 @@ export function Funil() {
   const [cards, setCards] = useState<Card[] | null>(null);
   const [nomes, setNomes] = useState<Record<string, string>>({});
   const [imob, setImob] = useState('');
+  const [busca, setBusca] = useState('');
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<Etapa | null>(null);
 
@@ -91,7 +92,16 @@ export function Funil() {
     (cards ?? []).forEach((c) => c.pasta.imobiliarias && m.set(c.pasta.imobiliaria_id, c.pasta.imobiliarias.nome));
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
   }, [cards]);
-  const visiveis = (cards ?? []).filter((c) => !imob || c.pasta.imobiliaria_id === imob);
+  const chave = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const termo = chave(busca.trim());
+  const visiveis = (cards ?? []).filter((c) => {
+    if (imob && c.pasta.imobiliaria_id !== imob) return false;
+    if (!termo) return true;
+    const corretor = c.pasta.criado_por ? nomes[c.pasta.criado_por] ?? c.pasta.criado_por : '';
+    const alvo = [c.pasta.comprador_nome, c.pasta.imobiliarias?.nome, corretor, c.unidade?.numero,
+      c.pasta.codigo, c.pasta.codigo_aprovacao].filter(Boolean).join(' ');
+    return chave(alvo).includes(termo);
+  });
 
   const ERROS: Record<string, string> = {
     SEM_UNIDADE: 'Escolha a unidade desta pasta.',
@@ -146,11 +156,23 @@ export function Funil() {
     <section className="secao larga">
       <div className="secao-topo">
         <div><h2>Funil de vendas</h2><p className="sub">Cada unidade em negociação é um card. Arraste o card para mudar a etapa; o espelho acompanha. Para outra unidade do mesmo cliente, reserve no espelho.</p></div>
+      </div>
+
+      <div className="funil-filtros">
+        <label className="busca-funil">
+          <Search size={18} aria-hidden="true" />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por cliente, corretor, imobiliária, unidade ou código" aria-label="Buscar no funil" />
+          {busca && <button className="icone-botao" onClick={() => setBusca('')} aria-label="Limpar busca"><X size={16} /></button>}
+        </label>
         {imobiliarias.length > 1 && (
-          <select value={imob} onChange={(e) => setImob(e.target.value)} aria-label="Filtrar por imobiliária" style={{ width: 'auto' }}>
+          <select value={imob} onChange={(e) => setImob(e.target.value)} aria-label="Filtrar por imobiliária">
             <option value="">Todas as imobiliárias</option>
             {imobiliarias.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
           </select>
+        )}
+        {(busca || imob) && (
+          <span className="funil-contagem">{visiveis.length} de {cards?.length ?? 0} cards</span>
         )}
       </div>
 
