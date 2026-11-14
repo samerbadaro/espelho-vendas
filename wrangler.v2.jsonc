@@ -4,6 +4,7 @@
   "name": "espelho-vendas-v2",
   "main": "worker/index.ts",
   "compatibility_date": "2025-09-01",
+  "workers_dev": true,  // endereço espelho-vendas-v2.<conta>.workers.dev ligado
   "build": { "command": "npm run build:v2" },
   "assets": {
     "directory": "./dist",
