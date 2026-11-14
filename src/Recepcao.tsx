@@ -11,7 +11,7 @@ interface Participante {
 }
 
 /** Busca sem acento e sem diferença de maiúsculas. */
-const chave = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const chave = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
 const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
 
 export function Recepcao() {
@@ -219,8 +219,14 @@ export function Recepcao() {
     }
   };
 
+  // imobiliárias que já aparecem na lista, sem repetir variações de maiúsculas e espaços
+  const imobsDaLista = useMemo(() => {
+    const m = new Map<string, string>();
+    lista.forEach((p) => { const n = p.imobiliaria?.trim().replace(/\s+/g, ' '); if (n && !m.has(chave(n))) m.set(chave(n), n); });
+    return [...m.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [lista]);
   if (eventos == null) return <section className="secao"><p className="vazio">Carregando…</p></section>;
-  if (!eventos.length) return <section className="secao"><h2>Recepção</h2><p className="vazio">Nenhum evento com lista de convidados.</p></section>;
+  if (!eventos.length) return <section className="secao"><h2>Meeting</h2><p className="vazio">Nenhum evento com lista de convidados.</p></section>;
   const evento = eventos.find((e) => e.id === eventoId);
   const pct = lista.length ? Math.round((totalPresentes / lista.length) * 100) : 0;
 
@@ -228,7 +234,7 @@ export function Recepcao() {
     <section className="secao recepcao">
       <div className="secao-topo">
         <div>
-          <h2>Recepção</h2>
+          <h2>Meeting</h2>
           {eventos.length > 1 ? (
             <select className="seletor-evento" value={eventoId} onChange={(e) => setEventoId(e.target.value)} aria-label="Evento">
               {eventos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
@@ -308,15 +314,19 @@ export function Recepcao() {
         </div>
       </div>
 
-      {incluindo && <IncluirPessoa eventoId={eventoId} nomeInicial={busca} aoFechar={() => setIncluindo(false)}
+      {incluindo && <IncluirPessoa eventoId={eventoId} nomeInicial={busca} imobiliarias={imobsDaLista} aoFechar={() => setIncluindo(false)}
         aoSalvar={(nome) => { setIncluindo(false); setBusca(''); avisar(`${nome} incluído(a) e confirmado(a).`); carregar(); }} />}
     </section>
   );
 }
 
-function IncluirPessoa({ eventoId, nomeInicial, aoFechar, aoSalvar }: { eventoId: string; nomeInicial: string; aoFechar: () => void; aoSalvar: (nome: string) => void }) {
+const NOVA = '__nova__';
+
+function IncluirPessoa({ eventoId, nomeInicial, imobiliarias, aoFechar, aoSalvar }: { eventoId: string; nomeInicial: string; imobiliarias: string[]; aoFechar: () => void; aoSalvar: (nome: string) => void }) {
   const [nome, setNome] = useState(/\d/.test(nomeInicial) ? '' : nomeInicial);
-  const [imob, setImob] = useState('');
+  const [escolha, setEscolha] = useState('');
+  const [nova, setNova] = useState('');
+  const imob = escolha === NOVA ? nova : escolha;
   const [tel, setTel] = useState('');
   const [erro, setErro] = useState('');
 
@@ -329,6 +339,11 @@ function IncluirPessoa({ eventoId, nomeInicial, aoFechar, aoSalvar }: { eventoId
   const salvar = async (e: FormEvent) => {
     e.preventDefault(); setErro('');
     if (nome.trim().length < 3) { setErro('Informe o nome.'); return; }
+    if (escolha === NOVA && nova.trim().length < 2) { setErro('Informe o nome da nova imobiliária.'); return; }
+    if (escolha === NOVA) {
+      const igual = imobiliarias.find((i) => chave(i) === chave(nova));
+      if (igual) { setEscolha(igual); setNova(''); setErro(`"${igual}" já está na lista e foi selecionada. Confira e clique de novo.`); return; }
+    }
     const { error } = await supabase.rpc('incluir_participante', { p_evento: eventoId, p_nome: nome, p_imobiliaria: imob, p_telefone: tel });
     if (error) { setErro('Não foi possível incluir. Tente de novo.'); return; }
     aoSalvar(nome.trim());
@@ -341,7 +356,14 @@ function IncluirPessoa({ eventoId, nomeInicial, aoFechar, aoSalvar }: { eventoId
         <p className="sub">Ela entra direto como confirmada.</p>
         <div className="campos">
           <label className="largo">Nome completo<input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus maxLength={120} /></label>
-          <label>Imobiliária<input value={imob} onChange={(e) => setImob(e.target.value)} maxLength={80} /></label>
+          <label className="largo">Imobiliária
+            <select value={escolha} onChange={(e) => setEscolha(e.target.value)}>
+              <option value="">Sem imobiliária (autônomo)</option>
+              {imobiliarias.map((i) => <option key={i} value={i}>{i}</option>)}
+              <option value={NOVA}>+ Cadastrar nova imobiliária</option>
+            </select>
+          </label>
+          {escolha === NOVA && <label className="largo">Nome da nova imobiliária<input value={nova} onChange={(e) => setNova(e.target.value)} maxLength={80} autoFocus /></label>}
           <label>Telefone<input value={formatarTelefone(tel)} onChange={(e) => setTel(e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="tel" /></label>
         </div>
         {erro && <p className="erro">{erro}</p>}

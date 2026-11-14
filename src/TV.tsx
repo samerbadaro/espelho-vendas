@@ -43,6 +43,7 @@ export function TV() {
   const [, forcar] = useState(0);
   useEffect(() => { const t = setInterval(() => forcar((x) => x + 1), 10_000); return () => clearInterval(t); }, []);
 
+  if (marca.modulo_tv === false) return <Aviso texto="O modo TV está desligado. Ative em Empreendimento, no painel." />;
   if (carregando) return <Aviso texto="Carregando o espelho…" />;
   if (erro && unidades.length === 0) return <Aviso texto={erro} />;
 

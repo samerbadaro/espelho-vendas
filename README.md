@@ -52,6 +52,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 21. `supabase/migrations/021_portal_corretor.sql` (Portal do Corretor: materiais de venda por categoria)
 22. `supabase/migrations/022_cadastro_imobiliaria.sql` (cadastro de imobiliárias pelo link público, com aprovação do administrador)
 23. `supabase/migrations/023_dados_intermediacao.sql` (CPF, CRECI PF, CNPJ e CRECI PJ obrigatórios para imobiliárias e corretores, usados no contrato de intermediação)
+24. `supabase/migrations/024_modulos.sql` (ligar e desligar cada módulo na tela Empreendimento)
 
 ### Criar usuário da equipe
 

@@ -95,7 +95,8 @@ export function Rodadas({ perfil }: { perfil: Perfil }) {
       supabase.from('rodadas').select('*').order('data_hora', { ascending: true }),
       supabase.rpc('rodadas_vagas'),
     ]);
-    setRodadas((r.data as Rodada[]) ?? []);
+    // sempre pela data do evento (a mais próxima primeiro), não pela ordem de criação
+    setRodadas(((r.data as Rodada[]) ?? []).slice().sort((x, y) => new Date(x.data_hora).getTime() - new Date(y.data_hora).getTime() || x.nome.localeCompare(y.nome, 'pt-BR')));
     setVagas(Object.fromEntries(((v.data as Vagas[]) ?? []).map((x) => [x.rodada_id, x])));
     if (admin) {
       const [ri, im] = await Promise.all([
@@ -112,7 +113,7 @@ export function Rodadas({ perfil }: { perfil: Perfil }) {
 
   const agora = Date.now();
   const proximas = (rodadas ?? []).filter((r) => new Date(r.data_hora).getTime() >= agora - 12 * 3600_000);
-  const passadas = (rodadas ?? []).filter((r) => new Date(r.data_hora).getTime() < agora - 12 * 3600_000).reverse();
+  const passadas = (rodadas ?? []).filter((r) => new Date(r.data_hora).getTime() < agora - 12 * 3600_000);
   const nomeImob = (id: string) => imobs.find((i) => i.id === id)?.nome ?? '';
 
   const cartao = (r: Rodada) => {

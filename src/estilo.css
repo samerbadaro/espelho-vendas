@@ -714,3 +714,7 @@ small.bloco { display: block; color: var(--tinta-2); }
 .imob-info small { color: var(--tinta-2); }
 .imob-info small.pendente { color: #b45309; }
 .login .esqueci { align-self: center; margin-top: 2px; background: none; border: 0; padding: 6px; cursor: pointer; text-decoration: underline; }
+
+/* módulos (Empreendimento) */
+.lista-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px 28px; margin-top: 14px; }
+.interruptor.desativado { opacity: 0.55; cursor: not-allowed; }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { TelaAcesso } from './Painel';
+import { useMarca } from './ui';
 import { chamarApi, formatarTelefone, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, soDigitos } from './util';
 
 
@@ -10,6 +11,7 @@ export function CadastroImobiliaria() {
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  const { marca, carregada } = useMarca();
   const campo = (k: keyof typeof f) => ({ value: f[k], onChange: (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value })) });
 
   const enviar = async (e: FormEvent) => {
@@ -27,6 +29,18 @@ export function CadastroImobiliaria() {
     if (!r.ok) { setErro(r.erro ?? 'Não foi possível enviar o cadastro. Tente novamente.'); return; }
     setEnviado(true);
   };
+
+  if (carregada && marca.modulo_cadastro === false) {
+    return (
+      <TelaAcesso>
+        <div className="login">
+          <h1>Cadastro fechado</h1>
+          <p className="dica">O cadastro de novas imobiliárias está fechado no momento. Fale com a equipe de vendas para receber o acesso.</p>
+          <a className="botao principal largo" href="/painel">Ir para o login</a>
+        </div>
+      </TelaAcesso>
+    );
+  }
 
   if (enviado) {
     return (

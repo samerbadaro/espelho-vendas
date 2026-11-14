@@ -15,12 +15,20 @@ export interface Marca {
   logo_escuro_url: string | null;
   imagem_login_url: string | null;
   modulo_pastas: boolean;
+  modulo_funil: boolean;
+  modulo_portal: boolean;
+  modulo_rodadas: boolean;
+  modulo_meeting: boolean;
+  modulo_tv: boolean;
+  modulo_cadastro: boolean;
+  modulo_espelho_parceiros: boolean;
   publico_ativo: boolean;
 }
 
 const PADRAO: Marca = {
   nome_empreendimento: '', cidade: null, cor_primaria: '#23251C', cor_destaque: '#94874A', cor_apoio: '#CFCBC2', fonte: 'Archivo',
-  logo_url: null, logo_escuro_url: null, imagem_login_url: null, modulo_pastas: true, publico_ativo: true,
+  logo_url: null, logo_escuro_url: null, imagem_login_url: null, modulo_pastas: true, modulo_funil: true, modulo_portal: true, modulo_rodadas: true, modulo_meeting: true,
+  modulo_tv: true, modulo_cadastro: true, modulo_espelho_parceiros: true, publico_ativo: true,
 };
 
 /** Texto legível (claro ou escuro) sobre uma cor de fundo. */
