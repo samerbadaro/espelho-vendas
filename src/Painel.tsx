@@ -17,7 +17,7 @@ import { Funil } from './Funil';
 import { Rodadas, DetalheRodada } from './Rodadas';
 import { Recepcao } from './Recepcao';
 import { Portal } from './Portal';
-import { useRota, ir, type Perfil } from './util';
+import { useRota, ir, CAMPOS_PERFIL, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, ERROS_CADASTRO, type Perfil } from './util';
 import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
 
 interface Registro {
@@ -33,27 +33,52 @@ export function Painel() {
   const [sessao, setSessao] = useState<Session | null | undefined>(undefined);
   const [perfil, setPerfil] = useState<Perfil | null | undefined>(undefined);
   const [recarga, setRecarga] = useState(0);
+  const [recuperando, setRecuperando] = useState(() => location.pathname === '/painel/nova-senha' || location.hash.includes('type=recovery'));
+  const [imobDados, setImobDados] = useState<{ cnpj: string | null; creci_pj: string | null } | null | undefined>(undefined);
 
   useEffect(() => {
     if (!configurado) { setSessao(null); return; }
     supabase.auth.getSession().then(({ data }) => setSessao(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSessao(s));
+    const { data } = supabase.auth.onAuthStateChange((e, s) => { setSessao(s); if (e === 'PASSWORD_RECOVERY') setRecuperando(true); });
     return () => data.subscription.unsubscribe();
   }, []);
 
   const idUsuario = sessao?.user.id;
   useEffect(() => {
     if (!idUsuario) { setPerfil(sessao === null ? null : undefined); return; }
-    supabase.from('perfis').select('user_id, email, nome, papel, imobiliaria_id, trocar_senha').eq('user_id', idUsuario).maybeSingle()
-      .then(({ data }) => setPerfil((data as Perfil) ?? null));
+    (async () => {
+      const r = await supabase.from('perfis').select(CAMPOS_PERFIL).eq('user_id', idUsuario).maybeSingle();
+      if (!r.error) { setPerfil((r.data as Perfil) ?? null); return; }
+      // banco ainda sem a migração 023: entra sem pedir os dados novos
+      const v = await supabase.from('perfis').select('user_id, email, nome, papel, imobiliaria_id, trocar_senha').eq('user_id', idUsuario).maybeSingle();
+      setPerfil(v.data ? ({ ...(v.data as Perfil), cpf: '-', creci: '-', nome: (v.data as Perfil).nome || '- -' }) : null);
+    })();
   }, [idUsuario, recarga]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a imobiliária completa também o CNPJ e o CRECI PJ
+  const idImob = perfil?.papel === 'imobiliaria' ? perfil.imobiliaria_id : null;
+  useEffect(() => {
+    if (!idImob) { setImobDados(null); return; }
+    supabase.from('imobiliarias').select('cnpj, creci_pj').eq('id', idImob).maybeSingle()
+      .then(({ data, error }) => setImobDados(error ? { cnpj: '-', creci_pj: '-' } : ((data as { cnpj: string | null; creci_pj: string | null }) ?? null)));
+  }, [idImob, recarga]);
 
   if (!configurado) return <Aviso texto="O sistema ainda não foi conectado ao banco de dados." />;
   if (sessao === undefined) return <Aviso texto="Carregando…" />;
   if (!sessao) return <Login />;
+  if (recuperando) {
+    return <TrocarSenha recuperacao aoTrocar={() => { setRecuperando(false); history.replaceState(null, '', '/painel'); setRecarga((n) => n + 1); }} />;
+  }
   if (perfil === undefined) return <Aviso texto="Carregando…" />;
   if (!perfil) return <SemAcesso email={sessao.user.email ?? ''} userId={sessao.user.id} />;
   if (perfil.trocar_senha) return <TrocarSenha aoTrocar={() => setRecarga((n) => n + 1)} />;
+  if (perfil.papel === 'imobiliaria' && imobDados === undefined) return <Aviso texto="Carregando…" />;
+  const faltaPessoa = (perfil.papel === 'imobiliaria' || perfil.papel === 'corretor')
+    && (!nomeCompleto(perfil.nome) || !perfil.cpf || !perfil.creci);
+  const faltaEmpresa = perfil.papel === 'imobiliaria' && (!imobDados?.cnpj || !imobDados?.creci_pj);
+  if (faltaPessoa || faltaEmpresa) {
+    return <CompletarCadastro perfil={perfil} imob={imobDados ?? null} aoSalvar={() => setRecarga((n) => n + 1)} />;
+  }
   return <Casca perfil={perfil} />;
 }
 
@@ -112,6 +137,7 @@ function Login() {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [modo, setModo] = useState<'entrar' | 'esqueci' | 'enviado'>('entrar');
 
   const entrar = async (e: FormEvent) => {
     e.preventDefault();
@@ -120,6 +146,45 @@ function Login() {
     if (error) setErro('E-mail ou senha incorretos.');
     setEnviando(false);
   };
+
+  const enviarLink = async (e: FormEvent) => {
+    e.preventDefault();
+    setEnviando(true); setErro('');
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: `${location.origin}/painel/nova-senha` });
+    setEnviando(false);
+    // por segurança, a mesma mensagem aparece exista ou não o e-mail; só falhas de envio são mostradas
+    if (error && /rate|limit|seconds/i.test(error.message)) { setErro('Muitos pedidos seguidos. Espere alguns minutos e tente de novo.'); return; }
+    if (error && !/not found|user/i.test(error.message)) { setErro('Não foi possível enviar o e-mail agora. Tente de novo em alguns minutos.'); return; }
+    setModo('enviado');
+  };
+
+  if (modo === 'enviado') {
+    return (
+      <TelaAcesso>
+        <div className="login">
+          <h1>Confira seu e-mail</h1>
+          <p className="dica">Se <b>{email.trim().toLowerCase()}</b> tiver acesso ao painel, você vai receber em instantes um link para criar uma nova senha. O link vale por 1 hora.</p>
+          <p className="dica">Não chegou? Veja a caixa de spam ou promoções.</p>
+          <button className="botao largo" onClick={() => setModo('entrar')}>Voltar para o login</button>
+        </div>
+      </TelaAcesso>
+    );
+  }
+
+  if (modo === 'esqueci') {
+    return (
+      <TelaAcesso>
+        <form className="login" onSubmit={enviarLink}>
+          <h1>Esqueci minha senha</h1>
+          <p className="dica">Informe o e-mail do seu login. Enviaremos um link para você criar uma nova senha.</p>
+          <label>E-mail<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></label>
+          {erro && <p className="erro" role="alert">{erro}</p>}
+          <button className="botao principal largo" disabled={enviando}>{enviando ? 'Enviando…' : 'Enviar link'}</button>
+          <button type="button" className="botao largo" onClick={() => { setModo('entrar'); setErro(''); }}>Voltar</button>
+        </form>
+      </TelaAcesso>
+    );
+  }
 
   return (
     <TelaAcesso>
@@ -130,14 +195,62 @@ function Login() {
         <label>Senha<input type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
         {erro && <p className="erro" role="alert">{erro}</p>}
         <button className="botao principal largo" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
-        <p className="dica">Esqueceu a senha? Corretores pedem à imobiliária; imobiliárias pedem ao administrador.</p>
+        <button type="button" className="link-acao esqueci" onClick={() => { setModo('esqueci'); setErro(''); }}>Esqueci minha senha</button>
         <p className="dica cadastro-link">Sua imobiliária ainda não tem acesso? <a href="/cadastro">Cadastre a imobiliária</a></p>
       </form>
     </TelaAcesso>
   );
 }
 
-function TrocarSenha({ aoTrocar }: { aoTrocar: () => void }) {
+/** Imobiliária e corretor completam os dados usados no contrato de intermediação. */
+function CompletarCadastro({ perfil, imob, aoSalvar }: { perfil: Perfil; imob: { cnpj: string | null; creci_pj: string | null } | null; aoSalvar: () => void }) {
+  const gestor = perfil.papel === 'imobiliaria';
+  const [nome, setNome] = useState(perfil.nome ?? '');
+  const [cpf, setCpf] = useState(formatarCPF(perfil.cpf));
+  const [creci, setCreci] = useState(perfil.creci ?? '');
+  const [cnpj, setCnpj] = useState(formatarCNPJ(imob?.cnpj));
+  const [creciPj, setCreciPj] = useState(imob?.creci_pj ?? '');
+  const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const salvar = async (e: FormEvent) => {
+    e.preventDefault(); setErro('');
+    if (!nomeCompleto(nome)) { setErro(ERROS_CADASTRO.NOME_COMPLETO_OBRIGATORIO); return; }
+    if (!cpfValido(cpf)) { setErro(ERROS_CADASTRO.CPF_INVALIDO); return; }
+    if (!creci.trim()) { setErro(ERROS_CADASTRO.CRECI_OBRIGATORIO); return; }
+    if (gestor && !cnpjValido(cnpj)) { setErro(ERROS_CADASTRO.CNPJ_INVALIDO); return; }
+    if (gestor && !creciPj.trim()) { setErro(ERROS_CADASTRO.CRECI_PJ_OBRIGATORIO); return; }
+    setSalvando(true);
+    const { error } = await supabase.rpc('completar_cadastro', {
+      p_nome: nome, p_cpf: cpf, p_creci: creci, p_cnpj: gestor ? cnpj : null, p_creci_pj: gestor ? creciPj : null,
+    });
+    setSalvando(false);
+    if (error) { setErro(ERROS_CADASTRO[error.message] ?? 'Não foi possível salvar. Tente novamente.'); return; }
+    aoSalvar();
+  };
+  return (
+    <TelaAcesso>
+      <form className="login" onSubmit={salvar}>
+        <h1>Complete seu cadastro</h1>
+        <p className="dica">Estes dados entram nos documentos da venda, como o contrato de intermediação. Preencha uma única vez.</p>
+        <label>Nome completo<input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} required autoComplete="name" /></label>
+        <label>CPF<input value={cpf} onChange={(e) => setCpf(formatarCPF(e.target.value))} inputMode="numeric" required /></label>
+        <label>CRECI PF<input value={creci} onChange={(e) => setCreci(e.target.value)} maxLength={30} required /></label>
+        {gestor && (
+          <>
+            <label>CNPJ da imobiliária<input value={cnpj} onChange={(e) => setCnpj(formatarCNPJ(e.target.value))} inputMode="numeric" required /></label>
+            <label>CRECI PJ da imobiliária<input value={creciPj} onChange={(e) => setCreciPj(e.target.value)} maxLength={30} required /></label>
+          </>
+        )}
+        {!gestor && <p className="dica">O CNPJ e o CRECI PJ usados são os da sua imobiliária.</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
+        <button className="botao principal largo" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar e continuar'}</button>
+        <button type="button" className="botao largo" onClick={() => supabase.auth.signOut()}>Sair</button>
+      </form>
+    </TelaAcesso>
+  );
+}
+
+function TrocarSenha({ aoTrocar, recuperacao }: { aoTrocar: () => void; recuperacao?: boolean }) {
   const [senha, setSenha] = useState('');
   const [confirma, setConfirma] = useState('');
   const [erro, setErro] = useState('');
@@ -161,8 +274,8 @@ function TrocarSenha({ aoTrocar }: { aoTrocar: () => void }) {
   return (
     <TelaAcesso>
       <form className="login" onSubmit={salvar}>
-        <h1>Crie sua senha</h1>
-        <p className="dica">Você entrou com uma senha provisória. Crie uma senha própria, com pelo menos 8 caracteres.</p>
+        <h1>{recuperacao ? 'Crie uma nova senha' : 'Crie sua senha'}</h1>
+        <p className="dica">{recuperacao ? 'Escolha uma senha nova, com pelo menos 8 caracteres. Ela substitui a anterior.' : 'Você entrou com uma senha provisória. Crie uma senha própria, com pelo menos 8 caracteres.'}</p>
         <label>Nova senha<input type="password" autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
         <label>Repita a nova senha<input type="password" autoComplete="new-password" value={confirma} onChange={(e) => setConfirma(e.target.value)} required /></label>
         {erro && <p className="erro" role="alert">{erro}</p>}

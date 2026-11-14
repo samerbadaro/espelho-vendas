@@ -706,3 +706,11 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
 .sol-acoes { display: flex; gap: 8px; flex: none; }
 @media (max-width: 640px) { .lista-solicitacoes li { flex-direction: column; align-items: flex-start; } }
 .check input[type="radio"], .check input[type="checkbox"] { width: auto; flex: none; margin: 0; padding: 0; min-height: 0; }
+
+/* dados para o contrato de intermediação */
+small.bloco { display: block; color: var(--tinta-2); }
+.pendente { color: #b45309; font-weight: 600; }
+.imob-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.imob-info small { color: var(--tinta-2); }
+.imob-info small.pendente { color: #b45309; }
+.login .esqueci { align-self: center; margin-top: 2px; background: none; border: 0; padding: 6px; cursor: pointer; text-decoration: underline; }

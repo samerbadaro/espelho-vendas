@@ -1,17 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { TelaAcesso } from './Painel';
-import { chamarApi, formatarTelefone } from './util';
+import { chamarApi, formatarTelefone, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, soDigitos } from './util';
 
-const formatarCNPJ = (s: string) => {
-  const d = s.replace(/\D/g, '').slice(0, 14);
-  return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
-};
 
 /** Página pública: o dono da imobiliária pede o acesso e cria a própria senha. */
 export function CadastroImobiliaria() {
-  const [f, setF] = useState({ imobiliaria: '', cnpj: '', creci: '', cidade: '', responsavel: '', email: '', telefone: '', senha: '', confirma: '', site: '' });
+  const [f, setF] = useState({ imobiliaria: '', cnpj: '', creci: '', cidade: '', responsavel: '', cpf: '', creci_pf: '', email: '', telefone: '', senha: '', confirma: '', site: '' });
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -19,6 +14,11 @@ export function CadastroImobiliaria() {
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault(); setErro('');
+    if (!cnpjValido(f.cnpj)) { setErro('O CNPJ não é válido. Confira os números.'); return; }
+    if (!f.creci.trim()) { setErro('Informe o CRECI PJ da imobiliária.'); return; }
+    if (!nomeCompleto(f.responsavel)) { setErro('Informe o nome completo do responsável.'); return; }
+    if (!cpfValido(f.cpf)) { setErro('O CPF do responsável não é válido. Confira os números.'); return; }
+    if (!f.creci_pf.trim()) { setErro('Informe o CRECI PF do responsável.'); return; }
     if (f.senha.length < 8) { setErro('A senha precisa ter pelo menos 8 caracteres.'); return; }
     if (f.senha !== f.confirma) { setErro('As duas senhas não são iguais.'); return; }
     setEnviando(true);
@@ -50,11 +50,15 @@ export function CadastroImobiliaria() {
 
         <label>Nome da imobiliária<input {...campo('imobiliaria')} required maxLength={120} autoComplete="organization" /></label>
         <div className="duas-colunas">
-          <label>CNPJ (opcional)<input value={formatarCNPJ(f.cnpj)} onChange={(e) => setF((x) => ({ ...x, cnpj: e.target.value.replace(/\D/g, '').slice(0, 14) }))} inputMode="numeric" /></label>
-          <label>CRECI (opcional)<input {...campo('creci')} maxLength={30} /></label>
+          <label>CNPJ<input value={formatarCNPJ(f.cnpj)} onChange={(e) => setF((x) => ({ ...x, cnpj: soDigitos(e.target.value).slice(0, 14) }))} inputMode="numeric" required /></label>
+          <label>CRECI PJ<input {...campo('creci')} maxLength={30} required /></label>
         </div>
         <label>Cidade<input {...campo('cidade')} maxLength={80} autoComplete="address-level2" /></label>
         <label>Nome completo do responsável<input {...campo('responsavel')} required maxLength={120} autoComplete="name" /></label>
+        <div className="duas-colunas">
+          <label>CPF do responsável<input value={formatarCPF(f.cpf)} onChange={(e) => setF((x) => ({ ...x, cpf: soDigitos(e.target.value).slice(0, 11) }))} inputMode="numeric" required /></label>
+          <label>CRECI PF do responsável<input {...campo('creci_pf')} maxLength={30} required /></label>
+        </div>
         <div className="duas-colunas">
           <label>E-mail (será o seu login)<input type="email" {...campo('email')} required autoComplete="email" /></label>
           <label>WhatsApp<input value={formatarTelefone(f.telefone)} onChange={(e) => setF((x) => ({ ...x, telefone: e.target.value.replace(/\D/g, '').slice(0, 11) }))} inputMode="tel" required placeholder="(64) 99999-9999" /></label>
