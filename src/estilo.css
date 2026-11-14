@@ -721,3 +721,56 @@ small.bloco { display: block; color: var(--tinta-2); }
 .lista-recepcao .pessoa { flex: 1; min-width: 0; }
 .lista-recepcao .editar-pessoa { color: var(--tinta-2); flex-shrink: 0; }
 .lista-recepcao .editar-pessoa:hover { color: var(--tinta); }
+
+/* simulador de pagamento (Portal do Corretor) */
+.simulador { padding: 22px 24px; margin-bottom: 22px; }
+.simulador h3 { margin: 0 0 4px; }
+.sim-escolha { display: grid; gap: 22px; margin-top: 18px; }
+.sim-rotulo { display: block; font-size: 0.8125rem; color: var(--tinta-2); margin-bottom: 8px; }
+.segmentado { display: inline-flex; border: 1px solid var(--borda-forte); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
+.segmentado button { background: var(--superficie); border: 0; padding: 10px 18px; cursor: pointer; font: inherit; color: var(--tinta); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.segmentado button + button { border-left: 1px solid var(--borda-forte); }
+.segmentado button small { color: var(--tinta-2); font-size: 0.8125rem; }
+.segmentado button.ativo { background: var(--primaria); color: var(--primaria-texto); }
+.segmentado button.ativo small { color: inherit; opacity: 0.8; }
+.segmentado.pequeno { margin-top: 8px; }
+.segmentado.pequeno button { padding: 6px 12px; font-size: 0.8125rem; }
+.sim-fluxos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.sim-fluxo { text-align: left; background: var(--superficie-2); border: 1px solid var(--borda-forte); border-radius: 12px; padding: 18px 20px; cursor: pointer; font: inherit; color: var(--tinta); display: flex; flex-direction: column; gap: 4px; }
+.sim-fluxo strong { font-size: 1.25rem; }
+.sim-fluxo span { color: var(--tinta-2); font-size: 0.875rem; }
+.sim-fluxo:hover, .sim-fluxo:focus-visible { border-color: var(--destaque); background: var(--superficie); }
+.sim-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.sim-captacao { margin: 18px 0 8px; }
+.sim-captacao p { margin: 6px 0 0; font-size: 0.875rem; color: var(--tinta-2); }
+.sim-captacao.erro p strong { color: var(--vendida); }
+.sim-barra { position: relative; height: 10px; background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 6px; }
+.sim-barra span { position: absolute; inset: 0 auto 0 0; background: var(--disponivel); border-radius: 6px; transition: width 0.15s; }
+.sim-captacao.erro .sim-barra span { background: var(--vendida); }
+.sim-barra i { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--tinta); }
+.sim-tabela { width: 100%; border-collapse: collapse; margin-top: 10px; font-variant-numeric: tabular-nums; }
+.sim-tabela th { text-align: left; font-weight: 500; font-size: 0.8125rem; color: var(--tinta-2); padding: 8px 6px; border-bottom: 1px solid var(--borda-forte); }
+.sim-tabela td { padding: 10px 6px; border-bottom: 1px solid var(--borda); vertical-align: middle; }
+.sim-tabela .num { text-align: right; white-space: nowrap; }
+.sim-tabela tr.zerada td { color: var(--tinta-3); }
+.sim-tabela tr.sim-fin td { font-weight: 600; background: var(--superficie-2); }
+.sim-tabela tr.sim-fin small { font-weight: 400; color: var(--tinta-2); }
+.sim-tabela tfoot td { font-weight: 600; font-size: 1.0625rem; border-bottom: 0; padding-top: 14px; }
+.sim-pct { display: flex; align-items: center; gap: 12px; }
+.sim-pct input[type=range] { width: 160px; accent-color: var(--destaque); }
+.sim-passo { display: inline-flex; align-items: center; border: 1px solid var(--borda-forte); border-radius: 8px; overflow: hidden; }
+.sim-passo button { background: var(--superficie-2); border: 0; width: 30px; height: 34px; display: grid; place-items: center; cursor: pointer; color: var(--tinta); }
+.sim-passo button:hover { background: var(--borda); }
+.simulador .sim-passo input[type=number] { width: 58px !important; min-width: 0; height: 34px !important; border: 0 !important; border-radius: 0; text-align: center; padding: 0 2px !important; -moz-appearance: textfield; }
+.sim-passo input::-webkit-outer-spin-button, .sim-passo input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sim-fixo { display: inline-block; min-width: 30px; padding-left: 36px; color: var(--tinta-2); }
+.sim-rodape { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+.sim-rodape .dica { margin: 0; }
+.sim-outros { margin: 6px 0 12px; }
+@media (max-width: 760px) {
+  .sim-pct input[type=range] { display: none; }
+}
+.sim-sufixo { color: var(--tinta-2); margin-left: -6px; }
+.sim-rolagem { overflow-x: auto; margin: 0 -6px; padding: 0 6px; }
+.sim-rolagem .sim-tabela { min-width: 640px; }
+.sim-pct .sim-passo { flex-shrink: 0; } .sim-pct input[type=range] { flex: 1; min-width: 100px; }

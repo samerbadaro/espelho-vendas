@@ -7,6 +7,7 @@ import { zipSync } from 'fflate';
 import { supabase } from './dados';
 import { ir, type Perfil } from './util';
 import { useDialogos } from './ui';
+import { Simulador } from './Simulador';
 
 interface Item {
   id: string; categoria: string; titulo: string; descricao: string | null; link: string | null;
@@ -58,7 +59,7 @@ export function Portal({ perfil, categoria }: { perfil: Perfil; categoria?: stri
   useEffect(() => { carregar(); }, [carregar]);
 
   const cat = CATEGORIAS.find((c) => c.valor === categoria);
-  if (cat) return <CategoriaPortal cat={cat} itens={(itens ?? []).filter((i) => i.categoria === cat.valor)} carregando={itens == null} equipe={equipe} recarregar={carregar} />;
+  if (cat) return <CategoriaPortal perfil={perfil} cat={cat} itens={(itens ?? []).filter((i) => i.categoria === cat.valor)} carregando={itens == null} equipe={equipe} recarregar={carregar} />;
 
   const contagem = (v: string) => (itens ?? []).filter((i) => i.categoria === v).length;
   return (
@@ -85,8 +86,8 @@ export function Portal({ perfil, categoria }: { perfil: Perfil; categoria?: stri
   );
 }
 
-function CategoriaPortal({ cat, itens, carregando, equipe, recarregar }: {
-  cat: Categoria; itens: Item[]; carregando: boolean; equipe: boolean; recarregar: () => void;
+function CategoriaPortal({ perfil, cat, itens, carregando, equipe, recarregar }: {
+  perfil: Perfil; cat: Categoria; itens: Item[]; carregando: boolean; equipe: boolean; recarregar: () => void;
 }) {
   const { confirmar, avisar } = useDialogos();
   const [miniaturas, setMiniaturas] = useState<Record<string, string>>({});
@@ -192,7 +193,9 @@ function CategoriaPortal({ cat, itens, carregando, equipe, recarregar }: {
         </div>
       </div>
 
-      {carregando ? <p className="vazio">Carregando…</p> : itens.length === 0 ? (
+      {cat.valor === 'simulador' && <Simulador perfil={perfil} />}
+      {cat.valor === 'simulador' && itens.length > 0 && <h3 className="sim-outros">Outros materiais</h3>}
+      {carregando ? <p className="vazio">Carregando…</p> : itens.length === 0 ? (cat.valor === 'simulador' ? null :
         <div className="cartao vazio-grande">
           <p>{equipe ? 'Nenhum material nesta categoria ainda. Use "Adicionar" para enviar arquivos ou incluir links.' : 'Nenhum material disponível nesta categoria ainda.'}</p>
         </div>
