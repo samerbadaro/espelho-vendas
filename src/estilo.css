@@ -576,3 +576,54 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
 .lista-convidados label { display: flex; flex-direction: column; gap: 5px; font-size: 0.8125rem; font-weight: 600; color: var(--tinta-2); }
 .lista-convidados label:first-child { grid-column: 1 / -1; }
 @media (max-width: 640px) { .lista-convidados { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------- recepção (check-in) */
+.recepcao .seletor-evento { margin-top: 4px; font: inherit; padding: 6px 10px; border-radius: var(--raio); border: 1px solid var(--borda); }
+.placar { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px 28px; }
+.placar div:not(.placar-barra) { display: flex; align-items: baseline; gap: 8px; }
+.placar strong { font-size: 2rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.placar span { color: var(--tinta-2); }
+.placar-barra { height: 10px; border-radius: 999px; background: var(--superficie-2); border: 1px solid var(--borda); overflow: hidden; }
+.placar-barra span { display: block; height: 100%; background: var(--disponivel); transition: width 0.3s; }
+.busca-recepcao {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; margin: 16px 0 12px;
+  padding: 0 14px; background: var(--superficie); border: 2px solid var(--borda-forte); border-radius: var(--raio-g); box-shadow: var(--sombra);
+}
+.busca-recepcao:focus-within { border-color: var(--primaria); }
+.busca-recepcao svg { color: var(--tinta-2); flex: none; }
+.busca-recepcao input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; font-size: 1.25rem; padding: 16px 0; min-width: 0; }
+.abas-recepcao { display: none; }
+.colunas-recepcao { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; align-items: start; }
+.coluna-recepcao h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; font-size: 1rem; }
+.coluna-recepcao h3 span, .abas-recepcao span { font-size: 0.8125rem; font-weight: 600; background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 999px; padding: 1px 9px; }
+.lista-recepcao { list-style: none; margin: 0; padding: 0; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-g); overflow: hidden; }
+.lista-recepcao li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--borda); }
+.lista-recepcao li:last-child { border-bottom: 0; }
+.lista-recepcao .pessoa { display: flex; flex-direction: column; min-width: 0; }
+.lista-recepcao .pessoa strong { font-size: 1.0625rem; }
+.lista-recepcao .pessoa span { color: var(--tinta-2); font-size: 0.8125rem; }
+.lista-recepcao li.mais { color: var(--tinta-2); font-size: 0.875rem; justify-content: center; }
+.confirmados .lista-recepcao { background: color-mix(in srgb, var(--disponivel) 6%, var(--superficie)); }
+.botao-check {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 46px; padding: 0 18px; border-radius: var(--raio);
+  border: 0; background: var(--disponivel); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.botao-check:hover { filter: brightness(0.95); }
+.botao-check:focus-visible { outline: 3px solid color-mix(in srgb, var(--disponivel) 45%, transparent); outline-offset: 2px; }
+.botao-check:disabled { opacity: 0.6; }
+@media (max-width: 900px) {
+  .abas-recepcao { display: flex; gap: 6px; margin-bottom: 10px; }
+  .abas-recepcao button { flex: 1; display: flex; justify-content: center; align-items: center; gap: 8px; padding: 10px; font: inherit; font-weight: 600;
+    border: 1px solid var(--borda); border-radius: var(--raio); background: var(--superficie); color: var(--tinta-2); cursor: pointer; }
+  .abas-recepcao button.ativa { background: var(--primaria); color: var(--sobre-primaria, #fff); border-color: var(--primaria); }
+  .colunas-recepcao { grid-template-columns: 1fr; }
+  .coluna-recepcao { display: none; }
+  .coluna-recepcao.visivel { display: block; }
+  .coluna-recepcao h3 { display: none; }
+  .placar { grid-template-columns: auto auto; }
+  .placar-barra { grid-column: 1 / -1; }
+  .botao-check span { display: none; }
+  .botao-check { padding: 0 14px; }
+}
+.busca-recepcao input, .busca-recepcao input:focus { border: 0 !important; box-shadow: none !important; background: transparent !important; padding-left: 0; }
+.abas-recepcao button.ativa span { background: rgba(255, 255, 255, 0.18); color: inherit; border-color: transparent; }
