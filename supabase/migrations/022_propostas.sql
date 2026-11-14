@@ -1,5 +1,5 @@
 -- =====================================================================
--- 019 — Propostas (v2)
+-- 022 — Propostas (v2)
 --  * Parâmetros comerciais do empreendimento (mês da tabela, entrega,
 --    taxa do VPL, comissão, textos da carta proposta).
 --  * Preço do m² por tipo, peso e tabela de cada unidade.

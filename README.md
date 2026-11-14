@@ -106,9 +106,9 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 
 Painel → **Propostas**. O corretor monta a proposta (grade como a planilha, botões de preenchimento, "⟲ ajustar" para PV zero), vincula a pasta e envia. A Sec. Vendas aprova, devolve para ajuste ou recusa; aprovar leva a unidade para **Proposta recebida** no espelho, com o valor e o PV. A **carta proposta** sai em PDF com os dados da pasta.
 
-- `supabase/migrations/019_propostas.sql`: parâmetros comerciais, tabelas de venda, propostas, envio e análise.
-- `supabase/migrations/020_dados_comerciais_duohaus.sql`: dados da planilha `Compacto_Studio.xlsm` (preço do m² por tipo, Tabelas 1 e 2, peso e tabela de cada unidade).
-- `supabase/v2/instalar_v2.sql`: as migrações 001 a 020 num arquivo só, para um projeto novo do Supabase.
+- `supabase/migrations/022_propostas.sql`: parâmetros comerciais, tabelas de venda, propostas, envio e análise.
+- `supabase/migrations/023_dados_comerciais_duohaus.sql`: dados da planilha `Compacto_Studio.xlsm` (preço do m² por tipo, Tabelas 1 e 2, peso e tabela de cada unidade).
+- `supabase/v2/instalar_v2.sql`: as migrações 001 a 025 num arquivo só, para um projeto novo do Supabase.
 - `src/proposta/motor.ts`: cálculo (preço, fluxo, VPL, captação, comissão pelo sinal, validações, modelos, PV zero).
 - `src/proposta/Proposta.tsx` (editor), `Propostas.tsx` (lista e página), `carta.ts` (PDF), `dadosProposta.ts` (banco).
 

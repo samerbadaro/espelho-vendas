@@ -1,5 +1,5 @@
 -- =====================================================================
--- 020 — Dados comerciais do Duo Haus (planilha Compacto_Studio.xlsm)
+-- 023 — Dados comerciais do Duo Haus (planilha Compacto_Studio.xlsm)
 --  * Mês da tabela nov/2026, entrega out/2030, VPL a 0,7% a.m.
 --  * R$/m²: tipo I (poente) 11.900; tipo II (nascente) 12.500
 --  * Tabela 1 e Tabela 2, com o calendário usado na aba PV

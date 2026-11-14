@@ -1,4 +1,4 @@
--- Testes das propostas (019). Banco de teste local, depois de todas as migrações.
+-- Testes das propostas (022). Banco de teste local, depois de todas as migrações.
 \set ON_ERROR_STOP 0
 \pset tuples_only on
 \set QUIET on

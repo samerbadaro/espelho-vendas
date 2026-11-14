@@ -24,7 +24,7 @@ export async function carregarContexto(): Promise<Contexto | { erro: string }> {
     supabase.from('config').select('nome_empreendimento, logo_url, cor_destaque').eq('id', 1).maybeSingle(),
   ]);
   const erro = c.error || p.error || s.error || u.error;
-  if (erro) return { erro: erro.message.includes('does not exist') ? 'O banco ainda não tem a estrutura de propostas (migração 019).' : erro.message };
+  if (erro) return { erro: erro.message.includes('does not exist') ? 'O banco ainda não tem a estrutura de propostas (migração 022).' : erro.message };
   if (!c.data) return { erro: 'Parâmetros comerciais não cadastrados.' };
   const comercial = c.data as Comercial;
 
