@@ -109,9 +109,9 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 
 Painel → **Propostas**. O corretor monta a proposta (grade como a planilha, botões de preenchimento, "⟲ ajustar" para PV zero), vincula a pasta e envia. A Sec. Vendas aprova, devolve para ajuste ou recusa; aprovar leva a unidade para **Proposta recebida** no espelho, com o valor e o PV. A **carta proposta** sai em PDF com os dados da pasta.
 
-- `supabase/migrations/022_propostas.sql`: parâmetros comerciais, tabelas de venda, propostas, envio e análise.
-- `supabase/migrations/023_dados_comerciais_duohaus.sql`: dados da planilha `Compacto_Studio.xlsm` (preço do m² por tipo, Tabelas 1 e 2, peso e tabela de cada unidade).
-- `supabase/v2/instalar_v2.sql`: as migrações 001 a 025 num arquivo só, para um projeto novo do Supabase.
+- `supabase/migrations/101_propostas.sql`: parâmetros comerciais, tabelas de venda, propostas, envio e análise.
+- `supabase/migrations/102_dados_comerciais_duohaus.sql`: dados da planilha `Compacto_Studio.xlsm` (preço do m² por tipo, Tabelas 1 e 2, peso e tabela de cada unidade).
+- `supabase/v2/instalar_v2.sql`: as migrações num arquivo só, para um projeto novo do Supabase.
 - `src/proposta/motor.ts`: cálculo (preço, fluxo, VPL, captação, comissão pelo sinal, validações, modelos, PV zero).
 - `src/proposta/Proposta.tsx` (editor), `Propostas.tsx` (lista e página), `carta.ts` (PDF), `dadosProposta.ts` (banco).
 
@@ -126,9 +126,9 @@ Testes: `npm run testar:proposta` (motor × planilha) e `psql -d espelho -f supa
 
 ### Alçadas, escolha de unidades e painéis (v2)
 
-- **Alçadas** (`026`): no envio, o banco recalcula o PV (`pv_proposta`) e define quem aprova. PV ≥ `alcada_auto_pv` e sinal cobrindo a comissão → aprovada na hora; PV ≥ `alcada_vendas_pv` → Sec. Vendas; abaixo → só administrador. Limites na tabela `comercial`.
-- **Escolha de unidades** (`027`, menu "Escolha de unidades"): fila de pastas aprovadas (ordem PA), liberadas em lotes (ex.: 10 a cada 30 min). O corretor reserva a unidade com a própria pasta liberada. Liga/desliga em `fila_config` pela tela (administrador).
-- **Painéis** (`028`, menu "Painéis"): visão geral, vendas (VSO, funil), rankings de imobiliárias e corretores (unidades e VGV), carteira de recebíveis (propostas aprovadas) e propostas.
+- **Alçadas** (`105`): no envio, o banco recalcula o PV (`pv_proposta`) e define quem aprova. PV ≥ `alcada_auto_pv` e sinal cobrindo a comissão → aprovada na hora; PV ≥ `alcada_vendas_pv` → Sec. Vendas; abaixo → só administrador. Limites na tabela `comercial`.
+- **Escolha de unidades** (`106`, menu "Escolha de unidades"): fila de pastas aprovadas (ordem PA), liberadas em lotes (ex.: 10 a cada 30 min). O corretor reserva a unidade com a própria pasta liberada. Liga/desliga em `fila_config` pela tela (administrador).
+- **Painéis** (`107`, menu "Painéis"): visão geral, vendas (VSO, funil), rankings de imobiliárias e corretores (unidades e VGV), carteira de recebíveis (propostas aprovadas) e propostas.
 - Testes: `supabase/tests/testes_alcadas_fila.sql` (22).
 - Atualização do banco de testes: `supabase/v2/atualizar_v2_alcadas_fila_paineis.sql`.
 
@@ -136,4 +136,4 @@ Testes: `npm run testar:proposta` (motor × planilha) e `psql -d espelho -f supa
 
 - Menu **Meeting** (antes "Recepção"): criar o meeting, abrir/fechar inscrições, vagas, link público, inscritos (exportar) e **Confirmação de presença**.
 - Página pública de inscrição: `/meeting/<endereço>` (sem login): nome completo, e-mail, celular, imobiliária. Não aceita e-mail nem celular repetidos no mesmo meeting.
-- Banco: `029_meeting.sql`. Testes: `supabase/tests/testes_meeting.sql` (16).
+- Banco: `108_meeting.sql`. Testes: `supabase/tests/testes_meeting.sql` (16).

@@ -43,7 +43,7 @@ export function Paineis({ perfil }: { perfil: Perfil }) {
   useEffect(() => {
     if (aba === 'geral') return;
     supabase.rpc('paineis').then(({ data, error }) => {
-      if (error) setErro(error.message.includes('function') ? 'O banco ainda não tem os painéis (migração 028).' : traduzirErro(error.message));
+      if (error) setErro(error.message.includes('function') ? 'O banco ainda não tem os painéis (migração 107).' : traduzirErro(error.message));
       else setDados(data as Dados);
     });
   }, [aba]);

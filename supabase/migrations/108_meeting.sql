@@ -1,5 +1,5 @@
 -- =====================================================================
--- 029 — Meeting: inscrições (como o Sympla) + confirmação de presença
+-- 108 — Meeting: inscrições (como o Sympla) + confirmação de presença
 --  * Cada meeting tem um link público de inscrição (/meeting/<endereço>).
 --  * A inscrição pede nome completo, e-mail, celular e imobiliária.
 --  * Não aceita e-mail nem celular repetidos no mesmo meeting.

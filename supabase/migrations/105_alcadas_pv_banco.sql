@@ -1,5 +1,5 @@
 -- =====================================================================
--- 026 — Alçadas de aprovação e PV calculado pelo banco
+-- 105 — Alçadas de aprovação e PV calculado pelo banco
 --  * O banco recalcula o preço de tabela, o VPL da tabela e o da proposta
 --    no envio (não depende mais do cálculo feito no navegador).
 --  * Alçadas: PV ≥ limite automático e sinal cobrindo a comissão → aprovada

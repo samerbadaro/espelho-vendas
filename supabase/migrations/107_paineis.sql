@@ -1,5 +1,5 @@
 -- =====================================================================
--- 028 — Painéis da gestão comercial (somente equipe)
+-- 107 — Painéis da gestão comercial (somente equipe)
 --  Unidades e VGV, vendas por mês (VSO), funil das pastas, ranking de
 --  imobiliárias e corretores (unidades e VGV) e análise das propostas.
 --  A carteira de recebíveis é montada na tela a partir das propostas

@@ -1,4 +1,4 @@
--- Testes de 026 (alçadas), 027 (fila de escolha) e 028 (painéis).
+-- Testes de 105 (alçadas), 106 (fila de escolha) e 107 (painéis).
 -- Banco de teste local, depois de todas as migrações.
 \set ON_ERROR_STOP 0
 \pset tuples_only on

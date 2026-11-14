@@ -1,5 +1,5 @@
 -- =====================================================================
--- 025 — Novas séries: Bimestrais, Trimestrais e Permuta
+-- 104 — Novas séries: Bimestrais, Trimestrais e Permuta
 --  * Tabelas de venda passam a aceitar as novas periodicidades.
 --  * Proposta com Permuta só é enviada com as observações preenchidas
 --    (o que entra na permuta: imóvel, carro, serviços...).

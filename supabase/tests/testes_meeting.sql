@@ -1,4 +1,4 @@
--- Testes do 029 (Meeting: inscrições + recepção). Banco local, depois de todas as migrações.
+-- Testes do 108 (Meeting: inscrições + recepção). Banco local, depois de todas as migrações.
 \set ON_ERROR_STOP 0
 \pset tuples_only on
 \set QUIET on

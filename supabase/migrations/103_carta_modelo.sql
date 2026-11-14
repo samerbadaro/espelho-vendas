@@ -1,5 +1,5 @@
 -- =====================================================================
--- 024 — Carta proposta no modelo novo
+-- 103 — Carta proposta no modelo novo
 --  * Campos da carta: vaga, escaninho, coordenação comercial.
 --  * Textos de abertura e condições gerais do modelo (foro de Rio Verde).
 --  * Nome de quem criou a proposta (sai como corretor na carta).

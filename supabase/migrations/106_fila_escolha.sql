@@ -1,5 +1,5 @@
 -- =====================================================================
--- 027 — Escolha de unidades por lotes de pastas (liga/desliga)
+-- 106 — Escolha de unidades por lotes de pastas (liga/desliga)
 --  * A equipe monta a fila com as pastas aprovadas (ordem de submissão ao
 --    incorporador, código PA) e pode ajustar posições.
 --  * Com a fila ligada, a cada "intervalo" minutos a partir do "início"
