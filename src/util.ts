@@ -83,7 +83,43 @@ export interface Perfil {
   papel: 'admin' | 'vendas' | 'imobiliaria' | 'corretor';
   imobiliaria_id: string | null;
   trocar_senha: boolean;
+  cpf?: string | null;
+  creci?: string | null;
 }
+
+export const CAMPOS_PERFIL = 'user_id, email, nome, papel, imobiliaria_id, trocar_senha, cpf, creci';
+
+export function formatarCNPJ(s: string | null | undefined) {
+  const d = soDigitos(s || '').slice(0, 14);
+  return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+export function cnpjValido(s: string) {
+  const d = soDigitos(s);
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const calc = (n: number) => {
+    const pesos = n === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const r = pesos.reduce((a, p, i) => a + p * Number(d[i]), 0) % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(12) === Number(d[12]) && calc(13) === Number(d[13]);
+}
+
+export const nomeCompleto = (s: string | null | undefined) => (s ?? '').trim().split(/\s+/).length >= 2;
+
+/** Mensagens das regras de cadastro (CPF, CNPJ, CRECI). */
+export const ERROS_CADASTRO: Record<string, string> = {
+  NOME_COMPLETO_OBRIGATORIO: 'Informe o nome completo (nome e sobrenome).',
+  CPF_INVALIDO: 'O CPF não é válido. Confira os números.',
+  CRECI_OBRIGATORIO: 'Informe o CRECI PF.',
+  CNPJ_INVALIDO: 'O CNPJ não é válido. Confira os números.',
+  CRECI_PJ_OBRIGATORIO: 'Informe o CRECI PJ da imobiliária.',
+  CNPJ_EM_USO: 'Este CNPJ já está cadastrado em outra imobiliária.',
+  NOME_EM_USO: 'Já existe uma imobiliária com esse nome.',
+  NOME_OBRIGATORIO: 'Informe o nome da imobiliária.',
+  SEM_PERMISSAO: 'Você não tem permissão para alterar estes dados.',
+};
 
 /** Chama o servidor (/api) com o login atual. */
 export async function chamarApi(caminho: string, corpo: unknown): Promise<{ ok?: boolean; erro?: string; url?: string; nome_zip?: string; arquivos?: { nome: string; url: string }[] }> {

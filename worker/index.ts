@@ -22,6 +22,22 @@ const erro = (mensagem: string, status = 400) => json({ erro: mensagem }, status
 const PAPEIS = ['admin', 'vendas', 'imobiliaria', 'corretor'] as const;
 type Papel = (typeof PAPEIS)[number];
 const emailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+const digitos = (s: unknown) => String(s ?? '').replace(/\D/g, '');
+const creciLimpo = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toUpperCase().slice(0, 30);
+const nomeCompleto = (s: string) => s.trim().split(/\s+/).length >= 2;
+function cpfValido(v: unknown) {
+  const d = digitos(v);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const dv = (n: number) => { let s = 0; for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);
+}
+function cnpjValido(v: unknown) {
+  const d = digitos(v);
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const calc = (n: number) => { const pesos = n === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const r = pesos.reduce((a, p, i) => a + p * Number(d[i]), 0) % 11; return r < 2 ? 0 : 11 - r; };
+  return calc(12) === Number(d[12]) && calc(13) === Number(d[13]);
+}
 
 interface Chamador { id: string; papel: Papel; imobiliaria_id: string | null }
 
@@ -101,6 +117,68 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     return json({ ok: true, nome_zip: `${limpar(lista[0].codigo)}_${limpar(lista[0].cliente)}.zip`, arquivos });
   }
 
+  // Cadastro público de imobiliária: cria o login (sem acesso) e a solicitação para o administrador aprovar
+  if (caminho === '/api/cadastro-imobiliaria') {
+    if (String(corpo.site || '')) return json({ ok: true }); // campo invisível preenchido: robô
+    const txt = (k: string, max = 120) => String(corpo[k] ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+    const dados = {
+      imobiliaria_nome: txt('imobiliaria'),
+      cnpj: digitos(corpo.cnpj),
+      creci: creciLimpo(corpo.creci),
+      cidade: txt('cidade', 80) || null,
+      responsavel: txt('responsavel'),
+      responsavel_cpf: digitos(corpo.cpf),
+      responsavel_creci: creciLimpo(corpo.creci_pf),
+      email: txt('email').toLowerCase(),
+      telefone: txt('telefone', 20).replace(/\D/g, ''),
+    };
+    const senha = String(corpo.senha || '');
+    if (dados.imobiliaria_nome.length < 2) return erro('Informe o nome da imobiliária.');
+    if (!cnpjValido(dados.cnpj)) return erro('O CNPJ não é válido. Confira os números.');
+    if (!dados.creci) return erro('Informe o CRECI PJ da imobiliária.');
+    if (!nomeCompleto(dados.responsavel)) return erro('Informe o nome completo do responsável.');
+    if (!cpfValido(dados.responsavel_cpf)) return erro('O CPF do responsável não é válido. Confira os números.');
+    if (!dados.responsavel_creci) return erro('Informe o CRECI PF do responsável.');
+    if (!emailValido(dados.email)) return erro('Informe um e-mail válido.');
+    if (dados.telefone.length < 10) return erro('Informe um telefone com DDD.');
+    if (senha.length < 8) return erro('A senha precisa ter pelo menos 8 caracteres.');
+
+    const ip = req.headers.get('cf-connecting-ip') || '';
+    const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    if (ip) {
+      const { count } = await adm.from('solicitacoes_imobiliaria').select('id', { count: 'exact', head: true }).eq('ip', ip).gte('criada_em', desde);
+      if ((count ?? 0) >= 5) return erro('Muitos cadastros enviados deste local hoje. Tente amanhã ou fale com a administração.', 429);
+    }
+    const { count: pendentes } = await adm.from('solicitacoes_imobiliaria').select('id', { count: 'exact', head: true }).eq('status', 'pendente');
+    if ((pendentes ?? 0) >= 300) return erro('O cadastro está temporariamente fechado. Fale com a administração.', 429);
+
+    // e-mail que já se cadastrou antes
+    const { data: anterior } = await adm.from('solicitacoes_imobiliaria').select('id, user_id, status').eq('email', dados.email).maybeSingle();
+    if (anterior?.status === 'pendente') return erro('Já existe um cadastro em análise com este e-mail. Aguarde a aprovação.');
+    if (anterior?.status === 'aprovada') return erro('Este e-mail já tem acesso. Entre pela tela de login.');
+    if (anterior?.status === 'recusada') {
+      const { error: eSenha } = await adm.auth.admin.updateUserById(anterior.user_id, { password: senha });
+      if (eSenha) return erro(/pwned|leak|weak/i.test(eSenha.message) ? 'Essa senha é fraca ou já apareceu em vazamentos. Escolha outra.' : 'Não foi possível enviar o cadastro.');
+      await adm.from('solicitacoes_imobiliaria').update({ ...dados, ip, status: 'pendente', motivo: null, analisada_em: null, analisada_por: null, criada_em: new Date().toISOString() }).eq('id', anterior.id);
+      return json({ ok: true });
+    }
+    const { data: jaTemPerfil } = await adm.from('perfis').select('user_id').eq('email', dados.email).maybeSingle();
+    if (jaTemPerfil) return erro('Este e-mail já tem acesso. Entre pela tela de login.');
+
+    const criado = await adm.auth.admin.createUser({ email: dados.email, password: senha, email_confirm: true });
+    if (criado.error || !criado.data.user) {
+      const msg = criado.error?.message || '';
+      if (/pwned|leak|weak/i.test(msg)) return erro('Essa senha é fraca ou já apareceu em vazamentos. Escolha outra.');
+      return erro(/already|registered|exists/i.test(msg) ? 'Este e-mail já tem um login. Entre pela tela de login ou fale com a administração.' : 'Não foi possível enviar o cadastro.');
+    }
+    const { error: eSol } = await adm.from('solicitacoes_imobiliaria').insert({ ...dados, ip, user_id: criado.data.user.id });
+    if (eSol) {
+      await adm.auth.admin.deleteUser(criado.data.user.id);
+      return erro('Não foi possível enviar o cadastro.');
+    }
+    return json({ ok: true });
+  }
+
   const quem = await identificar(req, adm);
   if (!quem) return erro('Você não tem permissão para gerenciar logins.', 403);
 
@@ -120,7 +198,13 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     if (!PAPEIS.includes(papel)) return erro('Perfil inválido.');
     const comImob = papel === 'imobiliaria' || papel === 'corretor';
     if (comImob && !imobiliaria_id) return erro('Escolha a imobiliária.');
-    if (papel === 'corretor' && !nome) return erro('Informe o nome do corretor.');
+    const cpf = digitos(corpo.cpf);
+    const creci = creciLimpo(corpo.creci);
+    if (comImob) {
+      if (!nome || !nomeCompleto(nome)) return erro('Informe o nome completo.');
+      if (!cpfValido(cpf)) return erro('O CPF não é válido. Confira os números.');
+      if (!creci) return erro('Informe o CRECI.');
+    }
 
     const criado = await adm.auth.admin.createUser({ email, password: senha, email_confirm: true });
     if (criado.error || !criado.data.user) {
@@ -130,6 +214,7 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     const { error: ePerfil } = await adm.from('perfis').insert({
       user_id: criado.data.user.id, email, nome, papel,
       imobiliaria_id: comImob ? imobiliaria_id : null, trocar_senha: true,
+      cpf: comImob ? cpf : null, creci: comImob ? creci : null,
     });
     if (ePerfil) {
       await adm.auth.admin.deleteUser(criado.data.user.id);
