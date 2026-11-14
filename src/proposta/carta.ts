@@ -170,15 +170,15 @@ export async function gerarCarta(d: DadosCarta) {
 
   // ---------- Preço e forma de pagamento ----------
   secao('Preço e forma de pagamento', 50);
-  const ROTULO: Record<string, string> = { Sinal: 'Sinal', Mensais: 'Mensal', Semestrais: 'Semestral', Anuais: 'Anual', Unica: 'Única', Financiamento: 'Única' };
+  const ROTULO: Record<string, string> = { Sinal: 'Sinal', Mensais: 'Mensal', Bimestrais: 'Bimestral', Trimestrais: 'Trimestral', Semestrais: 'Semestral', Anuais: 'Anual', Unica: 'Única', Permuta: 'Permuta', Financiamento: 'Única' };
   const linhaSerie = (s: Serie): RowInput => {
     const ultimo = dataDaParcela(s, s.qtd - 1);
     const venc = s.qtd > 1 ? `${fmtData(s.vencimento)} a ${fmtData(ultimo).slice(3)}` : fmtData(s.vencimento);
     const fin = s.periodicidade === 'Financiamento';
     return [
       ROTULO[s.periodicidade] ?? s.periodicidade, String(s.qtd), venc, fmtReal(s.valor), fmtReal(s.valor * s.qtd),
-      s.periodicidade === 'Sinal' ? 'Fixa' : fin ? '—' : 'INCC até o habite-se',
-      s.periodicidade === 'Sinal' ? c.forma_sinal : fin ? 'Financiamento bancário' : c.forma_parcelas,
+      s.periodicidade === 'Sinal' ? 'Fixa' : fin || s.periodicidade === 'Permuta' ? '—' : 'INCC até o habite-se',
+      s.periodicidade === 'Sinal' ? c.forma_sinal : fin ? 'Financiamento bancário' : s.periodicidade === 'Permuta' ? 'Permuta (ver observações)' : c.forma_parcelas,
     ];
   };
   const ordenar = (l: Serie[]) => [...l].sort((a, b) => a.vencimento.localeCompare(b.vencimento));

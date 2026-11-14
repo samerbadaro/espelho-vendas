@@ -134,6 +134,8 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
 
   const pasta = pastas.find((p) => p.id === pastaId);
   const temErro = estado?.resultado.avisos.some((a) => a.nivel === 'erro') ?? true;
+  const temPermuta = estado?.series.some((s) => s.periodicidade === 'Permuta') ?? false;
+  const faltaPermuta = temPermuta && !obs.trim();
 
   const salvar = async (): Promise<string | null> => {
     if (!estado) return null;
@@ -159,6 +161,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   };
 
   const enviar = async () => {
+    if (faltaPermuta) { avisar('Descreva a permuta nas observações antes de enviar.', 'erro'); return; }
     if (temErro) { avisar('Corrija os erros (PV negativo ou vencimentos) antes de enviar.', 'erro'); return; }
     if (!pastaId) { avisar('Vincule a pasta do comprador antes de enviar.', 'erro'); return; }
     if (!(await confirmar({ titulo: 'Enviar para análise?', texto: 'Depois de enviada, a proposta só volta a ser editada se a equipe devolver para ajuste.', confirmar: 'Enviar proposta' }))) return;
@@ -287,11 +290,14 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
         comissaoInicial={proposta?.comissao_pct} parteInicial={proposta?.parte_sinal}
         somenteLeitura={!editavel} podeEditarComissao={equipe}
         aoMudar={setEstado}
+        observacoes={obs}
       />
 
       <div className="prop-bloco">
-        <label className="campo-motivo">Observações da proposta (saem na carta)
-          <textarea rows={2} value={obs} onChange={(e) => setObs(e.target.value)} disabled={!editavel} />
+        <label className={`campo-motivo${faltaPermuta ? ' obrigatorio' : ''}`}>
+          {faltaPermuta ? 'Observações — obrigatório: descreva a permuta (imóvel, carro, serviços, valor de avaliação...)' : 'Observações da proposta (saem na carta)'}
+          <textarea rows={faltaPermuta ? 3 : 2} value={obs} onChange={(e) => setObs(e.target.value)} disabled={!editavel}
+            placeholder={temPermuta ? 'Ex.: permuta de veículo Toyota Corolla 2022, placa ABC1D23, avaliado em R$ 110.000,00.' : undefined} />
         </label>
       </div>
 

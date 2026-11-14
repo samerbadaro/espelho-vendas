@@ -108,5 +108,6 @@ const ERROS: Record<string, string> = {
   UNIDADE_INDISPONIVEL: 'A unidade está em outra etapa no espelho (contrato ou vendida).',
   UNIDADE_COM_OUTRA_PASTA: 'A unidade está negociada com outra pasta no espelho.',
   SEM_PERMISSAO: 'Sem permissão para esta ação.',
+  PERMUTA_SEM_OBSERVACAO: 'Descreva a permuta nas observações da proposta antes de enviar.',
 };
 export const traduzirErro = (msg: string) => ERROS[Object.keys(ERROS).find((k) => msg.includes(k)) ?? ''] ?? msg;

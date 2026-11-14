@@ -91,3 +91,19 @@ reset role;
 
 select format('%s %s', case when ok then 'OK   ' else 'FALHA' end, teste) from r order by n;
 select format('%s de %s testes passaram', count(*) filter (where ok), count(*)) from r;
+
+-- ===== 022: permuta exige observação =====
+select pg_temp.como('00000000-0000-0000-0000-0000000000c1');
+set role authenticated;
+insert into propostas (unidade_id, pasta_id, series, resumo) values ((select id from unidades where numero = '1705'), 'cccccccc-0000-0000-0000-000000000001',
+  jsonb_build_array(jsonb_build_object('qtd', 1, 'periodicidade', 'Permuta', 'vencimento', ((now() at time zone 'America/Sao_Paulo')::date + 30)::text, 'valor', 100000)), '{"total": 100000}');
+insert into ctx select 'perm', id::text from propostas where unidade_id = (select id from unidades where numero = '1705');
+do $$ begin perform enviar_proposta((select v::uuid from ctx where k = 'perm'));
+  insert into r(teste, ok) values ('Permuta sem observação não é enviada', false);
+exception when others then insert into r(teste, ok) values ('Permuta sem observação não é enviada', sqlerrm like '%PERMUTA_SEM_OBSERVACAO%'); end $$;
+update propostas set observacoes = 'Veículo Corolla 2022 avaliado em R$ 100 mil' where id = (select v::uuid from ctx where k = 'perm');
+select enviar_proposta((select v::uuid from ctx where k = 'perm'));
+insert into r(teste, ok) select 'Permuta com observação é enviada', (select status = 'enviada' from propostas where id = (select v::uuid from ctx where k = 'perm'));
+reset role;
+select format('%s %s', case when ok then 'OK   ' else 'FALHA' end, teste) from r where n > 15 order by n;
+select format('%s de %s testes passaram (total)', count(*) filter (where ok), count(*)) from r;

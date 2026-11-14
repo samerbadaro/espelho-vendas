@@ -75,3 +75,19 @@ console.log('ok — motor da proposta confere com a planilha');
   assert.ok(r.avisos.some((a) => a.texto === 'Vencimento no dia 12: use dia 05, 10, 15 ou 20.'), 'avisa dia 12');
   console.log('ok — até as chaves 100%/90%/40% com PV zero; aviso de dia de vencimento');
 }
+
+// Bimestrais, trimestrais e permuta
+{
+  const datas = (periodicidade: M.Periodicidade) => M.parcelas(C, [{ id: 'x', qtd: 3, periodicidade, vencimento: '2027-01-10', valor: 1 }]).map((p) => p.data).join(' ');
+  assert.equal(datas('Bimestrais'), '2027-01-10 2027-03-10 2027-05-10');
+  assert.equal(datas('Trimestrais'), '2027-01-10 2027-04-10 2027-07-10');
+  const s: M.Serie[] = [...M.aplicarModelo(C, u, 'tabela', { dia: 10, hoje: '2026-11-13' }), { id: 'pm', qtd: 1, periodicidade: 'Permuta', vencimento: '2027-06-10', valor: 50000 }];
+  const sem = M.calcular(C, u, s, { dataMinima: '2026-11-13', observacoes: '' });
+  assert.ok(sem.avisos.some((a) => a.nivel === 'erro' && a.texto.startsWith('Permuta')), 'permuta exige observação');
+  const com = M.calcular(C, u, s, { dataMinima: '2026-11-13', observacoes: 'Carro avaliado em 50 mil' });
+  assert.ok(!com.avisos.some((a) => a.texto.startsWith('Permuta')));
+  const id = s.find((x) => x.periodicidade === 'Financiamento')!.id; // a permuta abate do financiamento
+  const aj = M.redistribuir(C, u, s, id);
+  assert.ok(!('erro' in aj));
+  console.log('ok — bimestrais, trimestrais e permuta');
+}

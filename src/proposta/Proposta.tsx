@@ -38,11 +38,13 @@ export interface EstadoEditor { series: Serie[]; comissaoPct: number; parteSinal
 
 export function EditorProposta({
   cfg, unidade, hoje, dataMinima, dias, seriesIniciais, comissaoInicial, parteInicial,
-  somenteLeitura = false, podeEditarComissao = false, aoMudar,
+  somenteLeitura = false, podeEditarComissao = false, aoMudar, observacoes,
 }: {
   cfg: ConfigEmpreendimento; unidade: Unidade; hoje: string; dataMinima: string; dias: number[];
   seriesIniciais?: Serie[]; comissaoInicial?: number | null; parteInicial?: number | null;
   somenteLeitura?: boolean; podeEditarComissao?: boolean; aoMudar?: (e: EstadoEditor) => void;
+  /** Texto das observações da proposta (a permuta exige descrição). */
+  observacoes?: string;
 }) {
   const CFG = cfg;
   const preChavesTabela = CFG.tabelas[unidade.tabela].filter((s) => s.periodicidade !== 'Financiamento').reduce((s, x) => s + x.percentual, 0);
@@ -55,8 +57,8 @@ export function EditorProposta({
   const [verFluxo, setVerFluxo] = useState(false);
 
   const r = useMemo(
-    () => calcular(CFG, unidade, series, { dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal, diasVencimento: dias }),
-    [CFG, unidade, series, dataMinima, comissaoPct, parteSinal, dias],
+    () => calcular(CFG, unidade, series, { dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal, diasVencimento: dias, observacoes }),
+    [CFG, unidade, series, dataMinima, comissaoPct, parteSinal, dias, observacoes],
   );
   useEffect(() => { aoMudar?.({ series, comissaoPct, parteSinal, resultado: r }); }, [r]); // eslint-disable-line react-hooks/exhaustive-deps
 

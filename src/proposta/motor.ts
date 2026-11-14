@@ -5,14 +5,17 @@
 // Datas: 'AAAA-MM-DD' (vencimentos) e 'AAAA-MM' (meses de referência).
 // =====================================================================
 
-export type Periodicidade = 'Sinal' | 'Mensais' | 'Semestrais' | 'Anuais' | 'Unica' | 'Financiamento';
+export type Periodicidade = 'Sinal' | 'Mensais' | 'Bimestrais' | 'Trimestrais' | 'Semestrais' | 'Anuais' | 'Unica' | 'Permuta' | 'Financiamento';
 
 export const PERIODICIDADES: { valor: Periodicidade; rotulo: string }[] = [
   { valor: 'Sinal', rotulo: 'Sinal' },
   { valor: 'Mensais', rotulo: 'Mensais' },
+  { valor: 'Bimestrais', rotulo: 'Bimestrais' },
+  { valor: 'Trimestrais', rotulo: 'Trimestrais' },
   { valor: 'Semestrais', rotulo: 'Semestrais' },
   { valor: 'Anuais', rotulo: 'Anuais' },
   { valor: 'Unica', rotulo: 'Única' },
+  { valor: 'Permuta', rotulo: 'Permuta' },
   { valor: 'Financiamento', rotulo: 'Financiamento' },
 ];
 
@@ -90,7 +93,7 @@ export function dataDaParcela(serie: Pick<Serie, 'vencimento' | 'periodicidade'>
 }
 
 export const PASSO: Record<Periodicidade, number> = {
-  Sinal: 1, Mensais: 1, Semestrais: 6, Anuais: 12, Unica: 1, Financiamento: 1,
+  Sinal: 1, Mensais: 1, Bimestrais: 2, Trimestrais: 3, Semestrais: 6, Anuais: 12, Unica: 1, Permuta: 1, Financiamento: 1,
 };
 
 export function hojeISO(d = new Date()) {
@@ -230,6 +233,8 @@ export interface Opcoes {
   parteDoSinal?: number;
   /** Dias de vencimento permitidos (ex.: 5, 10, 15, 20). O ato que vence na data da proposta fica de fora. */
   diasVencimento?: number[];
+  /** Observações da proposta: obrigatórias quando há permuta. */
+  observacoes?: string | null;
 }
 
 export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], op: Opcoes): Resultado {
@@ -258,6 +263,9 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
     if (s.periodicidade === 'Financiamento' && indiceMes(s.vencimento) < indiceMes(cfg.mesEntrega))
       avisos.push({ nivel: 'alerta', texto: 'Financiamento antes da entrega.', serieId: s.id });
   }
+  const permuta = series.find((s) => s.periodicidade === 'Permuta');
+  if (permuta && op.observacoes !== undefined && !(op.observacoes ?? '').trim())
+    avisos.push({ nivel: 'erro', texto: 'Permuta: descreva nas observações o que entra na permuta (imóvel, carro, serviços...).', serieId: permuta.id });
   if (diferencaVPL < -0.005) avisos.push({ nivel: 'erro', texto: `PV negativo: faltam ${fmtReal(-diferencaVPL)} em valor presente.` });
   for (const m of marcos)
     if (m.variacao !== null && m.variacao < cfg.limiteVariacaoCaptacao)

@@ -118,3 +118,6 @@ select.celula { cursor: pointer; }
 .traco { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
 .traco.tabela { border-color: #B0730F; border-top-style: dashed; }
 .traco.proposta { border-color: #2F63A8; }
+
+.campo-motivo.obrigatorio { color: var(--vendida); }
+.campo-motivo.obrigatorio textarea { border-color: var(--vendida); background: #FFF8F7; }
