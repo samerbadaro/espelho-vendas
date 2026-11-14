@@ -36,8 +36,8 @@ do $$ begin
 exception when others then insert into r(teste, ok) values ('Vencimento antes de hoje é recusado', sqlerrm like '%VENCIMENTO_ANTERIOR%'); end $$;
 
 insert into propostas (unidade_id, series, resumo) values ((select id from unidades where numero = '1704'),
-  jsonb_build_array(jsonb_build_object('qtd', 1, 'periodicidade', 'Sinal', 'vencimento', (now() at time zone 'America/Sao_Paulo')::date::text, 'valor', 448430)),
-  '{"total": 448430, "pv_pct": 100.5}');
+  jsonb_build_array(jsonb_build_object('qtd', 1, 'periodicidade', 'Sinal', 'vencimento', (now() at time zone 'America/Sao_Paulo')::date::text, 'valor', 341000)),
+  '{"total": 341000, "pv_pct": 100.5}');
 insert into ctx select 'p', id::text from propostas limit 1;
 insert into r(teste, ok) select 'Proposta nasce rascunho, da imobiliária e do corretor, com código',
   (select status = 'rascunho' and imobiliaria_id = 'aaaaaaaa-1111-0000-0000-000000000001' and criado_por = 'corretor-a@teste' and codigo ~ '^PR-' from propostas limit 1);
@@ -74,8 +74,8 @@ exception when others then insert into r(teste, ok) values ('Devolver exige moti
 select analisar_proposta((select v::uuid from ctx where k = 'p'), 'devolvida', 'Aumentar o sinal');
 
 select pg_temp.como('00000000-0000-0000-0000-0000000000c1');
-update propostas set series = jsonb_build_array(jsonb_build_object('qtd', 1, 'periodicidade', 'Sinal', 'vencimento', (now() at time zone 'America/Sao_Paulo')::date::text, 'valor', 448500)),
-  resumo = '{"total": 448500, "pv_pct": 100.6}';
+update propostas set series = jsonb_build_array(jsonb_build_object('qtd', 1, 'periodicidade', 'Sinal', 'vencimento', (now() at time zone 'America/Sao_Paulo')::date::text, 'valor', 341100)),
+  resumo = '{"total": 341100, "pv_pct": 100.6}';
 insert into r(teste, ok) select 'Corretor ajusta a proposta devolvida', (select versao > 1 and status = 'devolvida' from propostas limit 1);
 select enviar_proposta((select v::uuid from ctx where k = 'p'));
 
@@ -85,7 +85,7 @@ insert into r(teste, ok) select 'Admin aprova', (select status = 'aprovada' and 
 insert into r(teste, ok) select 'Aprovação leva a unidade para Proposta recebida',
   (select status = 'proposta' from unidades where numero = '1704');
 insert into r(teste, ok) select 'Negociação recebe valor e PV da proposta',
-  (select valor_venda = 448500 and pv_aprovado = 100.6 and pasta_id = 'cccccccc-0000-0000-0000-000000000001' from negociacoes n join unidades u on u.id = n.unidade_id where u.numero = '1704' and n.ativa);
+  (select valor_venda = 341100 and pv_aprovado = (select (resumo ->> 'pv_pct')::numeric from propostas limit 1) and pv_aprovado < 100 and pasta_id = 'cccccccc-0000-0000-0000-000000000001' from negociacoes n join unidades u on u.id = n.unidade_id where u.numero = '1704' and n.ativa);
 insert into r(teste, ok) select 'Histórico da proposta registrado', (select count(*) >= 5 from historico_propostas);
 reset role;
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
-  FileSignature,
+  LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
+  FileSignature, BarChart3, ListOrdered,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -12,7 +12,8 @@ import { Predio, Resumo } from './Predio';
 import { Aviso, StatusConexao, useTitulo } from './Publico';
 import { ListaPastas, DetalhePasta } from './Pastas';
 import { Imobiliarias, Corretores } from './Imobiliarias';
-import { Inicio } from './Inicio';
+import { Paineis } from './Paineis';
+import { EscolhaUnidades, useSituacaoFila } from './Fila';
 import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
 import { Rodadas, DetalheRodada } from './Rodadas';
@@ -177,13 +178,15 @@ function Casca({ perfil }: { perfil: Perfil }) {
   }, [avisar]);
   useSaidaPorInatividade(MINUTOS_INATIVIDADE, sair);
 
+  const { situacao: fila } = useSituacaoFila();
   type Item = { c: string; r: string; i: ReactNode };
   const menu: Item[] = equipe
     ? [
-      { c: '/painel', r: 'Início', i: <Home size={18} /> },
+      { c: '/painel', r: 'Painéis', i: <BarChart3 size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }, { c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
+      ...(pastasAtivas ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       { c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> },
       { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
       { c: '/painel/recepcao', r: 'Recepção', i: <ClipboardCheck size={18} /> },
@@ -194,6 +197,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
     ]
     : [
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(fila?.ativa ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
       { c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> },
       { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
@@ -209,7 +213,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
   const idProposta = atual.match(/^\/painel\/propostas\/([^/]+)$/)?.[1];
   const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
-  if (idProposta) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
+  if (atual === '/painel/escolha') pagina = <EscolhaUnidades perfil={perfil} />;
+  else if (idProposta) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
   else if (atual === '/painel/propostas') pagina = <ListaPropostas perfil={perfil} />;
   else if (catPortal) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
   else if (atual === '/painel/recepcao' && equipe) pagina = <Recepcao />;
@@ -222,8 +227,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (atual === '/painel/empreendimento' && admin) pagina = <Empreendimento />;
   else if (atual === '/painel/corretores' && gestor) pagina = <Corretores perfil={perfil} />;
   else if (atual === '/painel/espelho') pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <EspelhoSomenteLeitura />;
-  else if (atual === '/painel' && equipe) pagina = <Inicio perfil={perfil} />;
-  else pagina = equipe ? <Inicio perfil={perfil} /> : pastasAtivas ? <ListaPastas perfil={perfil} /> : <EspelhoSomenteLeitura />;
+  else if (atual === '/painel' && equipe) pagina = <Paineis perfil={perfil} />;
+  else pagina = equipe ? <Paineis perfil={perfil} /> : pastasAtivas ? <ListaPastas perfil={perfil} /> : <EspelhoSomenteLeitura />;
 
   const nomeUsuario = equipe ? perfil.nome || perfil.email : gestor ? imob : perfil.nome || perfil.email;
   const subtitulo = equipe ? PAPEL[perfil.papel] : gestor ? 'Imobiliária' : `Corretor, ${imob}`;

@@ -9,6 +9,7 @@ export interface Comercial {
   cidade_carta: string | null; forma_sinal: string; forma_parcelas: string; validade_dias: number;
   texto_abertura: string; texto_condicoes: string;
   vaga?: string; escaninho?: string; coordenacao_comercial?: string | null;
+  alcada_automatica?: boolean; alcada_auto_pv?: number; alcada_vendas_pv?: number;
 }
 
 export interface UnidadeComercial extends Unidade { id: string; status: string; versao: number; andar: number | null }
@@ -72,7 +73,17 @@ export interface PropostaSalva {
   criado_por_id: string | null; criado_por: string | null; criado_por_nome?: string | null; data_proposta: string; status: StatusProposta;
   series: Omit<Serie, 'id'>[]; resumo: Resumo; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
   motivo_analise: string | null; analisada_por: string | null; analisada_em: string | null; enviada_em: string | null;
-  versao: number; criada_em: string; atualizada_em: string;
+  versao: number; criada_em: string; atualizada_em: string; alcada?: Alcada | null;
+}
+
+export type Alcada = 'automatica' | 'vendas' | 'admin';
+export const ROTULO_ALCADA: Record<Alcada, string> = { automatica: 'Aprovação automática', vendas: 'Sec. Vendas', admin: 'Administrador' };
+
+/** Alçada prevista para a proposta (a definitiva é calculada pelo banco no envio). */
+export function alcadaPrevista(c: Comercial, pvPct: number, comissaoCoberta: boolean): Alcada {
+  if ((c.alcada_automatica ?? true) && pvPct >= Number(c.alcada_auto_pv ?? 100) && comissaoCoberta) return 'automatica';
+  if (pvPct >= Number(c.alcada_vendas_pv ?? 98)) return 'vendas';
+  return 'admin';
 }
 
 export interface Resumo {
@@ -108,6 +119,13 @@ const ERROS: Record<string, string> = {
   UNIDADE_INDISPONIVEL: 'A unidade está em outra etapa no espelho (contrato ou vendida).',
   UNIDADE_COM_OUTRA_PASTA: 'A unidade está negociada com outra pasta no espelho.',
   SEM_PERMISSAO: 'Sem permissão para esta ação.',
+  ALCADA_ADMIN: 'PV abaixo do limite da Sec. Vendas: só o administrador aprova esta proposta.',
+  UNIDADE_SEM_PRECO: 'A unidade não tem preço de tabela configurado (tipo, peso e tabela).',
+  FILA_DESLIGADA: 'A escolha de unidades pela fila está desligada.',
+  PASTA_AINDA_NAO_LIBERADA: 'Esta pasta ainda não foi liberada na fila.',
+  PASTA_FORA_DA_FILA: 'Esta pasta não está na fila de escolha.',
+  LIMITE_DE_UNIDADES_DA_PASTA: 'Esta pasta já atingiu o limite de unidades reservadas.',
+  INICIO_OBRIGATORIO: 'Informe a data e a hora de início da fila.',
   PERMUTA_SEM_OBSERVACAO: 'Descreva a permuta nas observações da proposta antes de enviar.',
 };
 export const traduzirErro = (msg: string) => ERROS[Object.keys(ERROS).find((k) => msg.includes(k)) ?? ''] ?? msg;

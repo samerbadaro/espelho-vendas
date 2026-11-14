@@ -82,7 +82,7 @@ export function EditorProposta({
   const avisosDa = (id: string) => r.avisos.filter((a) => a.serieId === id);
   const avisosGerais = r.avisos.filter((a) => !a.serieId);
   const positivo = r.diferencaVPL >= -0.005;
-  const outrosErros = r.avisos.some((a) => a.nivel === 'erro' && !a.texto.startsWith('PV negativo'));
+  const outrosErros = r.avisos.some((a) => a.nivel === 'erro');
   const estado = !positivo ? 'ruim' : outrosErros ? 'pendente' : 'bom';
   const ro = somenteLeitura;
 

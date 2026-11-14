@@ -121,3 +121,8 @@ select.celula { cursor: pointer; }
 
 .campo-motivo.obrigatorio { color: var(--vendida); }
 .campo-motivo.obrigatorio textarea { border-color: var(--vendida); background: #FFF8F7; }
+
+.chip-alcada { display: inline-flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; border: 1px solid; }
+.chip-alcada.a-automatica { background: #E5F3EA; color: #21683F; border-color: #BFE0CB; }
+.chip-alcada.a-vendas { background: #E6EEF8; color: #2F63A8; border-color: #C3D5EE; }
+.chip-alcada.a-admin { background: #FDF1DD; color: #8A5A0B; border-color: #EBD3A4; }

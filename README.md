@@ -123,3 +123,11 @@ Testes: `npm run testar:proposta` (motor × planilha) e `psql -d espelho -f supa
 
 - `.env.v2` e `wrangler.v2.jsonc`: URL e chave publishable do projeto de testes do Supabase.
 - Build: `npm run build:v2`. Deploy: `npx wrangler deploy -c wrangler.v2.jsonc` (Worker `espelho-vendas-v2`, separado da produção).
+
+### Alçadas, escolha de unidades e painéis (v2)
+
+- **Alçadas** (`026`): no envio, o banco recalcula o PV (`pv_proposta`) e define quem aprova. PV ≥ `alcada_auto_pv` e sinal cobrindo a comissão → aprovada na hora; PV ≥ `alcada_vendas_pv` → Sec. Vendas; abaixo → só administrador. Limites na tabela `comercial`.
+- **Escolha de unidades** (`027`, menu "Escolha de unidades"): fila de pastas aprovadas (ordem PA), liberadas em lotes (ex.: 10 a cada 30 min). O corretor reserva a unidade com a própria pasta liberada. Liga/desliga em `fila_config` pela tela (administrador).
+- **Painéis** (`028`, menu "Painéis"): visão geral, vendas (VSO, funil), rankings de imobiliárias e corretores (unidades e VGV), carteira de recebíveis (propostas aprovadas) e propostas.
+- Testes: `supabase/tests/testes_alcadas_fila.sql` (22).
+- Atualização do banco de testes: `supabase/v2/atualizar_v2_alcadas_fila_paineis.sql`.

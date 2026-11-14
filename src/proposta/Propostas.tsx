@@ -5,7 +5,7 @@ import { ir, type Perfil } from '../util';
 import { useDialogos } from '../ui';
 import { EditorProposta, type EstadoEditor } from './Proposta';
 import {
-  carregarContexto, doBanco, paraBanco, resumoDe, rotuloProposta, traduzirErro, STATUS_PROPOSTA,
+  alcadaPrevista, carregarContexto, doBanco, paraBanco, resumoDe, rotuloProposta, traduzirErro, ROTULO_ALCADA, STATUS_PROPOSTA,
   type Contexto, type PropostaSalva, type StatusProposta,
 } from './dadosProposta';
 import { gerarCarta, type DadosPasta } from './carta';
@@ -29,7 +29,7 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     let q = supabase.from('propostas')
-      .select('id, codigo, status, data_proposta, resumo, criado_por, atualizada_em, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
+      .select('id, codigo, status, alcada, analisada_por, data_proposta, resumo, criado_por, atualizada_em, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
       .order('atualizada_em', { ascending: false }).limit(300);
     if (filtro) q = q.eq('status', filtro);
     q.then(({ data, error }) => {
@@ -69,7 +69,8 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
                   <td>{p.criado_por}</td>
                   <td className="dir mono">{p.resumo.total != null ? fmtReal(p.resumo.total) : '—'}</td>
                   <td className={`dir mono ${(p.resumo.pv_pct ?? 100) < 100 ? 'texto-ruim' : ''}`}>{p.resumo.pv_pct != null ? `${p.resumo.pv_pct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%` : '—'}</td>
-                  <td><Selo s={p.status} /></td>
+                  <td><Selo s={p.status} />{p.status === 'enviada' && p.alcada && <small className="dica nowrap"> {ROTULO_ALCADA[p.alcada]}</small>}
+                    {p.status === 'aprovada' && p.analisada_por?.startsWith('Aprovação automática') && <small className="dica nowrap"> automática</small>}</td>
                   <td className="nowrap">{fmtData(p.atualizada_em.slice(0, 10))}</td>
                 </tr>
               ))}
@@ -135,6 +136,8 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   const pasta = pastas.find((p) => p.id === pastaId);
   const temErro = estado?.resultado.avisos.some((a) => a.nivel === 'erro') ?? true;
   const temPermuta = estado?.series.some((s) => s.periodicidade === 'Permuta') ?? false;
+  const pvPct = estado ? Math.round((estado.resultado.proposta.vpl / estado.resultado.tabela.vpl) * 10000) / 100 : 0;
+  const alcada = alcadaPrevista(ctx.comercial, pvPct, (estado?.resultado.comissao.naoCoberta ?? 1) <= 0.005);
   const faltaPermuta = temPermuta && !obs.trim();
 
   const salvar = async (): Promise<string | null> => {
@@ -162,14 +165,18 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
 
   const enviar = async () => {
     if (faltaPermuta) { avisar('Descreva a permuta nas observações antes de enviar.', 'erro'); return; }
-    if (temErro) { avisar('Corrija os erros (PV negativo ou vencimentos) antes de enviar.', 'erro'); return; }
+    if (temErro) { avisar('Corrija os erros da grade (vencimentos, parcelas) antes de enviar.', 'erro'); return; }
     if (!pastaId) { avisar('Vincule a pasta do comprador antes de enviar.', 'erro'); return; }
-    if (!(await confirmar({ titulo: 'Enviar para análise?', texto: 'Depois de enviada, a proposta só volta a ser editada se a equipe devolver para ajuste.', confirmar: 'Enviar proposta' }))) return;
+    const textoAlcada = alcada === 'automatica' ? 'PV dentro da tabela e sinal cobrindo a comissão: a proposta será aprovada na hora e a unidade irá para "Proposta recebida".'
+      : `PV de ${pvPct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%: a aprovação fica com ${alcada === 'vendas' ? 'a Sec. Vendas' : 'o administrador'}.`;
+    if (!(await confirmar({ titulo: 'Enviar proposta?', texto: `${textoAlcada} Depois de enviada, ela só volta a ser editada se for devolvida para ajuste.`, confirmar: 'Enviar proposta' }))) return;
     const novoId = await salvar();
     if (!novoId) return;
-    const { error } = await supabase.rpc('enviar_proposta', { p_id: novoId });
+    const { data: enviada, error } = await supabase.rpc('enviar_proposta', { p_id: novoId });
     if (error) { avisar(traduzirErro(error.message), 'erro'); if (!proposta) ir(`/painel/propostas/${novoId}`); return; }
-    avisar('Proposta enviada para análise.');
+    const e = enviada as PropostaSalva | null;
+    avisar(e?.status === 'aprovada' ? 'Proposta aprovada automaticamente. A unidade foi para "Proposta recebida".'
+      : `Proposta enviada. Aprovação: ${e?.alcada ? ROTULO_ALCADA[e.alcada] : 'equipe'}.`);
     if (!proposta) ir(`/painel/propostas/${novoId}`); else carregar();
   };
 
@@ -221,6 +228,8 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
           </p>
         </div>
         <div className="botoes-linha">
+          {editavel && estado && <span className={`chip-alcada a-${alcada}`} title="Quem aprova esta proposta, pelo PV e pela comissão">Aprovação: {ROTULO_ALCADA[alcada]}</span>}
+          {!editavel && proposta?.alcada && proposta.status === 'enviada' && <span className={`chip-alcada a-${proposta.alcada}`}>Aguardando: {ROTULO_ALCADA[proposta.alcada]}</span>}
           <button className="botao" onClick={carta} disabled={!estado}><FileDown size={16} /> Carta proposta</button>
           {editavel && <button className="botao" onClick={aoSalvar} disabled={salvando || !estado}>Salvar rascunho</button>}
           {editavel && <button className="botao principal" onClick={enviar} disabled={salvando || !estado}><Send size={16} /> Enviar para análise</button>}
@@ -234,8 +243,9 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
       {equipe && proposta && proposta.status === 'enviada' && (
         <div className="cartao analise-prop">
           <strong>Análise da equipe</strong>
+          {proposta.alcada === 'admin' && perfil.papel !== 'admin' && <span className="dica">PV de {proposta.resumo.pv_pct?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%: abaixo da alçada da Sec. Vendas, só o administrador aprova.</span>}
           <div className="botoes-linha">
-            <button className="botao ok" onClick={() => analisar('aprovada')} disabled={salvando}>Aprovar</button>
+            {(proposta.alcada !== 'admin' || perfil.papel === 'admin') && <button className="botao ok" onClick={() => analisar('aprovada')} disabled={salvando}>Aprovar</button>}
             <button className="botao" onClick={() => setAnalise('devolvida')}>Devolver para ajuste</button>
             <button className="botao" onClick={() => setAnalise('recusada')}>Recusar</button>
           </div>

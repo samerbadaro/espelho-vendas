@@ -266,7 +266,8 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
   const permuta = series.find((s) => s.periodicidade === 'Permuta');
   if (permuta && op.observacoes !== undefined && !(op.observacoes ?? '').trim())
     avisos.push({ nivel: 'erro', texto: 'Permuta: descreva nas observações o que entra na permuta (imóvel, carro, serviços...).', serieId: permuta.id });
-  if (diferencaVPL < -0.005) avisos.push({ nivel: 'erro', texto: `PV negativo: faltam ${fmtReal(-diferencaVPL)} em valor presente.` });
+  // PV abaixo da tabela não bloqueia: a proposta vai para a alçada de aprovação
+  if (diferencaVPL < -0.005) avisos.push({ nivel: 'alerta', texto: `PV negativo: faltam ${fmtReal(-diferencaVPL)} em valor presente. Precisa de aprovação.` });
   for (const m of marcos)
     if (m.variacao !== null && m.variacao < cfg.limiteVariacaoCaptacao)
       avisos.push({ nivel: 'alerta', texto: `Captação em ${m.rotulo.toLowerCase()} ${fmtPct(m.variacao)} abaixo da tabela.` });
