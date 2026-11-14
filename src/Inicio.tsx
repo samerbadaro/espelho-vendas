@@ -96,7 +96,7 @@ export function Inicio({ perfil }: { perfil: Perfil }) {
             <Atalho icone={<LayoutGrid size={20} />} texto="Alterar status de unidade" ao={() => ir('/painel/espelho')} />
             {marca.modulo_pastas && <Atalho icone={<FolderOpen size={20} />} texto="Analisar pastas" ao={() => ir('/painel/pastas')} />}
             {perfil.papel === 'admin' && <Atalho icone={<Building2 size={20} />} texto="Cadastrar imobiliária" ao={() => ir('/painel/imobiliarias')} />}
-            <Atalho icone={<Tv size={20} />} texto="Abrir modo TV" ao={() => window.open('/tv', '_blank')} />
+            {marca.modulo_tv !== false && <Atalho icone={<Tv size={20} />} texto="Abrir modo TV" ao={() => window.open('/tv', '_blank')} />}
           </div>
         </div>
         <div className="cartao">

@@ -143,6 +143,9 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     if (dados.telefone.length < 10) return erro('Informe um telefone com DDD.');
     if (senha.length < 8) return erro('A senha precisa ter pelo menos 8 caracteres.');
 
+    const { data: cfg } = await adm.from('config').select('*').eq('id', 1).maybeSingle();
+    if (cfg && (cfg as { modulo_cadastro?: boolean }).modulo_cadastro === false) return erro('O cadastro de novas imobiliárias está fechado no momento. Fale com a equipe de vendas.', 403);
+
     const ip = req.headers.get('cf-connecting-ip') || '';
     const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     if (ip) {

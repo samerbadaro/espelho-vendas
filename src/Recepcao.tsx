@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Check, FileText, RotateCcw, Search, UserPlus, X } from 'lucide-react';
+import { Check, FileText, Pencil, RotateCcw, Search, UserPlus, X } from 'lucide-react';
 import { supabase } from './dados';
 import { formatarTelefone } from './util';
 import { useDialogos } from './ui';
@@ -11,7 +11,7 @@ interface Participante {
 }
 
 /** Busca sem acento e sem diferença de maiúsculas. */
-const chave = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const chave = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
 const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
 
 /** Confirmação de presença. Com `eventoFixo`, mostra só aquele meeting (aba do Meeting). */
@@ -23,6 +23,7 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
   const [busca, setBusca] = useState('');
   const [aba, setAba] = useState<'aguardando' | 'confirmados'>('aguardando');
   const [incluindo, setIncluindo] = useState(false);
+  const [editando, setEditando] = useState<Participante | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const campo = useRef<HTMLInputElement>(null);
 
@@ -220,8 +221,14 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
     }
   };
 
+  // imobiliárias que já aparecem na lista, sem repetir variações de maiúsculas e espaços
+  const imobsDaLista = useMemo(() => {
+    const m = new Map<string, string>();
+    lista.forEach((p) => { const n = p.imobiliaria?.trim().replace(/\s+/g, ' '); if (n && !m.has(chave(n))) m.set(chave(n), n); });
+    return [...m.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [lista]);
   if (eventos == null) return <section className="secao"><p className="vazio">Carregando…</p></section>;
-  if (!eventos.length) return <section className="secao"><h2>Recepção</h2><p className="vazio">Nenhum evento com lista de convidados.</p></section>;
+  if (!eventos.length) return <section className="secao"><h2>Meeting</h2><p className="vazio">Nenhum evento com lista de convidados.</p></section>;
   const evento = eventos.find((e) => e.id === eventoId);
   const pct = lista.length ? Math.round((totalPresentes / lista.length) * 100) : 0;
 
@@ -229,7 +236,7 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
     <section className="secao recepcao">
       <div className="secao-topo">
         <div>
-          <h2>{eventoFixo ? 'Confirmação de presença' : 'Recepção'}</h2>
+          <h2>{eventoFixo ? 'Confirmação de presença' : 'Meeting'}</h2>
           {eventos.length > 1 && !eventoFixo ? (
             <select className="seletor-evento" value={eventoId} onChange={(e) => setEventoId(e.target.value)} aria-label="Evento">
               {eventos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
@@ -279,6 +286,7 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
                     <strong>{p.nome}</strong>
                     <span>{[p.imobiliaria, formatarTelefone(p.telefone)].filter(Boolean).join(' · ')}</span>
                   </div>
+                  <button className="icone-botao editar-pessoa" onClick={() => setEditando(p)} aria-label={`Editar dados de ${p.nome}`} title="Editar"><Pencil size={16} /></button>
                   <button className="botao-check" onClick={() => marcar(p, true)} disabled={ocupado === p.id} aria-label={`Confirmar chegada de ${p.nome}`}>
                     <Check size={20} /> <span>Confirmar</span>
                   </button>
@@ -299,6 +307,7 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
                     <strong>{p.nome}</strong>
                     <span>{[p.imobiliaria, `chegou às ${hora(p.chegada_em)}`, p.incluido_na_hora ? 'incluído na hora' : ''].filter(Boolean).join(' · ')}</span>
                   </div>
+                  <button className="icone-botao editar-pessoa" onClick={() => setEditando(p)} aria-label={`Editar dados de ${p.nome}`} title="Editar"><Pencil size={16} /></button>
                   <button className="botao pequeno" onClick={() => marcar(p, false)} disabled={ocupado === p.id} aria-label={`Desfazer confirmação de ${p.nome}`}>
                     <RotateCcw size={14} /> Desfazer
                   </button>
@@ -309,16 +318,29 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
         </div>
       </div>
 
-      {incluindo && <IncluirPessoa eventoId={eventoId} nomeInicial={busca} aoFechar={() => setIncluindo(false)}
+      {editando && <IncluirPessoa eventoId={eventoId} nomeInicial="" participante={editando} imobiliarias={imobsDaLista} aoFechar={() => setEditando(null)}
+        aoSalvar={(nome, confirmou) => { setEditando(null); avisar(confirmou ? `${nome}: dados salvos e presença confirmada.` : `${nome}: dados salvos.`); carregar(); }} />}
+      {incluindo && <IncluirPessoa eventoId={eventoId} nomeInicial={busca} imobiliarias={imobsDaLista} aoFechar={() => setIncluindo(false)}
         aoSalvar={(nome) => { setIncluindo(false); setBusca(''); avisar(`${nome} incluído(a) e confirmado(a).`); carregar(); }} />}
     </section>
   );
 }
 
-function IncluirPessoa({ eventoId, nomeInicial, aoFechar, aoSalvar }: { eventoId: string; nomeInicial: string; aoFechar: () => void; aoSalvar: (nome: string) => void }) {
-  const [nome, setNome] = useState(/\d/.test(nomeInicial) ? '' : nomeInicial);
-  const [imob, setImob] = useState('');
-  const [tel, setTel] = useState('');
+const NOVA = '__nova__';
+
+/** Incluir quem não está na lista ou, com `participante`, editar os dados de um convidado. */
+function IncluirPessoa({ eventoId, nomeInicial, participante, imobiliarias, aoFechar, aoSalvar }: {
+  eventoId: string; nomeInicial: string; participante?: Participante; imobiliarias: string[];
+  aoFechar: () => void; aoSalvar: (nome: string, confirmou: boolean) => void;
+}) {
+  const edicao = !!participante;
+  const imobAtual = participante?.imobiliaria?.trim() ?? '';
+  const imobNaLista = imobiliarias.find((i) => chave(i) === chave(imobAtual));
+  const [nome, setNome] = useState(participante ? participante.nome : /\d/.test(nomeInicial) ? '' : nomeInicial);
+  const [escolha, setEscolha] = useState(imobAtual ? imobNaLista ?? NOVA : '');
+  const [nova, setNova] = useState(imobAtual && !imobNaLista ? imobAtual : '');
+  const imob = escolha === NOVA ? nova : escolha;
+  const [tel, setTel] = useState(participante?.telefone ?? '');
   const [erro, setErro] = useState('');
 
   useEffect(() => {
@@ -329,26 +351,44 @@ function IncluirPessoa({ eventoId, nomeInicial, aoFechar, aoSalvar }: { eventoId
 
   const salvar = async (e: FormEvent) => {
     e.preventDefault(); setErro('');
+    const confirmar = edicao && (e.nativeEvent as SubmitEvent).submitter?.getAttribute('data-confirmar') === '1';
     if (nome.trim().length < 3) { setErro('Informe o nome.'); return; }
-    const { error } = await supabase.rpc('incluir_participante', { p_evento: eventoId, p_nome: nome, p_imobiliaria: imob, p_telefone: tel });
-    if (error) { setErro('Não foi possível incluir. Tente de novo.'); return; }
-    aoSalvar(nome.trim());
+    if (escolha === NOVA && nova.trim().length < 2) { setErro('Informe o nome da nova imobiliária.'); return; }
+    if (escolha === NOVA) {
+      const igual = imobiliarias.find((i) => chave(i) === chave(nova));
+      if (igual) { setEscolha(igual); setNova(''); setErro(`"${igual}" já está na lista e foi selecionada. Confira e clique de novo.`); return; }
+    }
+    const { error } = edicao
+      ? await supabase.rpc('editar_participante', { p_id: participante!.id, p_nome: nome, p_imobiliaria: imob, p_telefone: tel, p_confirmar: confirmar })
+      : await supabase.rpc('incluir_participante', { p_evento: eventoId, p_nome: nome, p_imobiliaria: imob, p_telefone: tel });
+    if (error) { setErro(edicao ? 'Não foi possível salvar. Tente de novo.' : 'Não foi possível incluir. Tente de novo.'); return; }
+    aoSalvar(nome.trim().replace(/\s+/g, ' '), edicao ? confirmar : true);
   };
 
   return (
     <div className="fundo-dialogo" onClick={aoFechar}>
       <form className="dialogo" role="dialog" aria-modal="true" aria-labelledby="inc-titulo" onClick={(e) => e.stopPropagation()} onSubmit={salvar}>
-        <h2 id="inc-titulo">Incluir pessoa que não está na lista</h2>
-        <p className="sub">Ela entra direto como confirmada.</p>
+        <h2 id="inc-titulo">{edicao ? 'Editar dados do convidado' : 'Incluir pessoa que não está na lista'}</h2>
+        <p className="sub">{edicao ? (participante!.presente ? 'A presença já está confirmada. Só os dados mudam.' : 'Corrija o que precisar. A presença só é confirmada se você pedir.') : 'Ela entra direto como confirmada.'}</p>
         <div className="campos">
           <label className="largo">Nome completo<input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus maxLength={120} /></label>
-          <label>Imobiliária<input value={imob} onChange={(e) => setImob(e.target.value)} maxLength={80} /></label>
+          <label className="largo">Imobiliária
+            <select value={escolha} onChange={(e) => setEscolha(e.target.value)}>
+              <option value="">Sem imobiliária (autônomo)</option>
+              {imobiliarias.map((i) => <option key={i} value={i}>{i}</option>)}
+              <option value={NOVA}>+ Cadastrar nova imobiliária</option>
+            </select>
+          </label>
+          {escolha === NOVA && <label className="largo">Nome da nova imobiliária<input value={nova} onChange={(e) => setNova(e.target.value)} maxLength={80} autoFocus /></label>}
           <label>Telefone<input value={formatarTelefone(tel)} onChange={(e) => setTel(e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="tel" /></label>
         </div>
         {erro && <p className="erro">{erro}</p>}
         <div className="dialogo-acoes">
           <button type="button" className="botao" onClick={aoFechar}>Cancelar</button>
-          <button className="botao principal">Incluir e confirmar</button>
+          {edicao && !participante!.presente && <button type="submit" className="botao" data-confirmar="0">Salvar</button>}
+          <button className="botao principal" data-confirmar={edicao && !participante!.presente ? '1' : '0'}>
+            {!edicao ? 'Incluir e confirmar' : participante!.presente ? 'Salvar' : 'Salvar e confirmar'}
+          </button>
         </div>
       </form>
     </div>

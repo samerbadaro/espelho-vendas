@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ArrowLeft, BookOpen, Calculator, Download, ExternalLink, FileText, FolderArchive, Image, LifeBuoy, Link2,
+  ArrowLeft, BookOpen, Calculator, Download, ExternalLink, FileText, FolderArchive, History, Image, LifeBuoy, Link2,
   Megaphone, Pencil, Plus, Rotate3d, Ruler, Sofa, Trash2, Upload, Video, X,
 } from 'lucide-react';
 import { zipSync } from 'fflate';
 import { supabase } from './dados';
 import { ir, type Perfil } from './util';
 import { useDialogos } from './ui';
+import { Simulador } from './Simulador';
+import { Registros } from './PortalRegistros';
 
 interface Item {
   id: string; categoria: string; titulo: string; descricao: string | null; link: string | null;
@@ -57,8 +59,9 @@ export function Portal({ perfil, categoria }: { perfil: Perfil; categoria?: stri
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
+  if (categoria === 'registros' && equipe) return <Registros />;
   const cat = CATEGORIAS.find((c) => c.valor === categoria);
-  if (cat) return <CategoriaPortal cat={cat} itens={(itens ?? []).filter((i) => i.categoria === cat.valor)} carregando={itens == null} equipe={equipe} recarregar={carregar} />;
+  if (cat) return <CategoriaPortal perfil={perfil} cat={cat} itens={(itens ?? []).filter((i) => i.categoria === cat.valor)} carregando={itens == null} equipe={equipe} recarregar={carregar} />;
 
   const contagem = (v: string) => (itens ?? []).filter((i) => i.categoria === v).length;
   return (
@@ -68,6 +71,7 @@ export function Portal({ perfil, categoria }: { perfil: Perfil; categoria?: stri
           <h2>Portal do Corretor</h2>
           <p className="sub">{equipe ? 'Materiais de venda do empreendimento. Abra uma categoria para adicionar arquivos ou links.' : 'Materiais de venda do empreendimento para visualizar e baixar.'}</p>
         </div>
+        {equipe && <button className="botao" onClick={() => ir('/painel/portal/registros')}><History size={16} /> Registros de downloads</button>}
       </div>
       <div className="portal-grade">
         {CATEGORIAS.map((c) => {
@@ -85,8 +89,8 @@ export function Portal({ perfil, categoria }: { perfil: Perfil; categoria?: stri
   );
 }
 
-function CategoriaPortal({ cat, itens, carregando, equipe, recarregar }: {
-  cat: Categoria; itens: Item[]; carregando: boolean; equipe: boolean; recarregar: () => void;
+function CategoriaPortal({ perfil, cat, itens, carregando, equipe, recarregar }: {
+  perfil: Perfil; cat: Categoria; itens: Item[]; carregando: boolean; equipe: boolean; recarregar: () => void;
 }) {
   const { confirmar, avisar } = useDialogos();
   const [miniaturas, setMiniaturas] = useState<Record<string, string>>({});
@@ -104,7 +108,12 @@ function CategoriaPortal({ cat, itens, carregando, equipe, recarregar }: {
     });
   }, [imagens]);
 
+  const registrar = (i: Item | null, modo: 'arquivo' | 'link' | 'visualizar' | 'zip', titulo?: string) => {
+    void supabase.rpc('registrar_download_portal', { p_item: i?.id ?? null, p_modo: modo, p_titulo: titulo ?? null, p_categoria: cat.valor });
+  };
+
   const baixar = async (i: Item) => {
+    registrar(i, i.link ? 'link' : 'arquivo');
     if (i.link) { window.open(i.link, '_blank', 'noopener'); return; }
     const { data, error } = await supabase.storage.from('portal').createSignedUrl(i.caminho!, 120, { download: i.nome_arquivo ?? true });
     if (error || !data) { avisar('Não foi possível baixar o arquivo.', 'erro'); return; }
@@ -112,6 +121,7 @@ function CategoriaPortal({ cat, itens, carregando, equipe, recarregar }: {
   };
 
   const abrir = async (i: Item) => {
+    registrar(i, i.link ? 'link' : 'visualizar');
     if (i.link) { window.open(i.link, '_blank', 'noopener'); return; }
     const { data } = await supabase.storage.from('portal').createSignedUrl(i.caminho!, 600);
     if (data) window.open(data.signedUrl, '_blank', 'noopener');
@@ -142,6 +152,7 @@ function CategoriaPortal({ cat, itens, carregando, equipe, recarregar }: {
     a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }));
     a.download = `${nomeSeguro(cat.rotulo).toLowerCase()}.zip`;
     a.click();
+    registrar(null, 'zip', `Todos de ${cat.rotulo} (.zip, ${arquivos.length} arquivos)`);
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     setBaixando('');
   };
@@ -192,7 +203,9 @@ function CategoriaPortal({ cat, itens, carregando, equipe, recarregar }: {
         </div>
       </div>
 
-      {carregando ? <p className="vazio">Carregando…</p> : itens.length === 0 ? (
+      {cat.valor === 'simulador' && <Simulador perfil={perfil} />}
+      {cat.valor === 'simulador' && itens.length > 0 && <h3 className="sim-outros">Outros materiais</h3>}
+      {carregando ? <p className="vazio">Carregando…</p> : itens.length === 0 ? (cat.valor === 'simulador' ? null :
         <div className="cartao vazio-grande">
           <p>{equipe ? 'Nenhum material nesta categoria ainda. Use "Adicionar" para enviar arquivos ou incluir links.' : 'Nenhum material disponível nesta categoria ainda.'}</p>
         </div>

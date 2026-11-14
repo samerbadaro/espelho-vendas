@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
+  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
   FileSignature, BarChart3, ListOrdered,
 } from 'lucide-react';
 import {
@@ -141,13 +141,15 @@ function Login() {
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [modo, setModo] = useState<'entrar' | 'esqueci' | 'enviado'>('entrar');
+  const { marca } = useMarca();
 
   const entrar = async (e: FormEvent) => {
     e.preventDefault();
     setEnviando(true); setErro('');
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha });
-    if (error) setErro('E-mail ou senha incorretos.');
-    setEnviando(false);
+    if (error) { setErro('E-mail ou senha incorretos.'); setEnviando(false); return; }
+    // ao entrar, sempre começa pela tela de Início
+    if (location.pathname !== '/painel') ir('/painel');
   };
 
   const enviarLink = async (e: FormEvent) => {
@@ -192,14 +194,14 @@ function Login() {
   return (
     <TelaAcesso>
       <form className="login" onSubmit={entrar}>
-        <h1>Entrar no painel</h1>
+        <h1>Acessar o Gestor Launch Machine</h1>
         <p className="dica">Acesso para a equipe de vendas, imobiliárias e corretores.</p>
         <label>E-mail<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label>Senha<input type="password" autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></label>
         {erro && <p className="erro" role="alert">{erro}</p>}
         <button className="botao principal largo" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
         <button type="button" className="link-acao esqueci" onClick={() => { setModo('esqueci'); setErro(''); }}>Esqueci minha senha</button>
-        <p className="dica cadastro-link">Sua imobiliária ainda não tem acesso? <a href="/cadastro">Cadastre a imobiliária</a></p>
+        {marca.modulo_cadastro !== false && <p className="dica cadastro-link">Sua imobiliária ainda não tem acesso? <a href="/cadastro">Cadastre a imobiliária</a></p>}
       </form>
     </TelaAcesso>
   );
@@ -302,6 +304,12 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const admin = perfil.papel === 'admin';
   const gestor = perfil.papel === 'imobiliaria';
   const pastasAtivas = marca.modulo_pastas;
+  const funilAtivo = pastasAtivas && marca.modulo_funil !== false;
+  const portalAtivo = marca.modulo_portal !== false;
+  const rodadasAtivas = marca.modulo_rodadas !== false;
+  const meetingAtivo = marca.modulo_meeting !== false;
+  const espelhoParceiros = marca.modulo_espelho_parceiros !== false;
+  const tvAtiva = marca.modulo_tv !== false;
 
   useEffect(() => {
     if (!equipe) supabase.from('imobiliarias').select('nome').maybeSingle()
@@ -322,12 +330,13 @@ function Casca({ perfil }: { perfil: Perfil }) {
     ? [
       { c: '/painel', r: 'Painéis', i: <BarChart3 size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
-      ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }, { c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
+      ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
-      { c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> },
-      { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
-      { c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> },
+      ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
+      ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
+      ...(meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : []),
       ...(admin ? [
         { c: '/painel/imobiliarias', r: 'Imobiliárias e logins', i: <Building2 size={18} /> },
         { c: '/painel/empreendimento', r: 'Empreendimento', i: <Settings size={18} /> },
@@ -337,11 +346,12 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(fila?.ativa ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
-      { c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> },
-      { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
+      ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
+      ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
-      { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
+      ...(espelhoParceiros ? [{ c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> }] : []),
     ];
+  if (!menu.length) menu.push({ c: '/painel/sem-modulos', r: 'Início', i: <Home size={18} /> });
   const inicial = menu[0].c;
   const atual = rota === '/painel' ? inicial : rota;
   const ativo = (c: string) => (c === '/painel' ? atual === '/painel' : atual.startsWith(c));
@@ -354,19 +364,24 @@ function Casca({ perfil }: { perfil: Perfil }) {
   if (atual === '/painel/escolha') pagina = <EscolhaUnidades perfil={perfil} />;
   else if (idProposta) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
   else if (atual === '/painel/propostas') pagina = <ListaPropostas perfil={perfil} />;
-  else if (catPortal) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
-  else if ((atual === '/painel/meeting' || atual === '/painel/recepcao') && equipe) pagina = <MeetingPainel perfil={perfil} />;
-  else if (idRodada) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
-  else if (atual === '/painel/rodadas') pagina = <Rodadas perfil={perfil} />;
+  else if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
+  else if ((atual === '/painel/meeting' || atual === '/painel/recepcao') && equipe && meetingAtivo) pagina = <MeetingPainel perfil={perfil} />;
+  else if (idRodada && rodadasAtivas) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
+  else if (atual === '/painel/rodadas' && rodadasAtivas) pagina = <Rodadas perfil={perfil} />;
   else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
   else if (atual === '/painel/pastas' && pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
-  else if (atual === '/painel/funil' && equipe && pastasAtivas) pagina = <Funil />;
+  else if (atual === '/painel/funil' && equipe && funilAtivo) pagina = <Funil />;
   else if (atual === '/painel/imobiliarias' && admin) pagina = <Imobiliarias perfil={perfil} />;
   else if (atual === '/painel/empreendimento' && admin) pagina = <Empreendimento />;
   else if (atual === '/painel/corretores' && gestor) pagina = <Corretores perfil={perfil} />;
-  else if (atual === '/painel/espelho') pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <EspelhoSomenteLeitura />;
+  else if (atual === '/painel/espelho' && (equipe || espelhoParceiros)) pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <EspelhoSomenteLeitura />;
   else if (atual === '/painel' && equipe) pagina = <Paineis perfil={perfil} />;
-  else pagina = equipe ? <Paineis perfil={perfil} /> : pastasAtivas ? <ListaPastas perfil={perfil} /> : <EspelhoSomenteLeitura />;
+  else if (equipe) pagina = <Paineis perfil={perfil} />;
+  else if (pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
+  else if (portalAtivo) pagina = <Portal key="inicio" perfil={perfil} />;
+  else if (rodadasAtivas) pagina = <Rodadas perfil={perfil} />;
+  else if (espelhoParceiros) pagina = <EspelhoSomenteLeitura />;
+  else pagina = <Aviso texto="Nenhum módulo liberado no momento. Fale com a equipe de vendas." />;
 
   const nomeUsuario = equipe ? perfil.nome || perfil.email : gestor ? imob : perfil.nome || perfil.email;
   const subtitulo = equipe ? PAPEL[perfil.papel] : gestor ? 'Imobiliária' : `Corretor, ${imob}`;
@@ -389,7 +404,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
         </nav>
         {equipe && (
           <div className="lateral-links">
-            <a href="/tv" target="_blank" rel="noreferrer"><Tv size={16} /><span>Modo TV</span></a>
+            {tvAtiva && <a href="/tv" target="_blank" rel="noreferrer"><Tv size={16} /><span>Modo TV</span></a>}
             <a href="/" target="_blank" rel="noreferrer"><ExternalLink size={16} /><span>Link público</span></a>
           </div>
         )}
