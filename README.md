@@ -6,6 +6,7 @@ Espelho de unidades em tempo real, para uso interno da Launch.
 |---|---|---|
 | `/` | Link público (corretores e clientes, no celular) | Não |
 | `/tv` | TV do salão de vendas | Não |
+| `/proposta` | **v2, em testes**: simulador de proposta (tabela × proposta, PV, comissão). Ainda não grava no banco | Não |
 | `/painel` | Sec. Vendas e administradores: espelho, pastas, imobiliárias e logins. Imobiliárias: as próprias pastas e o espelho | Sim |
 
 O sistema não guarda nenhum dado pessoal de comprador.
@@ -101,3 +102,12 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 - `src/Empreendimento.tsx`: nome, marca e módulos
 - `src/ui.tsx`: marca, confirmações, avisos e saída por inatividade
 - `src/estilo.css`: visual
+
+## Proposta (v2, em testes)
+
+- `src/proposta/motor.ts`: cálculo puro — preço da unidade, fluxo da tabela e da proposta, VPL, captação, comissão pelo sinal, validações, modelos de preenchimento (tabela, mensais até a entrega, semestrais, anuais) e "PV zero" (atingir meta numa série).
+- `src/proposta/compactoStudio.ts`: dados do empreendimento tirados da planilha `Compacto_Studio.xlsm` (vão para o banco da v2).
+- `src/proposta/Proposta.tsx`: a tela.
+- Conferência com a planilha: `node --experimental-strip-types testes/proposta.ts`
+
+Regras: nenhum vencimento antes de hoje (ou da data em que a proposta foi salva); financiamento entra no VPL no mês seguinte à entrega (securitizado), como na planilha.
