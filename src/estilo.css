@@ -627,3 +627,50 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
 }
 .busca-recepcao input, .busca-recepcao input:focus { border: 0 !important; box-shadow: none !important; background: transparent !important; padding-left: 0; }
 .abas-recepcao button.ativa span { background: rgba(255, 255, 255, 0.18); color: inherit; border-color: transparent; }
+
+/* ---------------------------------------------------------------- portal do corretor */
+.portal-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.portal-categoria {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  padding: 18px; min-height: 140px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-g); box-shadow: var(--sombra);
+}
+.portal-categoria:hover { border-color: var(--tinta-3); }
+.portal-categoria:focus-visible { outline: 3px solid color-mix(in srgb, var(--destaque) 45%, transparent); outline-offset: 2px; }
+.portal-icone {
+  display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; flex: none;
+  background: color-mix(in srgb, var(--destaque) 14%, var(--superficie)); color: var(--destaque);
+}
+.portal-nome { font-weight: 600; font-size: 1rem; line-height: 1.3; }
+.portal-qtd { margin-top: auto; color: var(--tinta-2); font-size: 0.8125rem; }
+.titulo-categoria { display: flex; align-items: center; gap: 12px; }
+.titulo-categoria h2 { margin: 0; }
+.portal-lista { list-style: none; margin: 0 0 18px; padding: 0; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-g); overflow: hidden; }
+.portal-lista li { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--borda); }
+.portal-lista li:last-child { border-bottom: 0; }
+.portal-tipo {
+  display: inline-grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 10px;
+  background: var(--superficie-2); border: 1px solid var(--borda); font-size: 0.6875rem; font-weight: 700; color: var(--tinta-2);
+}
+.portal-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.portal-info strong { overflow-wrap: anywhere; }
+.portal-info span { color: var(--tinta-2); font-size: 0.875rem; }
+.portal-info small { color: var(--tinta-3); font-size: 0.75rem; }
+.portal-acoes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.portal-galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.portal-foto { margin: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio-g); }
+.portal-miniatura { padding: 0; border: 0; cursor: zoom-in; border-radius: var(--raio); overflow: hidden; background: var(--superficie-2); aspect-ratio: 4 / 3; }
+.portal-miniatura img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.portal-foto figcaption { display: flex; flex-direction: column; min-width: 0; }
+.portal-foto figcaption strong { font-size: 0.9375rem; overflow-wrap: anywhere; }
+.portal-foto figcaption span { color: var(--tinta-2); font-size: 0.75rem; }
+.portal-foto .portal-acoes { justify-content: flex-start; }
+.abas-modo { display: flex; gap: 6px; margin-bottom: 12px; }
+.abas-modo button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font: inherit; font-weight: 600; font-size: 0.875rem;
+  border: 1px solid var(--borda); border-radius: var(--raio); background: var(--superficie); color: var(--tinta-2); cursor: pointer; }
+.abas-modo button.ativa { background: var(--primaria); color: var(--sobre-primaria, #fff); border-color: var(--primaria); }
+@media (max-width: 640px) {
+  .portal-grade { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .portal-categoria { min-height: 120px; padding: 14px; }
+  .portal-lista li { flex-wrap: wrap; }
+  .portal-lista .portal-acoes { width: 100%; justify-content: flex-start; padding-left: 58px; }
+}

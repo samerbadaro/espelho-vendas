@@ -49,6 +49,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 18. `supabase/migrations/018_rodadas_convidados.sql` (nome completo de cada convidado; só o corretor edita os seus)
 19. `supabase/migrations/019_rodadas_limite_3.sql` (no máximo 3 pessoas por cliente nas rodadas)
 20. `supabase/migrations/020_recepcao.sql` (recepção de eventos: check-in dos convidados; a lista de cada evento é carregada à parte)
+21. `supabase/migrations/021_portal_corretor.sql` (Portal do Corretor: materiais de venda por categoria)
 
 ### Criar usuário da equipe
 

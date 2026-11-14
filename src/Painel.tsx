@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck,
+  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -16,6 +16,7 @@ import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
 import { Rodadas, DetalheRodada } from './Rodadas';
 import { Recepcao } from './Recepcao';
+import { Portal } from './Portal';
 import { useRota, ir, type Perfil } from './util';
 import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
 
@@ -180,6 +181,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       { c: '/painel', r: 'Início', i: <Home size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }, { c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
+      { c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> },
       { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
       { c: '/painel/recepcao', r: 'Recepção', i: <ClipboardCheck size={18} /> },
       ...(admin ? [
@@ -189,6 +191,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
     ]
     : [
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      { c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> },
       { c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> },
       ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
@@ -200,7 +203,9 @@ function Casca({ perfil }: { perfil: Perfil }) {
   let pagina: ReactNode;
   const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
   const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
-  if (atual === '/painel/recepcao' && equipe) pagina = <Recepcao />;
+  const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
+  if (catPortal) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
+  else if (atual === '/painel/recepcao' && equipe) pagina = <Recepcao />;
   else if (idRodada) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
   else if (atual === '/painel/rodadas') pagina = <Rodadas perfil={perfil} />;
   else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
