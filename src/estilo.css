@@ -88,7 +88,7 @@ h1, h2, h3 { font-variation-settings: 'wdth' 108; letter-spacing: -0.01em; line-
 .link-acao:hover { color: var(--tinta); }
 
 /* ===== Campos ===== */
-input:not([type=checkbox]):not([type=color]):not([type=file]), select, textarea {
+input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=file]), select, textarea {
   padding: 9px 11px; border: 1px solid var(--borda-forte); border-radius: var(--raio);
   background: var(--superficie); color: var(--tinta); min-width: 0; width: 100%;
 }
@@ -686,3 +686,23 @@ body[data-pagina='tv'] { background: color-mix(in srgb, var(--primaria) 92%, bla
 .busca-funil svg { color: var(--tinta-2); flex: none; }
 .busca-funil input, .busca-funil input:focus { flex: 1; min-width: 0; border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 10px 0; font: inherit; outline: 0; }
 .funil-contagem { color: var(--tinta-2); font-size: 0.875rem; }
+
+/* cadastro público de imobiliária */
+.login.cadastro .duas-colunas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.login.cadastro .duas-colunas label { min-width: 0; }
+.campo-oculto { position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0; }
+.cadastro-link { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--borda); }
+.cadastro-ok { align-items: flex-start; }
+.cadastro-ok > svg { color: var(--disponivel); }
+.cadastro-ok a.botao { text-decoration: none; text-align: center; }
+@media (max-width: 520px) { .login.cadastro .duas-colunas { grid-template-columns: 1fr; } }
+.solicitacoes { margin-bottom: 18px; }
+.lista-solicitacoes { list-style: none; margin: 0; padding: 0; }
+.lista-solicitacoes li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--borda); }
+.sol-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sol-info strong { font-size: 1rem; }
+.sol-info span { color: var(--tinta-2); font-size: 0.875rem; overflow-wrap: anywhere; }
+.sol-info small { color: var(--tinta-3); font-size: 0.75rem; }
+.sol-acoes { display: flex; gap: 8px; flex: none; }
+@media (max-width: 640px) { .lista-solicitacoes li { flex-direction: column; align-items: flex-start; } }
+.check input[type="radio"], .check input[type="checkbox"] { width: auto; flex: none; margin: 0; padding: 0; min-height: 0; }

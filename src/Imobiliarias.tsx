@@ -60,7 +60,16 @@ export function Imobiliarias({ perfil }: { perfil: Perfil }) {
 
   return (
     <section className="secao">
-      <div className="secao-topo"><h2>Imobiliárias e logins</h2></div>
+      <div className="secao-topo">
+        <div>
+          <h2>Imobiliárias e logins</h2>
+          <p className="sub">Link de cadastro para os donos de imobiliária: <strong className="mono">{`${location.host}/cadastro`}</strong>{' '}
+            <button className="botao pequeno" onClick={() => { navigator.clipboard?.writeText(`${location.origin}/cadastro`); avisar('Link copiado.'); }}>Copiar link</button>
+          </p>
+        </div>
+      </div>
+
+      <Solicitacoes imobs={imobs} aoMudar={carregar} />
 
       {senhaMostrada && (
         <div className="senha-gerada" role="status">
@@ -255,5 +264,140 @@ export function Corretores({ perfil }: { perfil: Perfil }) {
         )}
       </div>
     </section>
+  );
+}
+
+// =====================================================================
+// Solicitações de cadastro vindas do link público
+// =====================================================================
+interface Solicitacao {
+  id: string; imobiliaria_nome: string; cnpj: string | null; creci: string | null; cidade: string | null;
+  responsavel: string; email: string; telefone: string; status: 'pendente' | 'aprovada' | 'recusada';
+  motivo: string | null; criada_em: string; analisada_em: string | null;
+}
+
+const ERROS_SOL: Record<string, string> = {
+  NOME_EM_USO: 'Já existe uma imobiliária com esse nome. Mude o nome ou vincule à imobiliária existente.',
+  SOLICITACAO_JA_ANALISADA: 'Esta solicitação já foi analisada.',
+  JA_TEM_ACESSO: 'Este login já tem acesso.',
+  MOTIVO_OBRIGATORIO: 'Informe o motivo da recusa.',
+};
+const cnpjFmt = (d: string | null) => (d && d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : d ?? '');
+const telFmt = (d: string) => (d.length === 11 ? d.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3') : d.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3'));
+
+function Solicitacoes({ imobs, aoMudar }: { imobs: Imob[]; aoMudar: () => void }) {
+  const { avisar } = useDialogos();
+  const [lista, setLista] = useState<Solicitacao[]>([]);
+  const [verTodas, setVerTodas] = useState(false);
+  const [aprovando, setAprovando] = useState<Solicitacao | null>(null);
+  const [recusando, setRecusando] = useState<Solicitacao | null>(null);
+
+  const carregar = useCallback(async () => {
+    const { data } = await supabase.from('solicitacoes_imobiliaria').select('*').order('criada_em', { ascending: false });
+    setLista((data as Solicitacao[]) ?? []);
+  }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const pendentes = lista.filter((s) => s.status === 'pendente');
+  const mostradas = verTodas ? lista : pendentes;
+  if (!lista.length) return null;
+
+  return (
+    <div className="cartao solicitacoes">
+      <div className="cartao-topo">
+        <h3>Solicitações de cadastro {pendentes.length > 0 && <span className="selo sr-encerrada">{pendentes.length} aguardando</span>}</h3>
+        <button className="botao pequeno" onClick={() => setVerTodas((v) => !v)}>{verTodas ? 'Só as pendentes' : 'Ver histórico'}</button>
+      </div>
+      {mostradas.length === 0 ? <p className="vazio">Nenhuma solicitação aguardando aprovação.</p> : (
+        <ul className="lista-solicitacoes">
+          {mostradas.map((s) => (
+            <li key={s.id}>
+              <div className="sol-info">
+                <strong>{s.imobiliaria_nome}</strong>
+                <span>{[s.cidade, s.cnpj && `CNPJ ${cnpjFmt(s.cnpj)}`, s.creci && `CRECI ${s.creci}`].filter(Boolean).join(' · ')}</span>
+                <span>{s.responsavel} · {s.email} · {telFmt(s.telefone)}</span>
+                <small>Enviado em {new Date(s.criada_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                  {s.status !== 'pendente' && ` · ${s.status === 'aprovada' ? 'Aprovada' : `Recusada${s.motivo ? `: ${s.motivo}` : ''}`}`}</small>
+              </div>
+              {s.status === 'pendente' && (
+                <div className="sol-acoes">
+                  <button className="botao pequeno recusar" onClick={() => setRecusando(s)}>Recusar</button>
+                  <button className="botao pequeno principal" onClick={() => setAprovando(s)}>Aprovar</button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {aprovando && <Aprovar sol={aprovando} imobs={imobs} aoFechar={() => setAprovando(null)}
+        aoAprovar={() => { setAprovando(null); avisar('Imobiliária aprovada. O responsável já pode entrar com a senha que criou.'); carregar(); aoMudar(); }} />}
+      {recusando && <Recusar sol={recusando} aoFechar={() => setRecusando(null)}
+        aoRecusar={() => { setRecusando(null); avisar('Solicitação recusada.'); carregar(); }} />}
+    </div>
+  );
+}
+
+function Aprovar({ sol, imobs, aoFechar, aoAprovar }: { sol: Solicitacao; imobs: Imob[]; aoFechar: () => void; aoAprovar: () => void }) {
+  const parecida = imobs.find((i) => i.nome.toLowerCase().trim() === sol.imobiliaria_nome.toLowerCase().trim());
+  const [modo, setModo] = useState<'nova' | 'existente'>(parecida ? 'existente' : 'nova');
+  const [nome, setNome] = useState(sol.imobiliaria_nome);
+  const [existente, setExistente] = useState(parecida?.id ?? '');
+  const [erro, setErro] = useState('');
+  const salvar = async (e: FormEvent) => {
+    e.preventDefault(); setErro('');
+    if (modo === 'existente' && !existente) { setErro('Escolha a imobiliária.'); return; }
+    const { error } = await supabase.rpc('aprovar_solicitacao', {
+      p_id: sol.id, p_nome_imobiliaria: modo === 'nova' ? nome : null, p_imobiliaria_existente: modo === 'existente' ? existente : null,
+    });
+    if (error) { setErro(ERROS_SOL[error.message] ?? 'Não foi possível aprovar.'); return; }
+    aoAprovar();
+  };
+  return (
+    <div className="fundo-dialogo" onClick={aoFechar}>
+      <form className="dialogo" role="dialog" aria-modal="true" aria-labelledby="apr-titulo" onClick={(e) => e.stopPropagation()} onSubmit={salvar}>
+        <h2 id="apr-titulo">Aprovar {sol.imobiliaria_nome}</h2>
+        <p className="sub">{sol.responsavel} ({sol.email}) passa a ser o login master da imobiliária, com a senha que criou no cadastro.</p>
+        <label className="check"><input type="radio" checked={modo === 'nova'} onChange={() => setModo('nova')} /> Cadastrar como nova imobiliária</label>
+        {modo === 'nova' && <div className="campos"><label className="largo">Nome da imobiliária<input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} /></label></div>}
+        <label className="check"><input type="radio" checked={modo === 'existente'} onChange={() => setModo('existente')} /> Vincular a uma imobiliária já cadastrada</label>
+        {modo === 'existente' && (
+          <div className="campos"><label className="largo">Imobiliária
+            <select value={existente} onChange={(e) => setExistente(e.target.value)}>
+              <option value="">Escolha</option>
+              {imobs.map((i) => <option key={i.id} value={i.id}>{i.nome}{i.ativa ? '' : ' (inativa)'}</option>)}
+            </select></label></div>
+        )}
+        {erro && <p className="erro">{erro}</p>}
+        <div className="dialogo-acoes">
+          <button type="button" className="botao" onClick={aoFechar}>Cancelar</button>
+          <button className="botao principal">Aprovar e liberar acesso</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Recusar({ sol, aoFechar, aoRecusar }: { sol: Solicitacao; aoFechar: () => void; aoRecusar: () => void }) {
+  const [motivo, setMotivo] = useState('');
+  const [erro, setErro] = useState('');
+  const salvar = async (e: FormEvent) => {
+    e.preventDefault(); setErro('');
+    const { error } = await supabase.rpc('recusar_solicitacao', { p_id: sol.id, p_motivo: motivo });
+    if (error) { setErro(ERROS_SOL[error.message] ?? 'Não foi possível recusar.'); return; }
+    aoRecusar();
+  };
+  return (
+    <div className="fundo-dialogo" onClick={aoFechar}>
+      <form className="dialogo" role="dialog" aria-modal="true" aria-labelledby="rec-titulo" onClick={(e) => e.stopPropagation()} onSubmit={salvar}>
+        <h2 id="rec-titulo">Recusar {sol.imobiliaria_nome}</h2>
+        <p className="sub">O responsável vê o motivo ao tentar entrar e pode corrigir e enviar de novo.</p>
+        <div className="campos"><label className="largo">Motivo<input value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={200} autoFocus placeholder="Ex.: imobiliária não identificada" /></label></div>
+        {erro && <p className="erro">{erro}</p>}
+        <div className="dialogo-acoes">
+          <button type="button" className="botao" onClick={aoFechar}>Cancelar</button>
+          <button className="botao recusar">Recusar</button>
+        </div>
+      </form>
+    </div>
   );
 }

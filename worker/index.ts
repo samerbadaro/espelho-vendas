@@ -101,6 +101,63 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
     return json({ ok: true, nome_zip: `${limpar(lista[0].codigo)}_${limpar(lista[0].cliente)}.zip`, arquivos });
   }
 
+  // Cadastro público de imobiliária: cria o login (sem acesso) e a solicitação para o administrador aprovar
+  if (caminho === '/api/cadastro-imobiliaria') {
+    if (String(corpo.site || '')) return json({ ok: true }); // campo invisível preenchido: robô
+    const txt = (k: string, max = 120) => String(corpo[k] ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+    const dados = {
+      imobiliaria_nome: txt('imobiliaria'),
+      cnpj: txt('cnpj', 20).replace(/\D/g, '') || null,
+      creci: txt('creci', 30) || null,
+      cidade: txt('cidade', 80) || null,
+      responsavel: txt('responsavel'),
+      email: txt('email').toLowerCase(),
+      telefone: txt('telefone', 20).replace(/\D/g, ''),
+    };
+    const senha = String(corpo.senha || '');
+    if (dados.imobiliaria_nome.length < 2) return erro('Informe o nome da imobiliária.');
+    if (dados.responsavel.split(' ').length < 2) return erro('Informe o nome completo do responsável.');
+    if (!emailValido(dados.email)) return erro('Informe um e-mail válido.');
+    if (dados.telefone.length < 10) return erro('Informe um telefone com DDD.');
+    if (dados.cnpj && dados.cnpj.length !== 14) return erro('O CNPJ precisa ter 14 números.');
+    if (senha.length < 8) return erro('A senha precisa ter pelo menos 8 caracteres.');
+
+    const ip = req.headers.get('cf-connecting-ip') || '';
+    const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    if (ip) {
+      const { count } = await adm.from('solicitacoes_imobiliaria').select('id', { count: 'exact', head: true }).eq('ip', ip).gte('criada_em', desde);
+      if ((count ?? 0) >= 5) return erro('Muitos cadastros enviados deste local hoje. Tente amanhã ou fale com a administração.', 429);
+    }
+    const { count: pendentes } = await adm.from('solicitacoes_imobiliaria').select('id', { count: 'exact', head: true }).eq('status', 'pendente');
+    if ((pendentes ?? 0) >= 300) return erro('O cadastro está temporariamente fechado. Fale com a administração.', 429);
+
+    // e-mail que já se cadastrou antes
+    const { data: anterior } = await adm.from('solicitacoes_imobiliaria').select('id, user_id, status').eq('email', dados.email).maybeSingle();
+    if (anterior?.status === 'pendente') return erro('Já existe um cadastro em análise com este e-mail. Aguarde a aprovação.');
+    if (anterior?.status === 'aprovada') return erro('Este e-mail já tem acesso. Entre pela tela de login.');
+    if (anterior?.status === 'recusada') {
+      const { error: eSenha } = await adm.auth.admin.updateUserById(anterior.user_id, { password: senha });
+      if (eSenha) return erro(/pwned|leak|weak/i.test(eSenha.message) ? 'Essa senha é fraca ou já apareceu em vazamentos. Escolha outra.' : 'Não foi possível enviar o cadastro.');
+      await adm.from('solicitacoes_imobiliaria').update({ ...dados, ip, status: 'pendente', motivo: null, analisada_em: null, analisada_por: null, criada_em: new Date().toISOString() }).eq('id', anterior.id);
+      return json({ ok: true });
+    }
+    const { data: jaTemPerfil } = await adm.from('perfis').select('user_id').eq('email', dados.email).maybeSingle();
+    if (jaTemPerfil) return erro('Este e-mail já tem acesso. Entre pela tela de login.');
+
+    const criado = await adm.auth.admin.createUser({ email: dados.email, password: senha, email_confirm: true });
+    if (criado.error || !criado.data.user) {
+      const msg = criado.error?.message || '';
+      if (/pwned|leak|weak/i.test(msg)) return erro('Essa senha é fraca ou já apareceu em vazamentos. Escolha outra.');
+      return erro(/already|registered|exists/i.test(msg) ? 'Este e-mail já tem um login. Entre pela tela de login ou fale com a administração.' : 'Não foi possível enviar o cadastro.');
+    }
+    const { error: eSol } = await adm.from('solicitacoes_imobiliaria').insert({ ...dados, ip, user_id: criado.data.user.id });
+    if (eSol) {
+      await adm.auth.admin.deleteUser(criado.data.user.id);
+      return erro('Não foi possível enviar o cadastro.');
+    }
+    return json({ ok: true });
+  }
+
   const quem = await identificar(req, adm);
   if (!quem) return erro('Você não tem permissão para gerenciar logins.', 403);
 

@@ -52,21 +52,45 @@ export function Painel() {
   if (sessao === undefined) return <Aviso texto="Carregando…" />;
   if (!sessao) return <Login />;
   if (perfil === undefined) return <Aviso texto="Carregando…" />;
-  if (!perfil) {
-    return (
-      <TelaAcesso>
-        <h1>Acesso não liberado</h1>
-        <p className="dica">O usuário {sessao.user.email} não tem acesso ao painel. Peça a liberação ao administrador.</p>
-        <button className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
-      </TelaAcesso>
-    );
-  }
+  if (!perfil) return <SemAcesso email={sessao.user.email ?? ''} userId={sessao.user.id} />;
   if (perfil.trocar_senha) return <TrocarSenha aoTrocar={() => setRecarga((n) => n + 1)} />;
   return <Casca perfil={perfil} />;
 }
 
+/** Login sem perfil: mostra se o cadastro da imobiliária está em análise ou foi recusado. */
+function SemAcesso({ email, userId }: { email: string; userId: string }) {
+  const [sol, setSol] = useState<{ status: string; motivo: string | null; imobiliaria_nome: string } | null | undefined>(undefined);
+  useEffect(() => {
+    supabase.from('solicitacoes_imobiliaria').select('status, motivo, imobiliaria_nome').eq('user_id', userId).maybeSingle()
+      .then(({ data }) => setSol((data as { status: string; motivo: string | null; imobiliaria_nome: string }) ?? null));
+  }, [userId]);
+  if (sol === undefined) return <Aviso texto="Carregando…" />;
+  return (
+    <TelaAcesso>
+      {sol?.status === 'pendente' ? (
+        <>
+          <h1>Cadastro em análise</h1>
+          <p className="dica">O cadastro da <b>{sol.imobiliaria_nome}</b> foi recebido e está aguardando a aprovação da administração. Assim que for aprovado, este mesmo login passa a ter acesso.</p>
+        </>
+      ) : sol?.status === 'recusada' ? (
+        <>
+          <h1>Cadastro não aprovado</h1>
+          <p className="dica">O cadastro da <b>{sol.imobiliaria_nome}</b> não foi aprovado{sol.motivo ? `: ${sol.motivo}` : '.'}</p>
+          <p className="dica">Você pode corrigir os dados e enviar de novo em <a href="/cadastro">Cadastro de imobiliária</a>, com o mesmo e-mail.</p>
+        </>
+      ) : (
+        <>
+          <h1>Acesso não liberado</h1>
+          <p className="dica">O usuário {email} não tem acesso ao painel. Peça a liberação ao administrador.</p>
+        </>
+      )}
+      <button className="botao" onClick={() => supabase.auth.signOut()}>Sair</button>
+    </TelaAcesso>
+  );
+}
+
 /** Tela dividida usada no login e na troca de senha: imagem do empreendimento + formulário. */
-function TelaAcesso({ children }: { children: ReactNode }) {
+export function TelaAcesso({ children }: { children: ReactNode }) {
   const { marca } = useMarca();
   return (
     <div className="acesso">
@@ -107,6 +131,7 @@ function Login() {
         {erro && <p className="erro" role="alert">{erro}</p>}
         <button className="botao principal largo" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
         <p className="dica">Esqueceu a senha? Corretores pedem à imobiliária; imobiliárias pedem ao administrador.</p>
+        <p className="dica cadastro-link">Sua imobiliária ainda não tem acesso? <a href="/cadastro">Cadastre a imobiliária</a></p>
       </form>
     </TelaAcesso>
   );
