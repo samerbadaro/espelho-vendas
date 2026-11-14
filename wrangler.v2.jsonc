@@ -12,8 +12,8 @@
     "run_worker_first": ["/api/*"]
   },
   "vars": {
-    "SUPABASE_URL": "https://COLE-AQUI-O-PROJETO-DE-TESTES.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "COLE-AQUI-A-CHAVE-PUBLISHABLE"
+    "SUPABASE_URL": "https://yntdnpuokozhhytdknnm.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_HJobnkiShZyTZQhugEfRAg_wbf4MW9f"
   }
   // SUPABASE_SECRET_KEY do projeto de testes: cadastrar como "Secret" no painel do Cloudflare
 }
