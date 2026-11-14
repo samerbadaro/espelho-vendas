@@ -8,19 +8,20 @@ export interface Comercial {
   limite_captacao: number; dias_vencimento: number[]; vendedora: string | null; vendedora_cnpj: string | null;
   cidade_carta: string | null; forma_sinal: string; forma_parcelas: string; validade_dias: number;
   texto_abertura: string; texto_condicoes: string;
+  vaga?: string; escaninho?: string; coordenacao_comercial?: string | null;
 }
 
-export interface UnidadeComercial extends Unidade { id: string; status: string; versao: number }
+export interface UnidadeComercial extends Unidade { id: string; status: string; versao: number; andar: number | null }
 
-export interface Contexto { cfg: ConfigEmpreendimento; comercial: Comercial; unidades: UnidadeComercial[]; nome: string }
+export interface Contexto { cfg: ConfigEmpreendimento; comercial: Comercial; unidades: UnidadeComercial[]; nome: string; logoUrl: string | null; corDestaque: string }
 
 export async function carregarContexto(): Promise<Contexto | { erro: string }> {
   const [c, p, s, u, cfgMarca] = await Promise.all([
     supabase.from('comercial').select('*').eq('id', 1).maybeSingle(),
     supabase.from('precos_tipo').select('tipo, preco_m2'),
     supabase.from('tabelas_series').select('tabela, ordem, rotulo, periodicidade, qtd, percentual, base, meses').order('ordem'),
-    supabase.from('unidades').select('id, numero, area_privativa, tipo_preco, peso, tabela, status, versao').order('andar').order('posicao'),
-    supabase.from('config').select('nome_empreendimento').eq('id', 1).maybeSingle(),
+    supabase.from('unidades').select('id, numero, andar, area_privativa, tipo_preco, peso, tabela, status, versao').order('andar').order('posicao'),
+    supabase.from('config').select('nome_empreendimento, logo_url, cor_destaque').eq('id', 1).maybeSingle(),
   ]);
   const erro = c.error || p.error || s.error || u.error;
   if (erro) return { erro: erro.message.includes('does not exist') ? 'O banco ainda não tem a estrutura de propostas (migração 019).' : erro.message };
@@ -33,13 +34,14 @@ export async function carregarContexto(): Promise<Contexto | { erro: string }> {
   }
   const precoM2PorTipo = Object.fromEntries(((p.data ?? []) as { tipo: string; preco_m2: number }[]).map((x) => [x.tipo, Number(x.preco_m2)]));
   const unidades: UnidadeComercial[] = ((u.data ?? []) as {
-    id: string; numero: string; area_privativa: number | null; tipo_preco: string | null; peso: number | null; tabela: string | null; status: string; versao: number;
+    id: string; numero: string; andar: number | null; area_privativa: number | null; tipo_preco: string | null; peso: number | null; tabela: string | null; status: string; versao: number;
   }[])
     .filter((x) => x.area_privativa && x.tipo_preco && x.peso && x.tabela && tabelas[x.tabela] && precoM2PorTipo[x.tipo_preco])
-    .map((x) => ({ id: x.id, numero: x.numero, area: Number(x.area_privativa), tipo: x.tipo_preco!, peso: Number(x.peso), tabela: x.tabela!, status: x.status, versao: x.versao }));
+    .map((x) => ({ id: x.id, numero: x.numero, area: Number(x.area_privativa), tipo: x.tipo_preco!, peso: Number(x.peso), tabela: x.tabela!, status: x.status, versao: x.versao, andar: x.andar }));
   if (!unidades.length) return { erro: 'Nenhuma unidade com preço configurado (tipo, peso e tabela).' };
 
-  const nome = (cfgMarca.data as { nome_empreendimento: string } | null)?.nome_empreendimento || 'Empreendimento';
+  const marca = cfgMarca.data as { nome_empreendimento: string; logo_url: string | null; cor_destaque: string | null } | null;
+  const nome = marca?.nome_empreendimento || 'Empreendimento';
   const cfg: ConfigEmpreendimento = {
     nome,
     mesTabela: comercial.mes_tabela.slice(0, 7),
@@ -51,7 +53,7 @@ export async function carregarContexto(): Promise<Contexto | { erro: string }> {
     comissao: { percentual: Number(comercial.comissao_pct), parteDoSinal: Number(comercial.parte_sinal) },
     limiteVariacaoCaptacao: Number(comercial.limite_captacao),
   };
-  return { cfg, comercial, unidades, nome };
+  return { cfg, comercial, unidades, nome, logoUrl: marca?.logo_url ?? null, corDestaque: marca?.cor_destaque ?? '#94874A' };
 }
 
 export type StatusProposta = 'rascunho' | 'enviada' | 'aprovada' | 'recusada' | 'devolvida' | 'cancelada';
@@ -67,7 +69,7 @@ export const rotuloProposta = (s: StatusProposta) => STATUS_PROPOSTA.find((x) =>
 
 export interface PropostaSalva {
   id: string; codigo: string; unidade_id: string; pasta_id: string | null; imobiliaria_id: string | null;
-  criado_por_id: string | null; criado_por: string | null; data_proposta: string; status: StatusProposta;
+  criado_por_id: string | null; criado_por: string | null; criado_por_nome?: string | null; data_proposta: string; status: StatusProposta;
   series: Omit<Serie, 'id'>[]; resumo: Resumo; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
   motivo_analise: string | null; analisada_por: string | null; analisada_em: string | null; enviada_em: string | null;
   versao: number; criada_em: string; atualizada_em: string;

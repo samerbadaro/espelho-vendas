@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   aplicarModelo, calcular, dataDaParcela, fmtData, fmtMes, fmtNum, fmtPct, fmtReal, mesesEntre, novoId,
-  PERIODICIDADES, redistribuir, somarMeses, type ConfigEmpreendimento, type Modelo, type Periodicidade, type Resultado,
+  PERIODICIDADES, aumentarSinal, redistribuir, somarMeses, type ConfigEmpreendimento, type Modelo, type Periodicidade, type Resultado,
   type Serie, type Unidade,
 } from './motor';
 import './proposta.css';
@@ -233,8 +233,29 @@ export function EditorProposta({
             )}
           </div>
         </div>
+        {r.comissao.naoCoberta > 0.005 && (
+          <div className="comissao-falta">
+            <strong>Sinal insuficiente para destacar {fmtPct(comissaoPct, 2)} de comissão.</strong>
+            <span>
+              Com sinal de {fmtPct(r.comissao.sinalPct, 2)} ({fmtReal(r.comissao.sinal)}) e {fmtPct(parteSinal, 0)} para a imobiliária,
+              {' '}o máximo destacável é <strong>{fmtPct(r.comissao.maximoPct, 2)}</strong> ({fmtReal(r.comissao.destacada)}).
+              {' '}Para destacar {fmtPct(comissaoPct, 2)}, o sinal precisa ser de pelo menos <strong>{fmtPct(r.comissao.sinalNecessarioPct, 2)}</strong> ({fmtReal(r.comissao.sinalNecessario)}):
+              {' '}aumente o sinal em <strong>{fmtReal(r.comissao.faltaSinal)}</strong> e reduza outra série.
+            </span>
+            {!ro && (
+              <button className="mini" onClick={() => {
+                // aumenta o ato o bastante para cobrir a comissão mesmo com o valor total subindo junto
+                const T = r.proposta.total, S = r.comissao.sinal, c = comissaoPct, p = parteSinal;
+                const extra = p > c ? Math.max(0, (c * T - p * S) / (p - c)) : r.comissao.faltaSinal;
+                setSeries((l) => aumentarSinal(l, extra));
+                setMensagem('Sinal aumentado. Use "⟲ ajustar" em outra série (mensais, semestrais...) para voltar o PV e o valor total.');
+              }}>Aumentar o ato para cobrir a comissão</button>
+            )}
+          </div>
+        )}
         <p className="dica">
-          Comissão de <strong>{fmtReal(r.comissao.devida)}</strong> sobre o valor total, paga com {fmtPct(parteSinal, 0)} de cada parcela de sinal até completar.
+          Sinal de <strong>{fmtPct(r.comissao.sinalPct, 2)}</strong> ({fmtReal(r.comissao.sinal)}) · máximo destacável {fmtPct(r.comissao.maximoPct, 2)}.
+          {' '}Comissão de <strong>{fmtReal(r.comissao.devida)}</strong> sobre o valor total, paga com {fmtPct(parteSinal, 0)} de cada parcela de sinal até completar.
           {' '}Para o incorporador no sinal: <strong>{fmtReal(r.comissao.linhas.reduce((s, l) => s + l.incorporador, 0))}</strong>.
         </p>
         <div className="tabela-rolagem">

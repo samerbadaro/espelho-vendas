@@ -190,7 +190,20 @@ export function comissao(prop: Parcela[], valorTotal: number, percentual: number
       falta = centavos(falta - c);
       return { data: p.data, parcela: p.valor, comissao: c, incorporador: centavos(p.valor - c) };
     });
-  return { devida, linhas, naoCoberta: Math.max(0, falta) };
+  const sinal = centavos(linhas.reduce((t, l) => t + l.parcela, 0));
+  // sinal mínimo para destacar a comissão inteira: comissão ÷ parte do sinal (ex.: 5,25% ÷ 70% = 7,5%)
+  const sinalNecessario = parteDoSinal > 0 ? centavosAcima(devida / parteDoSinal) : Infinity;
+  return {
+    devida, linhas, naoCoberta: Math.max(0, falta),
+    destacada: centavos(devida - Math.max(0, falta)),
+    sinal,
+    sinalPct: valorTotal > 0 ? sinal / valorTotal : 0,
+    /** % máximo do valor que dá para destacar com o sinal atual */
+    maximoPct: valorTotal > 0 ? (sinal * parteDoSinal) / valorTotal : 0,
+    sinalNecessario,
+    sinalNecessarioPct: valorTotal > 0 ? sinalNecessario / valorTotal : 0,
+    faltaSinal: Math.max(0, centavos(sinalNecessario - sinal)),
+  };
 }
 
 // ---------------------------------------------------------------------
@@ -245,7 +258,10 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
     if (m.variacao !== null && m.variacao < cfg.limiteVariacaoCaptacao)
       avisos.push({ nivel: 'alerta', texto: `Captação em ${m.rotulo.toLowerCase()} ${fmtPct(m.variacao)} abaixo da tabela.` });
   if (com.naoCoberta > 0.005)
-    avisos.push({ nivel: 'alerta', texto: `O sinal não cobre a comissão: faltam ${fmtReal(com.naoCoberta)}.` });
+    avisos.push({
+      nivel: 'alerta',
+      texto: `Sinal insuficiente para destacar a comissão: com sinal de ${fmtPct(com.sinalPct, 2)}, o máximo é ${fmtPct(com.maximoPct, 2)}. Aumente o sinal em ${fmtReal(com.faltaSinal)}.`,
+    });
 
   return {
     preco, tabela: t, proposta: p,
@@ -269,6 +285,14 @@ export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Seri
   const valor = Math.ceil(((vplTabela - outras) / unitario) * 100) / 100; // arredonda para cima: PV nunca fica negativo
   if (valor <= 0) return { erro: 'As outras séries já cobrem o PV da tabela; não sobra valor para esta série.' };
   return series.map((s) => (s.id === serieId ? { ...s, valor } : s));
+}
+
+/** Soma ao ato (primeira série de sinal) o que falta para o sinal cobrir a comissão inteira. */
+export function aumentarSinal(series: Serie[], valor: number): Serie[] {
+  const ato = series.filter((s) => s.periodicidade === 'Sinal').sort((a, b) => a.vencimento.localeCompare(b.vencimento))[0];
+  if (!ato || valor <= 0) return series;
+  const extra = centavosAcima(valor / ato.qtd);
+  return series.map((s) => (s.id === ato.id ? { ...s, valor: centavos(s.valor + extra) } : s));
 }
 
 // ---------------------------------------------------------------------

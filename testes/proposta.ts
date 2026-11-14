@@ -38,3 +38,18 @@ const oito: M.Serie[] = [{ id: 'a', qtd: 8, periodicidade: 'Semestrais', vencime
 assert.equal(M.parcelas(C, oito).length, 8);
 
 console.log('ok — motor da proposta confere com a planilha');
+
+// Comissão: sinal de 6% com 70/30 só destaca 4,2%; para 5,25% o sinal precisa de 7,5%
+{
+  const valor = 400000;
+  const ps: M.Parcela[] = [{ serieId: 'a', data: '2026-12-01', mes: 1, mesVP: 1, valor: valor * 0.06, periodicidade: 'Sinal' }];
+  const c = M.comissao(ps, valor, 0.0525, 0.7);
+  perto(c.maximoPct, 0.042, 1e-9, 'máximo destacável');
+  perto(c.sinalNecessarioPct, 0.075, 1e-6, 'sinal necessário');
+  perto(c.faltaSinal, 6000, 0.01, 'falta de sinal');
+  const s: M.Serie[] = [{ id: 'a', qtd: 1, periodicidade: 'Sinal', vencimento: '2026-12-01', valor: valor * 0.06 }];
+  const s2 = M.aumentarSinal(s, c.faltaSinal);
+  const c2 = M.comissao(M.parcelas(C, s2), valor, 0.0525, 0.7);
+  assert.equal(c2.naoCoberta, 0, 'depois de aumentar o sinal a comissão fica coberta');
+  console.log('ok — comissão: sinal 6% destaca no máximo 4,20%; precisa de 7,50%');
+}

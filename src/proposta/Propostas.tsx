@@ -195,8 +195,9 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     try {
       await gerarCarta({
         codigo: proposta?.codigo ?? 'SIMULAÇÃO', dataProposta: proposta?.data_proposta ?? hoje, empreendimento: ctx.nome, comercial: ctx.comercial,
-        unidade: { numero: unidade.numero, area: unidade.area }, pasta: dadosPasta,
-        imobiliaria: (im as { nome: string } | null)?.nome ?? '', corretor: proposta?.criado_por ?? perfil.nome ?? perfil.email,
+        unidade: { numero: unidade.numero, area: unidade.area, andar: unidade.andar }, pasta: dadosPasta,
+        logoUrl: ctx.logoUrl, corDestaque: ctx.corDestaque,
+        imobiliaria: (im as { nome: string } | null)?.nome ?? '', corretor: proposta ? proposta.criado_por_nome ?? proposta.criado_por ?? '' : perfil.nome || perfil.email,
         series: estado.series, resultado: estado.resultado, observacoes: obs,
       });
     } catch { avisar('Não foi possível gerar a carta proposta.', 'erro'); }
@@ -212,7 +213,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
           <button className="link-voltar" onClick={() => ir('/painel/propostas')}><ArrowLeft size={15} /> Propostas</button>
           <h2>{proposta ? `Proposta ${proposta.codigo}` : 'Nova proposta'} {proposta && <Selo s={proposta.status} />}</h2>
           <p className="sub">
-            {proposta ? `Criada em ${fmtData(proposta.data_proposta)} por ${proposta.criado_por ?? '—'}` : `Data da proposta: ${fmtData(hoje)}`}
+            {proposta ? `Criada em ${fmtData(proposta.data_proposta)} por ${proposta.criado_por_nome ?? proposta.criado_por ?? '—'}` : `Data da proposta: ${fmtData(hoje)}`}
             {proposta?.analisada_por && ` · analisada por ${proposta.analisada_por} em ${fmtData(proposta.analisada_em!.slice(0, 10))}`}
           </p>
         </div>
