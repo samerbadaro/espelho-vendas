@@ -1003,3 +1003,14 @@ body[data-pagina=meeting] { background: var(--fundo, #F4F3EE); }
 .lateral-menu::-webkit-scrollbar-thumb { background: rgba(127, 127, 127, 0.45); border-radius: 3px; }
 .lateral-links { margin-top: 0; }
 @media (max-height: 640px) { .lateral-topo { padding-bottom: 8px; } .lateral-logo .logo { max-height: 44px; } }
+
+/* Meeting: visão do corretor */
+.meeting-corretor { display: grid; gap: 10px; }
+.meeting-corretor-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.meeting-corretor-topo h3 { margin: 0 0 6px; }
+.meeting-corretor-info { display: flex; align-items: center; gap: 6px; margin: 2px 0; font-size: 0.9375rem; }
+.meeting-corretor-info:first-letter { text-transform: uppercase; }
+.meeting-corretor-desc { margin: 0; white-space: pre-line; color: var(--tinta-2); }
+.meeting-corretor-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; align-items: end; }
+.meeting-corretor-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8125rem; font-weight: 600; }
+.meeting-corretor-form .botoes-linha { grid-column: 1 / -1; }

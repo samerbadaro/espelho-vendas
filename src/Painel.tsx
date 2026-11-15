@@ -21,7 +21,7 @@ import { EscolhaUnidades, useSituacaoFila } from './Fila';
 import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
 import { Rodadas, DetalheRodada } from './Rodadas';
-import { MeetingPainel } from './Meeting';
+import { MeetingCorretor, MeetingPainel } from './Meeting';
 import { Portal } from './Portal';
 import { ListaPropostas, PaginaProposta } from './proposta/Propostas';
 import { useRota, ir, CAMPOS_PERFIL, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, ERROS_CADASTRO, type Perfil } from './util';
@@ -364,6 +364,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
+      ...(meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : []),
       ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
       ...(espelhoParceiros ? [{ c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> }] : []),
     ];
@@ -383,6 +384,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (atual === '/painel/tabela') pagina = <TabelaVendas perfil={perfil} />;
   else if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
   else if ((atual === '/painel/meeting' || atual === '/painel/recepcao') && equipe && meetingAtivo) pagina = <MeetingPainel perfil={perfil} />;
+  else if (atual === '/painel/meeting' && meetingAtivo) pagina = <MeetingCorretor perfil={perfil} />;
   else if (idRodada && rodadasAtivas) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
   else if (atual === '/painel/rodadas' && rodadasAtivas) pagina = <Rodadas perfil={perfil} />;
   else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;

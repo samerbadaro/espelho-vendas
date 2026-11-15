@@ -354,3 +354,87 @@ function EditarMeeting({ ev, aoFechar, aoSalvar }: { ev: Evento | null; aoFechar
   );
 }
 
+
+// ---------------------------------------------------------------------
+// Visão do corretor e da imobiliária: meetings do empreendimento e inscrição
+// ---------------------------------------------------------------------
+interface MeuMeeting extends MeetingPub {
+  slug: string; encerra_em: string | null;
+  minha_inscricao: { codigo: string | null; presente: boolean; inscrito_em: string | null } | null;
+}
+
+export function MeetingCorretor({ perfil }: { perfil: Perfil }) {
+  const { avisar } = useDialogos();
+  const [lista, setLista] = useState<MeuMeeting[] | null>(null);
+  const [imob, setImob] = useState('');
+  const carregar = useCallback(() => {
+    supabase.rpc('meus_meetings').then(({ data, error }) => setLista(error ? [] : (data ?? []) as MeuMeeting[]));
+  }, []);
+  useEffect(() => {
+    carregar();
+    if (perfil.imobiliaria_id) supabase.from('imobiliarias').select('nome').eq('id', perfil.imobiliaria_id).maybeSingle()
+      .then(({ data }) => setImob((data as { nome: string } | null)?.nome ?? ''));
+  }, [carregar, perfil.imobiliaria_id]);
+
+  return (
+    <section className="secao">
+      <div className="secao-topo">
+        <div><h2>Meeting</h2><p className="sub">Encontros do empreendimento. Inscreva-se para ter o seu nome na lista da recepção.</p></div>
+      </div>
+      {!lista ? <p className="vazio">Carregando…</p> : !lista.length ? (
+        <div className="cartao"><p className="vazio">Nenhum meeting agendado para este empreendimento.</p></div>
+      ) : lista.map((m) => <CartaoMeeting key={m.slug} m={m} perfil={perfil} imob={imob} aoInscrever={carregar} avisar={avisar} />)}
+    </section>
+  );
+}
+
+function CartaoMeeting({ m, perfil, imob, aoInscrever, avisar }: {
+  m: MeuMeeting; perfil: Perfil; imob: string; aoInscrever: () => void; avisar: (t: string, tipo?: 'erro') => void;
+}) {
+  const [tel, setTel] = useState('');
+  const [nome, setNome] = useState(perfil.nome || '');
+  const [enviando, setEnviando] = useState(false);
+  const link = `${window.location.origin}/meeting/${m.slug}`;
+  const inscrever = async (e: FormEvent) => {
+    e.preventDefault();
+    setEnviando(true);
+    const { error } = await supabase.rpc('inscrever_meeting', { p_slug: m.slug, p_nome: nome, p_email: perfil.email, p_telefone: tel, p_imobiliaria: imob || null });
+    setEnviando(false);
+    if (error) { avisar(erroMeeting(error.message), 'erro'); return; }
+    avisar('Inscrição feita. Até lá!');
+    aoInscrever();
+  };
+  const copiar = async () => { try { await navigator.clipboard.writeText(link); avisar('Link de inscrição copiado.'); } catch { avisar(link); } };
+  return (
+    <article className="cartao meeting-corretor">
+      <div className="meeting-corretor-topo">
+        <div>
+          <h3>{m.nome}</h3>
+          <p className="meeting-corretor-info"><CalendarDays size={15} /> {dataLonga(m.data_hora)}</p>
+          {m.local && <p className="meeting-corretor-info"><MapPin size={15} /> {m.local}</p>}
+          {m.vagas_restantes != null && m.abertas && <p className="dica">{m.vagas_restantes} vaga{m.vagas_restantes === 1 ? '' : 's'} restante{m.vagas_restantes === 1 ? '' : 's'}</p>}
+        </div>
+        {m.minha_inscricao && <span className="selo st-vigente"><Check size={13} /> Inscrito{m.minha_inscricao.codigo ? ` · código ${m.minha_inscricao.codigo}` : ''}</span>}
+      </div>
+      {m.descricao && <p className="meeting-corretor-desc">{m.descricao}</p>}
+      {m.minha_inscricao ? (
+        <div className="botoes-linha">
+          <button className="botao pequeno" onClick={() => baixarCalendario(m.nome, m.data_hora, m.local)}><Download size={14} /> Salvar na agenda</button>
+          <button className="botao pequeno" onClick={copiar}><Copy size={14} /> Copiar link para colegas</button>
+        </div>
+      ) : m.abertas ? (
+        <form className="meeting-corretor-form" onSubmit={inscrever}>
+          <label>Nome completo<input value={nome} onChange={(e) => setNome(e.target.value)} required /></label>
+          <label>E-mail<input value={perfil.email} disabled /></label>
+          <label>Celular com DDD<input value={tel} onChange={(e) => setTel(formatarTelefone(e.target.value))} inputMode="tel" placeholder="(64) 9 9999-9999" required /></label>
+          <div className="botoes-linha">
+            <button className="botao principal" disabled={enviando}>{enviando ? 'Inscrevendo…' : 'Quero participar'}</button>
+            <button type="button" className="botao" onClick={copiar}><Copy size={14} /> Copiar link para colegas</button>
+          </div>
+        </form>
+      ) : (
+        <p className="dica">Inscrições {m.motivo === 'esgotadas' ? 'esgotadas' : 'encerradas'}.</p>
+      )}
+    </article>
+  );
+}
