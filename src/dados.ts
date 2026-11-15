@@ -5,7 +5,11 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const configurado = Boolean(url && chave);
-export const supabase = createClient(url || 'http://localhost', chave || 'sem-chave');
+import { slugAba } from './rotaEmp';
+// cada pedido leva o empreendimento da aba; o banco filtra os dados por ele
+export const supabase = createClient(url || 'http://localhost', chave || 'sem-chave', {
+  global: { headers: slugAba ? { 'x-empreendimento': slugAba } : {} },
+});
 
 export type Status = 'disponivel' | 'reservada' | 'proposta' | 'contrato' | 'vendida' | 'bloqueada' | 'permutante';
 

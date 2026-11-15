@@ -78,3 +78,6 @@ begin
              group by u.area_privativa) x))
    where empreendimento_id = v_emp;
 end $$;
+
+-- vitrine (113): fase e cidade
+update public.empreendimentos set fase = 'pre_lancamento', cidade = 'Rio Verde, GO' where sigla = 'RT';

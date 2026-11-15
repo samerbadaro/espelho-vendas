@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import type { Session } from '@supabase/supabase-js';
 import {
   Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
-  FileSignature, BarChart3, ListOrdered, Table2,
+  FileSignature, BarChart3, ListOrdered, Table2, ArrowLeft,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -14,7 +14,9 @@ import { ListaPastas, DetalhePasta } from './Pastas';
 import { Imobiliarias, Corretores } from './Imobiliarias';
 import { Paineis } from './Paineis';
 import { TabelaVendas } from './TabelaVendas';
-import { EscolhaEmpreendimento, SeletorEmpreendimento, useEmpreendimentos } from './Empreendimentos';
+import { useEmpreendimentos } from './Empreendimentos';
+import { Vitrine } from './Vitrine';
+import { entrarNoEmpreendimento, irParaVitrine, semBase, slugAba } from './rotaEmp';
 import { EscolhaUnidades, useSituacaoFila } from './Fila';
 import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
@@ -38,7 +40,7 @@ export function Painel() {
   const [sessao, setSessao] = useState<Session | null | undefined>(undefined);
   const [perfil, setPerfil] = useState<Perfil | null | undefined>(undefined);
   const [recarga, setRecarga] = useState(0);
-  const [recuperando, setRecuperando] = useState(() => location.pathname === '/painel/nova-senha' || location.hash.includes('type=recovery'));
+  const [recuperando, setRecuperando] = useState(() => semBase(location.pathname) === '/painel/nova-senha' || location.hash.includes('type=recovery'));
   const [imobDados, setImobDados] = useState<{ cnpj: string | null; creci_pj: string | null } | null | undefined>(undefined);
 
   useEffect(() => {
@@ -151,7 +153,7 @@ function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha });
     if (error) { setErro('E-mail ou senha incorretos.'); setEnviando(false); return; }
     // ao entrar, sempre começa pela tela de Início
-    if (location.pathname !== '/painel') ir('/painel');
+    if (semBase(location.pathname) !== '/painel') ir('/painel');
   };
 
   const enviarLink = async (e: FormEvent) => {
@@ -328,6 +330,15 @@ function Casca({ perfil }: { perfil: Perfil }) {
 
   const { situacao: fila } = useSituacaoFila();
   const emps = useEmpreendimentos();
+  // o tempo real usa o empreendimento guardado no perfil: acompanha a aba em uso
+  const idEmpAba = slugAba ? emps.lista?.find((e) => e.slug === slugAba)?.id : undefined;
+  useEffect(() => {
+    if (!idEmpAba) return;
+    const sincronizar = () => { void supabase.rpc('escolher_empreendimento', { p_emp: idEmpAba }); };
+    sincronizar();
+    window.addEventListener('focus', sincronizar);
+    return () => window.removeEventListener('focus', sincronizar);
+  }, [idEmpAba]);
   type Item = { c: string; r: string; i: ReactNode };
   const menu: Item[] = equipe
     ? [
@@ -394,7 +405,14 @@ function Casca({ perfil }: { perfil: Perfil }) {
 
   const navegar = (c: string) => (e: React.MouseEvent) => { e.preventDefault(); ir(c); };
 
-  if (emps.lista && emps.lista.length > 1 && !emps.lista[0].escolhido) return <EscolhaEmpreendimento lista={emps.lista} trocar={emps.trocar} />;
+  // sem empreendimento no endereço: vitrine (com um só empreendimento, entra direto nele)
+  const empAba = slugAba ? emps.lista?.find((e) => e.slug === slugAba) ?? null : null;
+  if (!slugAba && atual === inicial && rota === '/painel' && emps.lista && emps.lista.length > 0) {
+    if (emps.lista.length === 1) { entrarNoEmpreendimento(emps.lista[0].slug); return null; }
+    return <Vitrine perfil={perfil} />;
+  }
+  if (!slugAba && rota === '/painel' && !emps.lista) return <Aviso texto="Carregando…" />;
+  if (slugAba && emps.lista && !empAba) { irParaVitrine(); return null; }
 
   return (
     <div className={`app${menuAberto ? ' menu-aberto' : ''}`}>
@@ -403,7 +421,12 @@ function Casca({ perfil }: { perfil: Perfil }) {
           <a href={inicial} onClick={navegar(inicial)} className="lateral-logo"><Logo escuro /></a>
           <button className="so-celular icone-botao" onClick={() => setMenuAberto(false)} aria-label="Fechar menu"><X size={20} /></button>
         </div>
-        {emps.lista && <SeletorEmpreendimento lista={emps.lista} trocar={emps.trocar} />}
+        {empAba && emps.lista && emps.lista.length > 1 && (
+          <div className="emp-atual">
+            <a href="/painel" onClick={(e) => { e.preventDefault(); irParaVitrine(); }}><ArrowLeft size={14} /> Todos os empreendimentos</a>
+            <strong>{empAba.nome}</strong>
+          </div>
+        )}
         <nav className="lateral-menu">
           {menu.map((m) => (
             <a key={m.c} href={m.c} className={ativo(m.c) ? 'ativo' : ''} aria-current={ativo(m.c) ? 'page' : undefined} onClick={navegar(m.c)}>

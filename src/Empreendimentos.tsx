@@ -1,9 +1,11 @@
 // Vários empreendimentos na mesma incorporadora: escolha do empreendimento atual,
 // cadastro (administrador), acesso por imobiliária e dados comerciais de cada um.
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { supabase } from './dados';
 import { useDialogos } from './ui';
+import { EnvioImagem } from './Empreendimento';
+import { entrarNoEmpreendimento } from './rotaEmp';
 
 export interface EmpreendimentoItem { id: string; slug: string; sigla: string; nome: string; ativo: boolean; atual: boolean; escolhido: boolean }
 
@@ -30,50 +32,16 @@ export function useEmpreendimentos() {
   return { lista, atual: lista?.find((e) => e.atual) ?? null, trocar, carregar };
 }
 
-/** Seletor no topo do menu (só aparece com mais de um empreendimento). */
-export function SeletorEmpreendimento({ lista, trocar }: { lista: EmpreendimentoItem[]; trocar: (id: string) => Promise<string> }) {
-  const { avisar } = useDialogos();
-  if (lista.length < 2) return null;
-  const atual = lista.find((e) => e.atual);
-  return (
-    <label className="seletor-emp">
-      <span>Empreendimento</span>
-      <select value={atual?.id ?? ''} onChange={async (e) => { const m = await trocar(e.target.value); if (m) avisar(m, 'erro'); }}>
-        {lista.map((e) => <option key={e.id} value={e.id}>{e.sigla} · {e.nome}{e.ativo ? '' : ' (inativo)'}</option>)}
-      </select>
-    </label>
-  );
-}
-
-/** Primeiro acesso com mais de um empreendimento: o login escolhe onde vai trabalhar. */
-export function EscolhaEmpreendimento({ lista, trocar }: { lista: EmpreendimentoItem[]; trocar: (id: string) => Promise<string> }) {
-  const { avisar } = useDialogos();
-  return (
-    <div className="escolha-emp">
-      <div className="cartao escolha-emp-cartao">
-        <h2>Em qual empreendimento você vai trabalhar?</h2>
-        <p className="sub">Dá para trocar depois, no topo do menu.</p>
-        <div className="escolha-emp-lista">
-          {lista.map((e) => (
-            <button key={e.id} className="escolha-emp-item" onClick={async () => { const m = await trocar(e.id); if (m) avisar(m, 'erro'); }}>
-              <span className="escolha-emp-sigla">{e.sigla}</span>
-              <strong>{e.nome}</strong>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------
 // Administrador: empreendimentos da incorporadora e acesso das imobiliárias
 // ---------------------------------------------------------------------
-interface EmpBanco { id: string; slug: string; sigla: string; nome: string; ativo: boolean; ordem: number }
+type Fase = 'pre_lancamento' | 'lancamento' | 'obras' | 'entregue';
+const FASES: Record<Fase, string> = { pre_lancamento: 'Pré-lançamento', lancamento: 'Lançamento', obras: 'Em obras', entregue: 'Entregue' };
+interface EmpBanco { id: string; slug: string; sigla: string; nome: string; ativo: boolean; ordem: number; fase: Fase; cidade: string | null; fachada_url: string | null }
 interface Imob { id: string; nome: string }
 const slugDe = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
-export function GestaoEmpreendimentos() {
+export function GestaoEmpreendimentos({ aoMudar, aoFechar }: { aoMudar?: () => void; aoFechar?: () => void } = {}) {
   const { avisar } = useDialogos();
   const [emps, setEmps] = useState<EmpBanco[] | null>(null);
   const [imobs, setImobs] = useState<Imob[]>([]);
@@ -83,7 +51,7 @@ export function GestaoEmpreendimentos() {
 
   const carregar = useCallback(async () => {
     const [e, i, b] = await Promise.all([
-      supabase.from('empreendimentos').select('id, slug, sigla, nome, ativo, ordem').order('ordem').order('criado_em'),
+      supabase.from('empreendimentos').select('id, slug, sigla, nome, ativo, ordem, fase, cidade, fachada_url').order('ordem').order('criado_em'),
       supabase.from('imobiliarias').select('id, nome').order('nome'),
       supabase.from('imobiliarias_bloqueios').select('imobiliaria_id, empreendimento_id'),
     ]);
@@ -96,17 +64,20 @@ export function GestaoEmpreendimentos() {
   const salvar = async (ev: FormEvent) => {
     ev.preventDefault();
     if (!edicao) return;
-    const { error } = await supabase.rpc('salvar_empreendimento', {
+    const { data, error } = await supabase.rpc('salvar_empreendimento', {
       p_id: edicao.id, p_nome: edicao.nome, p_slug: edicao.slug || slugDe(edicao.nome), p_sigla: edicao.sigla, p_ativo: edicao.ativo, p_ordem: edicao.ordem,
     });
     if (error) { avisar(erro(error.message), 'erro'); return; }
-    avisar(edicao.id ? 'Empreendimento atualizado.' : 'Empreendimento criado. Troque para ele no topo do menu para configurar marca, dados comerciais e unidades.');
+    const r2 = await supabase.rpc('salvar_vitrine', { p_emp: (data as { id: string }).id, p_fase: edicao.fase, p_cidade: edicao.cidade, p_fachada: edicao.fachada_url });
+    if (r2.error) { avisar(erro(r2.error.message), 'erro'); return; }
+    aoMudar?.();
+    avisar(edicao.id ? 'Empreendimento atualizado.' : 'Empreendimento criado. Use "Configurar" no card dele para marca, módulos, dados comerciais e unidades.');
     setEdicao(null); carregar();
   };
   const alternarBloqueio = async (imob: string, emp: string, liberar: boolean) => {
     const { error } = await supabase.rpc('bloquear_empreendimento', { p_imobiliaria: imob, p_empreendimento: emp, p_bloquear: !liberar });
     if (error) { avisar(erro(error.message), 'erro'); return; }
-    carregar();
+    carregar(); aoMudar?.();
   };
 
   if (!emps) return null;
@@ -115,11 +86,14 @@ export function GestaoEmpreendimentos() {
     <div className="cartao">
       <div className="cartao-topo">
         <div><h3>Empreendimentos da incorporadora</h3><p className="sub">Pastas, fila de escolha, tabela, propostas, Meeting e Portal são de cada empreendimento. Imobiliárias e logins são da incorporadora.</p></div>
-        <button type="button" className="botao pequeno" onClick={() => setEdicao({ id: null, nome: '', slug: '', sigla: '', ativo: true, ordem: emps.length })}><Plus size={14} /> Novo empreendimento</button>
+        <div className="botoes-linha">
+          <button type="button" className="botao pequeno" onClick={() => setEdicao({ id: null, nome: '', slug: '', sigla: '', ativo: true, ordem: emps.length, fase: 'lancamento', cidade: '', fachada_url: null })}><Plus size={14} /> Novo empreendimento</button>
+          {aoFechar && <button type="button" className="icone-botao" onClick={aoFechar} aria-label="Fechar"><X size={16} /></button>}
+        </div>
       </div>
       <div className="tabela-rolagem">
         <table className="tabela">
-          <thead><tr><th>Sigla</th><th>Nome</th><th>Endereço</th><th>Situação</th><th>Imobiliárias com acesso</th><th /></tr></thead>
+          <thead><tr><th>Sigla</th><th>Nome</th><th>Fase</th><th>Endereço</th><th>Situação</th><th>Imobiliárias com acesso</th><th /></tr></thead>
           <tbody>
             {emps.map((e) => {
               const bloqueadas = imobs.filter((i) => bloqueios.has(`${i.id}|${e.id}`)).length;
@@ -127,11 +101,13 @@ export function GestaoEmpreendimentos() {
                 <tr key={e.id}>
                   <td className="mono"><strong>{e.sigla}</strong></td>
                   <td>{e.nome}</td>
+                  <td>{FASES[e.fase]}</td>
                   <td className="mono">{e.slug}</td>
                   <td>{e.ativo ? 'Ativo' : 'Inativo'}</td>
                   <td>{bloqueadas ? `${imobs.length - bloqueadas} de ${imobs.length}` : 'Todas'}</td>
                   <td className="nowrap">
-                    <button type="button" className="botao pequeno" onClick={() => setEdicao({ ...e })}>Editar</button>{' '}
+                    <button type="button" className="botao pequeno" onClick={() => entrarNoEmpreendimento(e.slug)}>Entrar</button>{' '}
+                    <button type="button" className="botao pequeno" onClick={() => setEdicao({ ...e, cidade: e.cidade ?? '' })}>Editar</button>{' '}
                     <button type="button" className="botao pequeno" onClick={() => setAcessos(acessos === e.id ? null : e.id)}>Acessos</button>
                   </td>
                 </tr>
@@ -147,7 +123,16 @@ export function GestaoEmpreendimentos() {
             <label>Nome<input value={edicao.nome} required minLength={2} onChange={(ev) => setEdicao({ ...edicao, nome: ev.target.value, slug: edicao.id ? edicao.slug : slugDe(ev.target.value) })} /></label>
             <label>Sigla (2 a 4 letras, usada nos códigos das pastas)<input value={edicao.sigla} required pattern="[A-Za-z0-9]{2,4}" maxLength={4} onChange={(ev) => setEdicao({ ...edicao, sigla: ev.target.value.toUpperCase() })} /></label>
             <label>Endereço curto<input value={edicao.slug} required pattern="[a-z0-9][a-z0-9-]{1,39}" onChange={(ev) => setEdicao({ ...edicao, slug: slugDe(ev.target.value) })} /></label>
-            <label>Ordem no menu<input type="number" min={0} value={edicao.ordem} onChange={(ev) => setEdicao({ ...edicao, ordem: Number(ev.target.value) })} /></label>
+            <label>Ordem na vitrine<input type="number" min={0} value={edicao.ordem} onChange={(ev) => setEdicao({ ...edicao, ordem: Number(ev.target.value) })} /></label>
+            <label>Fase
+              <select value={edicao.fase} onChange={(ev) => setEdicao({ ...edicao, fase: ev.target.value as Fase })}>
+                {(Object.keys(FASES) as Fase[]).map((f) => <option key={f} value={f}>{FASES[f]}</option>)}
+              </select>
+            </label>
+            <label>Cidade<input value={edicao.cidade ?? ''} onChange={(ev) => setEdicao({ ...edicao, cidade: ev.target.value })} placeholder="Ex.: Rio Verde, GO" /></label>
+          </div>
+          <div className="grade-imagens">
+            <EnvioImagem rotulo="Foto da fachada (card da vitrine)" dica="Perspectiva na horizontal; sem foto, o card usa a imagem de login ou as cores" valor={edicao.fachada_url} aoMudar={(v) => setEdicao({ ...edicao, fachada_url: v })} capa />
           </div>
           <label className="interruptor">
             <input type="checkbox" checked={edicao.ativo} onChange={(ev) => setEdicao({ ...edicao, ativo: ev.target.checked })} />

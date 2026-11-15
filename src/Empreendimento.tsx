@@ -131,7 +131,7 @@ function CampoCor({ rotulo, valor, aoMudar }: { rotulo: string; valor: string; a
   );
 }
 
-function EnvioImagem({ rotulo, dica, valor, aoMudar, fundo, capa }: {
+export function EnvioImagem({ rotulo, dica, valor, aoMudar, fundo, capa }: {
   rotulo: string; dica: string; valor: string | null; aoMudar: (v: string | null) => void; fundo?: string; capa?: boolean;
 }) {
   const entrada = useRef<HTMLInputElement>(null);

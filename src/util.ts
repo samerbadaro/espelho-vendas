@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './dados';
+import { comBase, semBase } from './rotaEmp';
 
 // ---------- Rotas internas do painel (/painel, /painel/pastas, /painel/pastas/<id>, ...) ----------
 export function useRota() {
-  const [rota, setRota] = useState(window.location.pathname);
+  const [rota, setRota] = useState(semBase(window.location.pathname));
   useEffect(() => {
-    const aoVoltar = () => setRota(window.location.pathname);
+    const aoVoltar = () => setRota(semBase(window.location.pathname));
     window.addEventListener('popstate', aoVoltar);
     return () => window.removeEventListener('popstate', aoVoltar);
   }, []);
   return rota.replace(/\/+$/, '') || '/';
 }
 export function ir(caminho: string) {
-  window.history.pushState({}, '', caminho);
+  window.history.pushState({}, '', comBase(caminho));
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.scrollTo(0, 0);
 }
