@@ -990,3 +990,16 @@ body[data-pagina=meeting] { background: var(--fundo, #F4F3EE); }
   .vitrine-consolidado { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vitrine-topo { flex-direction: column; align-items: flex-start; }
 }
+
+/* Menu lateral: logo e usuário fixos; só a lista de opções rola */
+.lateral { overflow: hidden; }
+.lateral-topo, .emp-atual, .lateral-links, .lateral-usuario { flex: none; }
+.lateral-menu {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 -12px; padding: 0 12px 6px; /* deixa a marca do item ativo visível dentro da rolagem */
+  scrollbar-width: thin; scrollbar-color: rgba(127, 127, 127, 0.45) transparent;
+}
+.lateral-menu::-webkit-scrollbar { width: 6px; }
+.lateral-menu::-webkit-scrollbar-thumb { background: rgba(127, 127, 127, 0.45); border-radius: 3px; }
+.lateral-links { margin-top: 0; }
+@media (max-height: 640px) { .lateral-topo { padding-bottom: 8px; } .lateral-logo .logo { max-height: 44px; } }
