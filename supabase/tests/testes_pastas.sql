@@ -34,7 +34,7 @@ insert into pastas (comprador_nome, comprador_cpf, estado_civil, comprador_telef
   values ('Maria Teste', '12345678901', 'solteiro', '64999998888', 'maria@t.com', 'Engenheira');
 insert into ctx select 'pasta', id::text from pastas where comprador_cpf='12345678901';
 insert into r(teste, ok) select 'A cria pasta (incompleta, código P-00X, ligada à A)',
-  (select status='incompleta' and codigo ~ '^P-[0-9]{3}$' and imobiliaria_id='aaaaaaaa-0000-0000-0000-000000000001' from pastas limit 1);
+  (select status='incompleta' and codigo ~ '^([A-Z0-9]{2,4}-)?P-[0-9]{3}$' and imobiliaria_id='aaaaaaaa-0000-0000-0000-000000000001' from pastas limit 1);
 insert into r(teste, ok) select 'Histórico registra criação', exists(select 1 from historico_pastas where acao='Pasta criada' and usuario_email='imob-a@teste');
 do $$ begin
   insert into pastas (imobiliaria_id, comprador_nome, comprador_cpf, comprador_telefone, comprador_email, comprador_profissao) values ('bbbbbbbb-0000-0000-0000-000000000002', 'Invasor', '99999999999', '64999998888', 'x@t.com', 'X');
@@ -103,7 +103,7 @@ reset role;
 set role authenticated; select pg_temp.como('00000000-0000-0000-0000-00000000000d');
 select submeter_pasta((select v::uuid from ctx where k='pasta')) \g /dev/null
 insert into r(teste, ok) select 'A submete: recebe PA-001 e fica aguardando análise',
-  (select codigo_aprovacao='PA-001' and status='aguardando_analise' and submetida_por='imob-a@teste' from pastas);
+  (select codigo_aprovacao ~ '^([A-Z0-9]{2,4}-)?PA-001$' and status='aguardando_analise' and submetida_por='imob-a@teste' from pastas);
 do $$ begin perform submeter_pasta((select v::uuid from ctx where k='pasta'));
   insert into r(teste, ok) values ('Não submete duas vezes', false);
 exception when others then insert into r(teste, ok) values ('Não submete duas vezes', sqlerrm='JA_SUBMETIDA'); end $$;

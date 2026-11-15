@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { DadosComerciais, GestaoEmpreendimentos } from './Empreendimentos';
 import { ImageUp, Trash2 } from 'lucide-react';
 import { supabase } from './dados';
 import { useMarca, useDialogos, aplicarMarca, textoSobre, FONTES, type Marca } from './ui';
@@ -53,7 +54,7 @@ export function Empreendimento() {
       cor_primaria: f.cor_primaria, cor_destaque: f.cor_destaque, cor_apoio: f.cor_apoio, fonte: f.fonte, logo_url: f.logo_url,
       logo_escuro_url: f.logo_escuro_url, imagem_login_url: f.imagem_login_url,
       ...Object.fromEntries(MODULOS.map((m) => [m.k, f[m.k]])), atualizado_em: new Date().toISOString(),
-    }).eq('id', 1);
+    }).eq('empreendimento_id', marca.empreendimento_id ?? '');
     setSalvando(false);
     if (error) { avisar('Não foi possível salvar. Tente novamente.', 'erro'); return; }
     avisar('Empreendimento atualizado.');
@@ -63,8 +64,9 @@ export function Empreendimento() {
   return (
     <section className="secao">
       <div className="secao-topo">
-        <div><h2>Empreendimento</h2><p className="sub">Nome, identidade visual e módulos. As mudanças aparecem no painel, no link público e na TV.</p></div>
+        <div><h2>Empreendimentos</h2><p className="sub">Cadastro dos empreendimentos e, abaixo, nome, identidade visual, módulos e dados comerciais do empreendimento atual ({f.nome_empreendimento}).</p></div>
       </div>
+      <GestaoEmpreendimentos />
       <form onSubmit={salvar}>
         <div className="cartao">
           <h3>Dados</h3>
@@ -112,6 +114,7 @@ export function Empreendimento() {
 
         <div className="acoes"><button className="botao principal" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar alterações'}</button></div>
       </form>
+      <DadosComerciais />
     </section>
   );
 }

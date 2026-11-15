@@ -57,10 +57,10 @@ export const mesDaVenda = (t: Pick<TabelaResumo, 'mes_referencia'>, data: string
  */
 export async function carregarContexto(op: { tabelaId?: string | null; data?: string; proxima?: boolean } = {}): Promise<Contexto | { erro: string }> {
   const [c, t, u, cfgMarca] = await Promise.all([
-    supabase.from('comercial').select('*').eq('id', 1).maybeSingle(),
+    supabase.from('comercial').select('*').limit(1).maybeSingle(),
     supabase.from('tabelas_preco_resumo').select('*').neq('situacao', 'rascunho').order('vigente_desde', { ascending: false }),
     supabase.from('unidades').select('id, numero, andar, area_privativa, tipologia, status, versao').order('andar').order('posicao'),
-    supabase.from('config').select('nome_empreendimento, logo_url, cor_destaque').eq('id', 1).maybeSingle(),
+    supabase.from('config').select('nome_empreendimento, logo_url, cor_destaque').limit(1).maybeSingle(),
   ]);
   const erro = c.error || t.error || u.error;
   if (erro) return { erro: erro.message.includes('does not exist') ? 'O banco ainda não tem a tabela de vendas (migração 110).' : erro.message };

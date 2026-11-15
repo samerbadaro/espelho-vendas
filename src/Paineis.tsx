@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from './dados';
+import { useEmpreendimentos } from './Empreendimentos';
 import { type Perfil } from './util';
 import { Inicio } from './Inicio';
 import { carregarContexto, doBanco, traduzirErro, type Contexto, type PropostaSalva } from './proposta/dadosProposta';
@@ -18,6 +19,7 @@ const ABAS: { v: Aba; r: string }[] = [
 ];
 
 interface Dados {
+  consolidado?: boolean; por_empreendimento?: unknown[];
   gerado_em: string;
   unidades: Record<string, { n: number; vgv_tabela: number }> | null;
   vgv_tabela_total: number;
@@ -39,14 +41,17 @@ export function Paineis({ perfil }: { perfil: Perfil }) {
   const [aba, setAba] = useState<Aba>(() => (new URLSearchParams(window.location.search).get('aba') as Aba) || 'geral');
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState('');
+  const { lista: emps } = useEmpreendimentos();
+  const [todos, setTodos] = useState(false);
 
   useEffect(() => {
     if (aba === 'geral') return;
-    supabase.rpc('paineis').then(({ data, error }) => {
+    setDados(null);
+    supabase.rpc('paineis', { p_todos: todos }).then(({ data, error }) => {
       if (error) setErro(error.message.includes('function') ? 'O banco ainda não tem os painéis (migração 107).' : traduzirErro(error.message));
       else setDados(data as Dados);
     });
-  }, [aba]);
+  }, [aba, todos]);
 
   const trocar = (v: Aba) => {
     setAba(v);
@@ -59,11 +64,15 @@ export function Paineis({ perfil }: { perfil: Perfil }) {
     <div className="paineis">
       <div className="abas paineis-abas" role="tablist">
         {ABAS.map((a) => <button key={a.v} role="tab" aria-selected={aba === a.v} className={aba === a.v ? 'ativa' : ''} onClick={() => trocar(a.v)}>{a.r}</button>)}
+        {emps && emps.length > 1 && aba !== 'geral' && aba !== 'carteira' && (
+          <label className="tv-check paineis-todos"><input type="checkbox" checked={todos} onChange={(e) => setTodos(e.target.checked)} /> Todos os empreendimentos</label>
+        )}
       </div>
       {aba === 'geral' ? <Inicio perfil={perfil} /> : (
         <section className="secao">
           {erro ? <p className="erro">{erro}</p> : !dados ? <p className="vazio">Carregando…</p> : (
             <>
+              {dados.consolidado && <PorEmpreendimento d={dados} />}
               {aba === 'vendas' && <Vendas d={dados} />}
               {aba === 'rankings' && <Rankings d={dados} />}
               {aba === 'carteira' && <Carteira />}
@@ -371,5 +380,36 @@ function PropostasPainel({ d }: { d: Dados }) {
         )}
       </div>
     </>
+  );
+}
+
+interface LinhaEmp { sigla: string; nome: string; unidades: number; disponiveis: number; vendidas: number; vendas: number; vgv_tabela: number; vgv_vendido: number }
+function PorEmpreendimento({ d }: { d: Dados }) {
+  const linhas = (d.por_empreendimento ?? []) as LinhaEmp[];
+  const tot = linhas.reduce((a, l) => ({ unidades: a.unidades + l.unidades, disponiveis: a.disponiveis + l.disponiveis, vendas: a.vendas + l.vendas,
+    vgv_tabela: a.vgv_tabela + Number(l.vgv_tabela), vgv_vendido: a.vgv_vendido + Number(l.vgv_vendido) }), { unidades: 0, disponiveis: 0, vendas: 0, vgv_tabela: 0, vgv_vendido: 0 });
+  const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  return (
+    <div className="cartao">
+      <h3>Incorporadora · todos os empreendimentos</h3>
+      <div className="tabela-rolagem">
+        <table className="tabela">
+          <thead><tr><th>Empreendimento</th><th className="dir">Unidades</th><th className="dir">Disponíveis</th><th className="dir">Vendas</th><th className="dir">VSO</th><th className="dir">VGV de tabela</th><th className="dir">VGV vendido</th></tr></thead>
+          <tbody>
+            {linhas.map((l) => (
+              <tr key={l.sigla}>
+                <td><strong>{l.sigla}</strong> · {l.nome}</td>
+                <td className="dir mono">{l.unidades}</td><td className="dir mono">{l.disponiveis}</td><td className="dir mono">{l.vendas}</td>
+                <td className="dir mono">{l.unidades ? `${((l.vendas / l.unidades) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</td>
+                <td className="dir mono">{brl(Number(l.vgv_tabela))}</td><td className="dir mono">{brl(Number(l.vgv_vendido))}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr><td>Total</td><td className="dir mono">{tot.unidades}</td><td className="dir mono">{tot.disponiveis}</td><td className="dir mono">{tot.vendas}</td>
+            <td className="dir mono">{tot.unidades ? `${((tot.vendas / tot.unidades) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</td>
+            <td className="dir mono">{brl(tot.vgv_tabela)}</td><td className="dir mono">{brl(tot.vgv_vendido)}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
   );
 }

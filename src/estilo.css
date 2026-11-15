@@ -912,3 +912,20 @@ body[data-pagina=meeting] { background: var(--fundo, #F4F3EE); }
 .sim-conf-fluxo input { text-align: right; }
 .sim-conf-fin { font-size: 0.8125rem; font-weight: 600; padding-bottom: 8px; }
 @media (max-width: 700px) { .sim-conf-linha { grid-template-columns: 1fr; } }
+
+/* Vários empreendimentos */
+.seletor-emp { display: flex; flex-direction: column; gap: 4px; margin: 0 14px 12px; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; }
+.seletor-emp select { font-size: 0.875rem; text-transform: none; letter-spacing: 0; padding: 7px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08); color: inherit; }
+.seletor-emp select option { color: #1d1d1b; }
+.escolha-emp { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--fundo); }
+.escolha-emp-cartao { width: min(560px, 100%); }
+.escolha-emp-lista { display: grid; gap: 10px; margin-top: 14px; }
+.escolha-emp-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--borda); border-radius: 12px; background: var(--superficie);
+  text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.escolha-emp-item:hover { border-color: var(--destaque); }
+.escolha-emp-sigla { min-width: 44px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--primaria); color: var(--primaria-texto); font-weight: 700; font-size: 0.8125rem; }
+.emp-form { border-top: 1px solid var(--borda); margin-top: 14px; padding-top: 14px; display: grid; gap: 12px; }
+.emp-acessos { border-top: 1px solid var(--borda); margin-top: 14px; padding-top: 14px; }
+.emp-acessos-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 14px; margin-top: 8px; }
+.paineis-todos { margin-left: auto; font-size: 0.8125rem; }

@@ -80,7 +80,7 @@ export function useEspelho() {
     }
     const [u, c] = await Promise.all([
       supabase.from('unidades').select('*').order('andar', { ascending: false }).order('posicao'),
-      supabase.from('config').select('nome_empreendimento, publico_ativo').eq('id', 1).single(),
+      supabase.from('config').select('nome_empreendimento, publico_ativo').limit(1).single(),
     ]);
     if (u.error || c.error) {
       setErro('Não foi possível carregar o espelho. Tentando novamente…');

@@ -36,8 +36,8 @@ export function TabelaVendas({ perfil }: { perfil: Perfil }) {
   const carregar = useCallback(async () => {
     const [t, c, m] = await Promise.all([
       supabase.from('tabelas_preco_resumo').select('*').order('criada_em', { ascending: false }),
-      supabase.from('comercial').select('mes_entrega').eq('id', 1).maybeSingle(),
-      supabase.from('config').select('nome_empreendimento, logo_url, cor_destaque').eq('id', 1).maybeSingle(),
+      supabase.from('comercial').select('mes_entrega').limit(1).maybeSingle(),
+      supabase.from('config').select('nome_empreendimento, logo_url, cor_destaque').limit(1).maybeSingle(),
     ]);
     if (t.error) { setErro(t.error.message.includes('does not exist') ? 'O banco ainda não tem a tabela de vendas (migração 110).' : traduzirErro(t.error.message)); return; }
     setTabelas((t.data ?? []) as TabelaResumo[]);

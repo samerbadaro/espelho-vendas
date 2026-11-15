@@ -14,6 +14,7 @@ import { ListaPastas, DetalhePasta } from './Pastas';
 import { Imobiliarias, Corretores } from './Imobiliarias';
 import { Paineis } from './Paineis';
 import { TabelaVendas } from './TabelaVendas';
+import { EscolhaEmpreendimento, SeletorEmpreendimento, useEmpreendimentos } from './Empreendimentos';
 import { EscolhaUnidades, useSituacaoFila } from './Fila';
 import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
@@ -326,6 +327,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   useSaidaPorInatividade(MINUTOS_INATIVIDADE, sair);
 
   const { situacao: fila } = useSituacaoFila();
+  const emps = useEmpreendimentos();
   type Item = { c: string; r: string; i: ReactNode };
   const menu: Item[] = equipe
     ? [
@@ -341,7 +343,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : []),
       ...(admin ? [
         { c: '/painel/imobiliarias', r: 'Imobiliárias e logins', i: <Building2 size={18} /> },
-        { c: '/painel/empreendimento', r: 'Empreendimento', i: <Settings size={18} /> },
+        { c: '/painel/empreendimento', r: 'Empreendimentos', i: <Settings size={18} /> },
       ] : []),
     ]
     : [
@@ -392,6 +394,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
 
   const navegar = (c: string) => (e: React.MouseEvent) => { e.preventDefault(); ir(c); };
 
+  if (emps.lista && emps.lista.length > 1 && !emps.lista[0].escolhido) return <EscolhaEmpreendimento lista={emps.lista} trocar={emps.trocar} />;
+
   return (
     <div className={`app${menuAberto ? ' menu-aberto' : ''}`}>
       <aside className="lateral" aria-label="Menu principal">
@@ -399,6 +403,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
           <a href={inicial} onClick={navegar(inicial)} className="lateral-logo"><Logo escuro /></a>
           <button className="so-celular icone-botao" onClick={() => setMenuAberto(false)} aria-label="Fechar menu"><X size={20} /></button>
         </div>
+        {emps.lista && <SeletorEmpreendimento lista={emps.lista} trocar={emps.trocar} />}
         <nav className="lateral-menu">
           {menu.map((m) => (
             <a key={m.c} href={m.c} className={ativo(m.c) ? 'ativo' : ''} aria-current={ativo(m.c) ? 'page' : undefined} onClick={navegar(m.c)}>

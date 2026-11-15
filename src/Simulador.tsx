@@ -149,7 +149,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
   const [busca, setBusca] = useState('');
 
   useEffect(() => {
-    supabase.from('comercial').select('mes_entrega').eq('id', 1).maybeSingle()
+    supabase.from('comercial').select('mes_entrega').limit(1).maybeSingle()
       .then(({ data }) => setEntrega((data as { mes_entrega?: string } | null)?.mes_entrega?.slice(0, 7) ?? null));
   }, []);
 

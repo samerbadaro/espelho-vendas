@@ -5,6 +5,7 @@ import { supabase } from './dados';
 // Marca do empreendimento (nome, cores, logos) — vem da tabela config
 // =====================================================================
 export interface Marca {
+  empreendimento_id?: string;
   nome_empreendimento: string;
   cidade: string | null;
   cor_primaria: string;
@@ -79,9 +80,10 @@ export function ProvedorMarca({ children }: { children: ReactNode }) {
   const [marca, setMarca] = useState<Marca>(marcaGuardada);
   const [carregada, setCarregada] = useState(false);
   const recarregar = useCallback(() => {
+    // a linha de configuração é a do empreendimento atual do login (o banco filtra)
     supabase.from('config')
       .select('*')
-      .eq('id', 1).single()
+      .limit(1).maybeSingle()
       .then(({ data }) => {
         if (data) {
           const m = { ...PADRAO, ...(data as Partial<Marca>) };
@@ -91,7 +93,11 @@ export function ProvedorMarca({ children }: { children: ReactNode }) {
         setCarregada(true);
       });
   }, []);
-  useEffect(() => { recarregar(); }, [recarregar]);
+  useEffect(() => {
+    recarregar();
+    const { data } = supabase.auth.onAuthStateChange((evento) => { if (evento === 'SIGNED_IN' || evento === 'SIGNED_OUT') recarregar(); });
+    return () => data.subscription.unsubscribe();
+  }, [recarregar]);
   return <MarcaCtx.Provider value={{ marca, carregada, recarregar }}>{children}</MarcaCtx.Provider>;
 }
 export const useMarca = () => useContext(MarcaCtx);
