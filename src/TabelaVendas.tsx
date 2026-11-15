@@ -567,7 +567,7 @@ function EditorCaptacoes({ t, caps, pode, venda, entrega, rpc, aoMudar }: {
                     {c.series.map((s, si) => {
                       const r = resolvidas?.[si];
                       const ini = r ? somarMeses(r.inicio.base === 'venda' ? venda : entrega, r.inicio.meses) : null;
-                      const set = (k: keyof SerieEdit, v: string | boolean) => mudar((x) => { (x[ci].series[si] as unknown as Record<string, unknown>)[k] = v; if (k === 'periodicidade' && !AUTOMATICAVEIS.includes(v as Periodicidade)) x[ci].series[si].auto = false; return x; });
+                      const set = (k: keyof SerieEdit, v: string | boolean) => mudar((x) => { (x[ci].series[si] as unknown as Record<string, unknown>)[k] = v; if (k === 'periodicidade') { if (!AUTOMATICAVEIS.includes(v as Periodicidade)) x[ci].series[si].auto = false; x[ci].series[si].fim = v === 'Semestrais' || v === 'Anuais' ? '-1' : '0'; } return x; });
                       return (
                         <tr key={si}>
                           <td>{pode ? <input className="tv-rot" value={s.rotulo} onChange={(e) => set('rotulo', e.target.value)} /> : s.rotulo}</td>
@@ -587,7 +587,7 @@ function EditorCaptacoes({ t, caps, pode, venda, entrega, rpc, aoMudar }: {
                                   {AUTOMATICAVEIS.includes(s.periodicidade) && <option value="auto">Automática</option>}
                                 </select>
                                 {s.auto
-                                  ? <> até a entrega <input className="tv-num" value={s.fim} onChange={(e) => set('fim', e.target.value)} inputMode="numeric" title="Meses em relação à entrega: 0 = pode vencer no mês da entrega; -1 = até o mês anterior" /> meses</>
+                                  ? <> até a entrega <input className="tv-num" value={s.fim} onChange={(e) => set('fim', e.target.value)} inputMode="numeric" title="Meses em relação à entrega: 0 = pode vencer no mês da entrega; -1 = até o mês anterior (padrão de semestrais e anuais)" /> meses</>
                                   : <input className="tv-num" value={s.qtd} onChange={(e) => set('qtd', e.target.value)} inputMode="numeric" />}
                               </>
                             ) : s.auto ? `Automática (até entrega ${Number(s.fim) >= 0 ? '+' : ''}${s.fim} m)` : `${s.qtd}×`}

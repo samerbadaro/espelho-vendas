@@ -155,3 +155,4 @@ Decisões de 14/11/2026: **um banco por incorporadora** (o subdomínio escolhe o
   - reajuste por % em todas, nas filtradas ou nas selecionadas; agendar a próxima tabela para um dia (0h de Brasília) ou ativar na hora;
   - propostas guardam a tabela; depois da virada, rascunhos da tabela antiga precisam ser atualizados para a vigente antes do envio; consulta da próxima tabela na tela da proposta;
   - PDF da tabela (todas as unidades ou só as disponíveis).
+- Simulador do Portal com cenários livres (`111_simulador_cenarios.sql`): de 1 a 30 cenários (tipologia, metragem, posição), cada um com 1 a 6 preços de referência, captação mínima e fluxo padrão; quantidade máxima de parcelas calculada pela entrega (semestrais e anuais até um mês antes). Poente/Nascente antigos viram dois cenários.

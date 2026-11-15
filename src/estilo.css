@@ -894,3 +894,21 @@ body[data-pagina=meeting] { background: var(--fundo, #F4F3EE); }
 
 .campos .interruptor { flex-direction: row; align-items: center; }
 .busca-simples input { border: 0 !important; box-shadow: none !important; outline: none; }
+
+/* Simulador: cenários livres */
+.sim-busca { margin: 0 0 12px; max-width: 360px; }
+.sim-fluxos { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.sim-conf-dialogo { width: min(980px, 96vw); max-height: 92vh; overflow: auto; }
+.sim-conf-lista { display: grid; gap: 12px; margin: 12px 0; }
+.sim-conf-cenario { border: 1px solid var(--borda); border-radius: 10px; padding: 12px; margin: 0; display: grid; gap: 10px; background: var(--superficie-2); }
+.sim-conf-linha { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 10px; align-items: end; }
+.sim-conf-cenario label { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; font-weight: 600; color: var(--tinta-2); }
+.sim-conf-acoes { display: flex; gap: 2px; }
+.sim-conf-precos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sim-conf-preco { display: inline-flex; gap: 4px; align-items: center; }
+.sim-conf-preco input:first-child { width: 120px; }
+.sim-conf-preco input:nth-child(2) { width: 130px; text-align: right; }
+.sim-conf-fluxo { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; align-items: end; }
+.sim-conf-fluxo input { text-align: right; }
+.sim-conf-fin { font-size: 0.8125rem; font-weight: 600; padding-bottom: 8px; }
+@media (max-width: 700px) { .sim-conf-linha { grid-template-columns: 1fr; } }
