@@ -55,6 +55,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 24. `supabase/migrations/024_modulos.sql` (ligar e desligar cada módulo na tela Empreendimento)
 25. `supabase/migrations/025_meeting_editar.sql` (editar nome, imobiliária e telefone de convidados no Meeting)
 26. `supabase/migrations/026_simulador_logs.sql` (preços e fluxos do simulador; registros de simulações e downloads do portal)
+27. `supabase/migrations/027_rodadas_vagas_pessoas.sql` (limite das rodadas conta pessoas: cliente + acompanhantes)
 
 ### Criar usuário da equipe
 

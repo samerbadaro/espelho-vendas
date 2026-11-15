@@ -4,9 +4,9 @@ create temp table rid (k text primary key, v uuid);
 grant all on rid to authenticated;
 set role authenticated;
 
--- Administrador cria duas rodadas: uma só para a Imobiliária A (limite 2), outra para todas
+-- Administrador cria duas rodadas: uma só para a Imobiliária A (limite 5 pessoas), outra para todas
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \g /dev/null
-insert into rid select 'so_a', (salvar_rodada(null, 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 2, true, false,
+insert into rid select 'so_a', (salvar_rodada(null, 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 5, true, false,
   array['aaaaaaaa-0000-0000-0000-000000000001'::uuid])).id;
 insert into rid select 'todas', (salvar_rodada(null, 'Rodada geral', now() + interval '11 days', null, null, 25, true, true, null)).id;
 do $$ begin perform salvar_rodada(null, 'Sem imobiliária', now(), null, null, 25, true, false, '{}');
@@ -52,7 +52,7 @@ do $$ begin
   raise notice '%  Vagas: 2 clientes, 5 pessoas', case when exists(select 1 from rodadas_vagas() where rodada_id=(select v from rid where k='so_a') and clientes=2 and pessoas=5) then 'OK    ' else 'FALHOU' end;
   begin perform confirmar_cliente_rodada((select v from rid where k='so_a'), array['Carlos Lima']);
     raise notice 'FALHOU  passou do limite';
-  exception when others then raise notice '%  Rodada lotada não aceita mais clientes (%)', case when sqlerrm='RODADA_LOTADA' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
+  exception when others then raise notice '%  Rodada lotada (5 pessoas) não aceita mais clientes (%)', case when sqlerrm='RODADA_LOTADA' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
   begin perform cancelar_cliente_rodada((select id from rodada_inscricoes where cliente_nome='João da Silva'));
     raise notice 'FALHOU  cancelou cliente de outro';
   exception when others then raise notice '%  Corretor não cancela cliente de outro corretor (%)', case when sqlerrm='INSCRICAO_NAO_ENCONTRADA' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
@@ -67,19 +67,22 @@ do $$ begin
   exception when others then raise notice '%  Imobiliária só visualiza, não cancela convidado do corretor (%)', case when sqlerrm='INSCRICAO_NAO_ENCONTRADA' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
 end $$;
 
--- Administrador não pode baixar o limite abaixo dos confirmados; aumenta para 3
+-- Administrador não pode baixar o limite abaixo das pessoas confirmadas; aumenta para 6
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \g /dev/null
 do $$ declare r rodadas; begin
-  begin perform salvar_rodada((select v from rid where k='so_a'), 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 1, true, false, array['aaaaaaaa-0000-0000-0000-000000000001'::uuid]);
+  begin perform salvar_rodada((select v from rid where k='so_a'), 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 4, true, false, array['aaaaaaaa-0000-0000-0000-000000000001'::uuid]);
     raise notice 'FALHOU  limite abaixo';
   exception when others then raise notice '%  Limite não fica abaixo dos confirmados (%)', case when sqlerrm='LIMITE_ABAIXO_DOS_CONFIRMADOS' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
-  r := salvar_rodada((select v from rid where k='so_a'), 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 3, true, false, array['aaaaaaaa-0000-0000-0000-000000000001'::uuid]);
-  raise notice '%  Administrador aumenta o limite para 3', case when r.limite_clientes=3 then 'OK    ' else 'FALHOU' end;
+  r := salvar_rodada((select v from rid where k='so_a'), 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 6, true, false, array['aaaaaaaa-0000-0000-0000-000000000001'::uuid]);
+  raise notice '%  Administrador aumenta o limite para 6 pessoas', case when r.limite_clientes=6 then 'OK    ' else 'FALHOU' end;
 end $$;
 
 -- Com o limite maior, o corretor 1 confirma mais um; depois cancela e a vaga volta
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c1', false) \g /dev/null
 do $$ declare i rodada_inscricoes; begin
+  begin perform confirmar_cliente_rodada((select v from rid where k='so_a'), array['Carlos Lima','Rita Lima']);
+    raise notice 'FALHOU  2 pessoas com 1 vaga';
+  exception when others then raise notice '%  Cliente + acompanhante não cabe em 1 vaga (% / resta %)', case when sqlerrm='VAGAS_INSUFICIENTES' then 'OK    ' else 'FALHOU' end, sqlerrm, 1; end;
   i := confirmar_cliente_rodada((select v from rid where k='so_a'), array['Carlos Lima']);
   raise notice '%  Nova vaga aceita o cliente', case when i.id is not null then 'OK    ' else 'FALHOU' end;
   perform cancelar_cliente_rodada(i.id);
@@ -93,7 +96,7 @@ end $$;
 
 -- Inscrições encerradas: corretor não confirma, Sec. Vendas ainda consegue
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \g /dev/null
-select salvar_rodada((select v from rid where k='so_a'), 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 3, false, false, array['aaaaaaaa-0000-0000-0000-000000000001'::uuid]) \g /dev/null
+select salvar_rodada((select v from rid where k='so_a'), 'Rodada Imobiliária A', now() + interval '10 days', 'Stand', null, 6, false, false, array['aaaaaaaa-0000-0000-0000-000000000001'::uuid]) \g /dev/null
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c1', false) \g /dev/null
 do $$ begin perform confirmar_cliente_rodada((select v from rid where k='so_a'), array['Pedro Alves']);
   raise notice 'FALHOU  confirmou com inscrições encerradas';
