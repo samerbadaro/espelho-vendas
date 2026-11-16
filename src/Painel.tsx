@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
@@ -338,6 +338,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
     ]
     : [
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
@@ -358,6 +359,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (atual === '/painel/rodadas' && rodadasAtivas) pagina = <Rodadas perfil={perfil} />;
   else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
   else if (atual === '/painel/pastas' && pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
+  else if (atual === '/painel/funil' && !equipe && funilAtivo) pagina = <Funil somenteLeitura />;
   else if (atual === '/painel/funil' && equipe && funilAtivo) pagina = <Funil />;
   else if (atual === '/painel/imobiliarias' && admin) pagina = <Imobiliarias perfil={perfil} />;
   else if (atual === '/painel/empreendimento' && admin) pagina = <Empreendimento />;
@@ -419,8 +421,25 @@ function Casca({ perfil }: { perfil: Perfil }) {
   );
 }
 
+/** Imobiliária e corretor veem só disponível ou vendida, como na TV. O andamento fica no funil. */
+const paraParceiro = (u: Unidade): Unidade => (u.status === 'disponivel' ? u : { ...u, status: 'vendida' });
+
 function EspelhoSomenteLeitura() {
-  const esp = useEspelho();
+  const real = useEspelho();
+  const unidades = useMemo(() => real.unidades.map(paraParceiro), [real.unidades]);
+  // só destaca o que mudou entre disponível e vendida (reservada -> proposta não aparece)
+  const visto = useRef<Map<string, string>>(new Map());
+  const [recentes, setRecentes] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const novos: Record<string, number> = {};
+    unidades.forEach((u) => {
+      const antes = visto.current.get(u.id);
+      if (antes !== undefined && antes !== u.status && real.recentes[u.id]) novos[u.id] = real.recentes[u.id];
+      visto.current.set(u.id, u.status);
+    });
+    if (Object.keys(novos).length) setRecentes((r) => ({ ...r, ...novos }));
+  }, [unidades, real.recentes]);
+  const esp = { ...real, unidades, recentes };
   return (
     <section className="secao larga">
       <div className="secao-topo">
@@ -428,7 +447,7 @@ function EspelhoSomenteLeitura() {
         <StatusConexao conectado={esp.conectado} />
       </div>
       <div className="cartao espelho-cartao">
-        <Resumo unidades={esp.unidades} />
+        <Resumo unidades={esp.unidades} apenas={['disponivel', 'vendida']} />
         <Predio unidades={esp.unidades} recentes={esp.recentes} />
       </div>
     </section>

@@ -793,3 +793,10 @@ small.bloco { display: block; color: var(--tinta-2); }
 /* registros do portal */
 .registros-abas { display: flex; gap: 6px; margin: 4px 0 14px; flex-wrap: wrap; }
 .tabela-registros td small { display: block; color: var(--tinta-2); }
+
+/* funil: busca e rótulos parados, só os cards rolam */
+.kanban.fixo { align-items: stretch; }
+.kanban.fixo .coluna { display: flex; flex-direction: column; min-height: 0; }
+.kanban.fixo .coluna-topo { flex-shrink: 0; }
+.kanban.fixo .coluna-cards { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; margin-right: -4px; }
+.kcard.leitura { cursor: default; }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Clock, GripVertical, Search, X } from 'lucide-react';
 import { supabase } from './dados';
 import { ir } from './util';
@@ -47,7 +47,27 @@ function diasDesde(iso: string | null) {
 }
 
 /** Funil de vendas da Sec. Vendas: pastas com documentação aprovada, por etapa. */
-export function Funil() {
+/** Altura do quadro até o pé da tela: busca e rótulos ficam parados, só os cards rolam. */
+function useAlturaQuadro() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [altura, setAltura] = useState<number | undefined>();
+  useLayoutEffect(() => {
+    const medir = () => {
+      const el = ref.current;
+      if (!el || window.innerWidth < 760) { setAltura(undefined); return; }
+      setAltura(Math.max(320, window.innerHeight - (el.getBoundingClientRect().top + window.scrollY) - 56));
+    };
+    medir();
+    window.addEventListener('resize', medir);
+    const t = setTimeout(medir, 300);
+    return () => { window.removeEventListener('resize', medir); clearTimeout(t); };
+  });
+  return { ref, altura };
+}
+
+/** Equipe move os cards; imobiliária e corretor só acompanham as próprias negociações. */
+export function Funil({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
+  const quadro = useAlturaQuadro();
   const { avisar, confirmar } = useDialogos();
   const [escolha, setEscolha] = useState<{ card: Card; etapa: Etapa } | null>(null);
   const [cards, setCards] = useState<Card[] | null>(null);
@@ -155,7 +175,9 @@ export function Funil() {
   return (
     <section className="secao larga">
       <div className="secao-topo">
-        <div><h2>Funil de vendas</h2><p className="sub">Cada unidade em negociação é um card. Arraste o card para mudar a etapa; o espelho acompanha. Para outra unidade do mesmo cliente, reserve no espelho.</p></div>
+        <div><h2>Funil de vendas</h2><p className="sub">{somenteLeitura
+          ? 'Acompanhe o andamento das suas negociações. As mudanças de etapa são feitas pela equipe de vendas.'
+          : 'Cada unidade em negociação é um card. Arraste o card para mudar a etapa; o espelho acompanha. Para outra unidade do mesmo cliente, reserve no espelho.'}</p></div>
       </div>
 
       <div className="funil-filtros">
@@ -181,27 +203,27 @@ export function Funil() {
           aoConfirmar={async (u) => { if (await executar(escolha.card, escolha.etapa, u)) setEscolha(null); }} />
       )}
       {cards === null ? <p className="vazio">Carregando…</p> : (
-        <div className="kanban">
+        <div className={`kanban${quadro.altura ? ' fixo' : ''}`} ref={quadro.ref} style={quadro.altura ? { height: quadro.altura } : undefined}>
           {ETAPAS.map((et) => {
             const lista = visiveis.filter((c) => c.etapa === et.valor);
             return (
               <div key={et.valor} className={`coluna k-${et.valor}${sobre === et.valor ? ' sobre' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setSobre(et.valor); }}
-                onDragLeave={() => setSobre((s) => (s === et.valor ? null : s))}
-                onDrop={soltar(et.valor)}>
-                <div className="coluna-topo"><div><h3>{et.rotulo}</h3><span className="coluna-espelho">Espelho: {ESPELHO[et.valor]}</span></div><span className="contagem">{lista.length}</span></div>
+                onDragOver={somenteLeitura ? undefined : (e) => { e.preventDefault(); setSobre(et.valor); }}
+                onDragLeave={somenteLeitura ? undefined : () => setSobre((s) => (s === et.valor ? null : s))}
+                onDrop={somenteLeitura ? undefined : soltar(et.valor)}>
+                <div className="coluna-topo"><div><h3>{et.rotulo}</h3>{!somenteLeitura && <span className="coluna-espelho">Espelho: {ESPELHO[et.valor]}</span>}</div><span className="contagem">{lista.length}</span></div>
                 <div className="coluna-cards">
                   {lista.length === 0 && <p className="coluna-vazia">Nenhum card nesta etapa.</p>}
                   {lista.map((c) => {
                     const dias = diasDesde(c.desde);
                     return (
-                      <article key={c.chave} className={`kcard${arrastando === c.chave ? ' arrastando' : ''}`} draggable
-                        onDragStart={(e) => { e.dataTransfer.setData('text/plain', c.chave); e.dataTransfer.effectAllowed = 'move'; setArrastando(c.chave); }}
-                        onDragEnd={() => { setArrastando(null); setSobre(null); }}>
+                      <article key={c.chave} className={`kcard${arrastando === c.chave ? ' arrastando' : ''}${somenteLeitura ? ' leitura' : ''}`} draggable={!somenteLeitura}
+                        onDragStart={somenteLeitura ? undefined : (e) => { e.dataTransfer.setData('text/plain', c.chave); e.dataTransfer.effectAllowed = 'move'; setArrastando(c.chave); }}
+                        onDragEnd={somenteLeitura ? undefined : () => { setArrastando(null); setSobre(null); }}>
                         <div className="kcard-topo">
                           <span className="mono">{c.pasta.codigo_aprovacao ?? c.pasta.codigo}</span>
                           {c.unidade && <span className="kcard-unidade">Unid. {c.unidade.numero}</span>}
-                          <GripVertical size={16} className="alca" aria-hidden="true" />
+                          {!somenteLeitura && <GripVertical size={16} className="alca" aria-hidden="true" />}
                         </div>
                         <button className="kcard-nome" onClick={() => ir(`/painel/pastas/${c.pasta.id}`)}>{c.pasta.comprador_nome}</button>
                         <p className="kcard-meta">{c.pasta.imobiliarias?.nome}{c.pasta.criado_por ? `, ${nomes[c.pasta.criado_por] ?? c.pasta.criado_por}` : ''}</p>
@@ -210,9 +232,11 @@ export function Funil() {
                         )}
                         <div className="kcard-pe">
                           {dias !== null && <span className="kcard-dias"><Clock size={13} /> {dias === 0 ? 'hoje' : `${dias} ${dias === 1 ? 'dia' : 'dias'}`}</span>}
-                          <select value={c.etapa} onChange={(e) => mover(c.chave, e.target.value as Etapa)} aria-label={`Mover ${c.pasta.comprador_nome} para outra etapa`}>
-                            {ETAPAS.map((x) => <option key={x.valor} value={x.valor}>{x.rotulo}</option>)}
-                          </select>
+                          {!somenteLeitura && (
+                            <select value={c.etapa} onChange={(e) => mover(c.chave, e.target.value as Etapa)} aria-label={`Mover ${c.pasta.comprador_nome} para outra etapa`}>
+                              {ETAPAS.map((x) => <option key={x.valor} value={x.valor}>{x.rotulo}</option>)}
+                            </select>
+                          )}
                         </div>
                       </article>
                     );
