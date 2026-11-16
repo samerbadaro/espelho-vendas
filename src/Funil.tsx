@@ -19,7 +19,7 @@ const ETAPAS: { valor: Etapa; rotulo: string }[] = [
 
 interface PastaFunil {
   id: string; codigo: string; codigo_aprovacao: string | null; comprador_nome: string;
-  etapa_atualizada_em: string | null; submetida_em: string | null; criado_por: string | null; imobiliaria_id: string;
+  etapa_atualizada_em: string | null; submetida_em: string | null; criado_por: string | null; criado_por_id: string | null; imobiliaria_id: string;
   imobiliarias: { nome: string } | null; unidades_numeros: string | null;
 }
 
@@ -78,7 +78,7 @@ export function Funil({ somenteLeitura = false }: { somenteLeitura?: boolean }) 
   const [sobre, setSobre] = useState<Etapa | null>(null);
 
   const carregar = useCallback(async () => {
-    const campos = 'id, codigo, codigo_aprovacao, comprador_nome, etapa_atualizada_em, submetida_em, criado_por, imobiliaria_id, imobiliarias(nome), unidades_numeros';
+    const campos = 'id, codigo, codigo_aprovacao, comprador_nome, etapa_atualizada_em, submetida_em, criado_por, criado_por_id, imobiliaria_id, imobiliarias(nome), unidades_numeros';
     const [pa, ng] = await Promise.all([
       supabase.from('pastas').select(campos).eq('status', 'aprovada').is('unidades_numeros', null).order('submetida_em', { ascending: true }),
       supabase.from('negociacoes').select(`unidade_id, atualizada_em, criada_em, unidades(numero, status), pastas(${campos})`)
@@ -100,9 +100,9 @@ export function Funil({ somenteLeitura = false }: { somenteLeitura?: boolean }) 
 
   useEffect(() => {
     carregar();
-    supabase.from('perfis').select('email, nome').then(({ data }) => {
+    supabase.from('perfis').select('user_id, email, nome').then(({ data }) => {
       const m: Record<string, string> = {};
-      ((data as { email: string; nome: string | null }[]) ?? []).forEach((x) => { m[x.email] = x.nome || x.email; });
+      ((data as { user_id: string; email: string; nome: string | null }[]) ?? []).forEach((x) => { m[x.user_id] = x.nome || x.email; });
       setNomes(m);
     });
   }, [carregar]);
@@ -117,7 +117,7 @@ export function Funil({ somenteLeitura = false }: { somenteLeitura?: boolean }) 
   const visiveis = (cards ?? []).filter((c) => {
     if (imob && c.pasta.imobiliaria_id !== imob) return false;
     if (!termo) return true;
-    const corretor = c.pasta.criado_por ? nomes[c.pasta.criado_por] ?? c.pasta.criado_por : '';
+    const corretor = c.pasta.criado_por_id ? nomes[c.pasta.criado_por_id] ?? '' : '';
     const alvo = [c.pasta.comprador_nome, c.pasta.imobiliarias?.nome, corretor, c.unidade?.numero,
       c.pasta.codigo, c.pasta.codigo_aprovacao].filter(Boolean).join(' ');
     return chave(alvo).includes(termo);
@@ -226,7 +226,7 @@ export function Funil({ somenteLeitura = false }: { somenteLeitura?: boolean }) 
                           {!somenteLeitura && <GripVertical size={16} className="alca" aria-hidden="true" />}
                         </div>
                         <button className="kcard-nome" onClick={() => ir(`/painel/pastas/${c.pasta.id}`)}>{c.pasta.comprador_nome}</button>
-                        <p className="kcard-meta">{c.pasta.imobiliarias?.nome}{c.pasta.criado_por ? `, ${nomes[c.pasta.criado_por] ?? c.pasta.criado_por}` : ''}</p>
+                        <p className="kcard-meta">{c.pasta.imobiliarias?.nome}{c.pasta.criado_por_id && nomes[c.pasta.criado_por_id] ? `, ${nomes[c.pasta.criado_por_id]}` : ''}</p>
                         {c.unidade && (c.pasta.unidades_numeros ?? '').includes(',') && (
                           <p className="kcard-meta">Também com: {(c.pasta.unidades_numeros ?? '').split(', ').filter((n) => n !== c.unidade!.numero).join(', ')}</p>
                         )}

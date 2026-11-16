@@ -57,6 +57,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 26. `supabase/migrations/026_simulador_logs.sql` (preços e fluxos do simulador; registros de simulações e downloads do portal)
 27. `supabase/migrations/027_rodadas_vagas_pessoas.sql` (limite das rodadas conta pessoas: cliente + acompanhantes)
 28. `supabase/migrations/028_funil_parceiros.sql` (imobiliária e corretor acompanham as próprias negociações no funil, só leitura)
+29. `supabase/migrations/029_corretor_responsavel.sql` (corretor responsável pela pasta: equipe e imobiliária atribuem)
 
 ### Criar usuário da equipe
 

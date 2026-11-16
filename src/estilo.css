@@ -800,3 +800,6 @@ small.bloco { display: block; color: var(--tinta-2); }
 .kanban.fixo .coluna-topo { flex-shrink: 0; }
 .kanban.fixo .coluna-cards { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; margin-right: -4px; }
 .kcard.leitura { cursor: default; }
+.corretor-responsavel { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin: 0 0 16px; }
+.corretor-responsavel label { min-width: 260px; }
+.corretor-responsavel .dica { margin: 0 0 8px; }
