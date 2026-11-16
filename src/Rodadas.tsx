@@ -20,9 +20,9 @@ const ERROS: Record<string, string> = {
   SEM_PERMISSAO: 'Você não tem permissão para isso.',
   NOME_OBRIGATORIO: 'Informe o nome (pelo menos 3 letras).',
   DATA_OBRIGATORIA: 'Informe a data e a hora da rodada.',
-  LIMITE_INVALIDO: 'O limite precisa ser de pelo menos 1 cliente.',
+  LIMITE_INVALIDO: 'O limite precisa ser de pelo menos 1 pessoa.',
   IMOBILIARIAS_OBRIGATORIAS: 'Escolha pelo menos uma imobiliária ou marque "Todas as imobiliárias".',
-  LIMITE_ABAIXO_DOS_CONFIRMADOS: 'O limite não pode ficar abaixo da quantidade de clientes já confirmados.',
+  LIMITE_ABAIXO_DOS_CONFIRMADOS: 'O limite não pode ficar abaixo das pessoas já confirmadas (clientes + acompanhantes).',
   RODADA_NAO_ENCONTRADA: 'Rodada não encontrada ou não liberada para a sua imobiliária.',
   INSCRICOES_ENCERRADAS: 'As confirmações desta rodada estão encerradas. Fale com a Sec. Vendas.',
   RODADA_JA_ACONTECEU: 'Esta rodada já aconteceu.',
@@ -33,7 +33,20 @@ const ERROS: Record<string, string> = {
   CLIENTE_JA_CONFIRMADO: 'Este cliente já está confirmado nesta rodada.',
   INSCRICAO_NAO_ENCONTRADA: 'Confirmação não encontrada.',
 };
-const mensagem = (e: { message: string } | null) => (e ? ERROS[e.message] ?? 'Não foi possível salvar. Tente novamente.' : '');
+const mensagem = (e: { message: string; hint?: string } | null) => {
+  if (!e) return '';
+  if (e.message === 'VAGAS_INSUFICIENTES') {
+    const n = Number(e.hint ?? 0);
+    return `${n === 1 ? 'Só resta 1 vaga' : `Só restam ${n} vagas`} nesta rodada, e cada acompanhante ocupa uma vaga. Diminua os acompanhantes ou fale com a Sec. Vendas.`;
+  }
+  if (e.message === 'LIMITE_ABAIXO_DOS_CONFIRMADOS' && e.hint) return `O limite não pode ficar abaixo das ${e.hint} pessoas já confirmadas (clientes + acompanhantes).`;
+  return ERROS[e.message] ?? 'Não foi possível salvar. Tente novamente.';
+};
+
+/** Corretor / imobiliária, sem e-mail. */
+const corretorDe = (i: { corretor_nome: string | null }) => (i.corretor_nome && !i.corretor_nome.includes('@') ? i.corretor_nome : '');
+const corretorImob = (i: { corretor_nome: string | null; imobiliarias?: { nome: string } | null }) =>
+  [corretorDe(i), i.imobiliarias?.nome ?? 'Direto'].filter(Boolean).join(' / ');
 
 /** Nomes de todos os convidados de uma confirmação (o primeiro é o cliente). */
 const convidadosDe = (i: Inscricao) => {
@@ -56,7 +69,7 @@ const paraCampoData = (iso: string) => {
 };
 
 function situacao(r: Rodada, v?: Vagas) {
-  const ocupadas = v?.clientes ?? 0;
+  const ocupadas = v?.pessoas ?? 0;
   if (new Date(r.data_hora) < new Date()) return { texto: 'Realizada', classe: 'sr-realizada' };
   if (!r.inscricoes_abertas) return { texto: 'Confirmações encerradas', classe: 'sr-encerrada' };
   if (ocupadas >= r.limite_clientes) return { texto: 'Lotada', classe: 'sr-lotada' };
@@ -64,13 +77,14 @@ function situacao(r: Rodada, v?: Vagas) {
 }
 
 function BarraVagas({ r, v }: { r: Rodada; v?: Vagas }) {
-  const ocupadas = v?.clientes ?? 0;
+  const ocupadas = v?.pessoas ?? 0;
+  const clientes = v?.clientes ?? 0;
   const pct = Math.min(100, (ocupadas / r.limite_clientes) * 100);
   return (
     <div className="vagas">
       <div className="vagas-texto">
-        <span className="vagas-principal"><strong>{ocupadas} de {r.limite_clientes}</strong> clientes confirmados</span>
-        <span>{v?.pessoas ?? 0} {(v?.pessoas ?? 0) === 1 ? 'pessoa' : 'pessoas'} no total</span>
+        <span className="vagas-principal"><strong>{ocupadas} de {r.limite_clientes}</strong> vagas preenchidas</span>
+        <span>{clientes} {clientes === 1 ? 'cliente' : 'clientes'} + {Math.max(0, ocupadas - clientes)} {ocupadas - clientes === 1 ? 'acompanhante' : 'acompanhantes'}</span>
       </div>
       <div className="vagas-barra" role="progressbar" aria-valuenow={ocupadas} aria-valuemin={0} aria-valuemax={r.limite_clientes}>
         <span style={{ width: `${pct}%` }} className={ocupadas >= r.limite_clientes ? 'cheia' : ''} />
@@ -226,7 +240,7 @@ function FormRodada({ rodada, liberadas, imobs, aoFechar, aoSalvar }: {
           <label>Data e hora
             <input type="datetime-local" value={data} onChange={(e) => setData(e.target.value)} />
           </label>
-          <label>Limite de clientes
+          <label>Limite de pessoas (clientes + acompanhantes)
             <input type="number" min={1} max={2000} value={limite} onChange={(e) => setLimite(e.target.value)} />
           </label>
           <label className="largo">Local
@@ -327,13 +341,13 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
 
   const s = situacao(rodada, vagas);
   const realizada = new Date(rodada.data_hora) < new Date();
-  const lotada = (vagas?.clientes ?? 0) >= rodada.limite_clientes;
+  const lotada = (vagas?.pessoas ?? 0) >= rodada.limite_clientes;
   const podeConfirmar = equipe ? !lotada : rodada.inscricoes_abertas && !realizada && !lotada;
   const podeAlterar = (i: Inscricao) => equipe || i.corretor_id === perfil.user_id;
   const alteravelAgora = equipe || (rodada.inscricoes_abertas && !realizada);
 
   const cancelar = async (i: Inscricao) => {
-    if (!(await confirmar({ titulo: `Cancelar a confirmação de ${i.cliente_nome}?`, texto: 'A vaga volta a ficar livre para outro cliente.', confirmar: 'Cancelar confirmação', perigo: true }))) return;
+    if (!(await confirmar({ titulo: `Cancelar a confirmação de ${i.cliente_nome}?`, texto: `${i.pessoas === 1 ? 'A vaga volta' : `As ${i.pessoas} vagas voltam`} a ficar livre${i.pessoas === 1 ? '' : 's'} para outros clientes.`, confirmar: 'Cancelar confirmação', perigo: true }))) return;
     const { error } = await supabase.rpc('cancelar_cliente_rodada', { p_id: i.id });
     if (error) { avisar(mensagem(error), 'erro'); return; }
     avisar('Confirmação cancelada.'); carregar();
@@ -350,11 +364,11 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
   const participantes = () => ordenarPorCliente(lista).flatMap((i) => convidadosDe(i).map((nome, k) => ({ i, nome, k })));
 
   const baixar = () => {
-    const cab = ['Participante', 'Tipo', 'Cliente', ...(comTelefone ? ['Telefone'] : []), 'Imobiliária', 'Corretor', 'Observação'];
+    const cab = ['Participante', 'Tipo', 'Cliente', ...(comTelefone ? ['Telefone'] : []), 'Corretor', 'Imobiliária', 'Observação'];
     const linhas = participantes().map(({ i, nome, k }) => [
       nome || '(nome não informado)', k === 0 ? 'Cliente' : 'Acompanhante', i.cliente_nome,
       ...(comTelefone ? [k === 0 ? formatarTelefone(i.telefone) : ''] : []),
-      i.imobiliarias?.nome ?? 'Direto', i.corretor_nome ?? '', k === 0 ? i.observacao ?? '' : '',
+      corretorDe(i), i.imobiliarias?.nome ?? 'Direto', k === 0 ? i.observacao ?? '' : '',
     ]);
     const csv = [cab, ...linhas].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const a = document.createElement('a');
@@ -380,10 +394,10 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
       let grupo = -1; let ultimo = '';
       autoTable(doc, {
         startY: 34,
-        head: [['#', 'Participante', 'Cliente', 'Imobiliária / corretor', 'Presença']],
+        head: [['#', 'Participante', 'Cliente', 'Corretor / Imobiliária', 'Presença']],
         body: lista2.map(({ i, nome, k }, n) => [
           String(n + 1), nome || '(nome não informado)', k === 0 ? 'Cliente' : `Acomp. de ${i.cliente_nome}`,
-          `${i.imobiliarias?.nome ?? 'Direto'}${i.corretor_nome ? `\n${i.corretor_nome}` : ''}`, '',
+          corretorImob(i), '',
         ]),
         styles: { font: 'helvetica', fontSize: 9, cellPadding: 2.2, valign: 'middle', lineColor: [220, 220, 215], lineWidth: 0.1 },
         headStyles: { fillColor: [29, 30, 25], textColor: 255, fontStyle: 'bold' },
@@ -445,7 +459,7 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
       <div className="cartao so-tela"><BarraVagas r={rodada} v={vagas} /></div>
 
       {podeConfirmar ? (
-        <FormCliente rodadaId={rodada.id} equipe={equipe} imobs={rodada.todas_imobiliarias ? imobs : imobs.filter((i) => liberadas.includes(i.id))}
+        <FormCliente rodadaId={rodada.id} equipe={equipe} restantes={Math.max(0, rodada.limite_clientes - (vagas?.pessoas ?? 0))} imobs={rodada.todas_imobiliarias ? imobs : imobs.filter((i) => liberadas.includes(i.id))}
           aoSalvar={() => carregar()} />
       ) : (
         <div className="cartao aviso-rodada so-tela">
@@ -473,7 +487,7 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
                 <tr>
                   <th>#</th><th>Cliente</th><th className="num">Pessoas</th>
                   {(!equipe || comTelefone) && <th>Telefone</th>}
-                  {(equipe || gestor) && <th>Imobiliária / corretor</th>}
+                  {(equipe || gestor) && <th>Corretor / Imobiliária</th>}
                   <th>Observação</th>
                   {equipe && <th className="so-impressao">Presença</th>}
                   <th className="so-tela" />
@@ -491,7 +505,7 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
                     </td>
                     <td className="num">{i.pessoas}</td>
                     {(!equipe || comTelefone) && <td className="nowrap">{formatarTelefone(i.telefone) || '—'}</td>}
-                    {(equipe || gestor) && <td>{i.imobiliarias?.nome ?? '—'}{i.corretor_nome ? <small className="bloco">{i.corretor_nome}</small> : null}</td>}
+                    {(equipe || gestor) && <td>{corretorDe(i) || '—'}<small className="bloco">{i.imobiliarias?.nome ?? 'Direto'}</small></td>}
                     <td>{i.observacao ?? ''}</td>
                     {equipe && <td className="so-impressao caixa-presenca" />}
                     <td className="so-tela acoes-linha">
@@ -532,18 +546,19 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
 const MAX_PESSOAS = 3;
 
 /** Quantidade de pessoas primeiro; um campo de nome completo para cada uma. */
-function CamposConvidados({ nomes, setNomes }: { nomes: string[]; setNomes: (n: string[]) => void }) {
+function CamposConvidados({ nomes, setNomes, restantes }: { nomes: string[]; setNomes: (n: string[]) => void; restantes?: number }) {
+  const teto = Math.max(1, Math.min(MAX_PESSOAS, restantes ?? MAX_PESSOAS));
   const mudarQtd = (q: number) => {
-    const n = Math.max(1, Math.min(MAX_PESSOAS, q || 1));
+    const n = Math.max(1, Math.min(teto, q || 1));
     setNomes(Array.from({ length: n }, (_, k) => nomes[k] ?? ''));
   };
   return (
     <>
       <label className="qtd-convidados">Quantas pessoas vêm
         <select value={nomes.length} onChange={(e) => mudarQtd(Number(e.target.value))}>
-          {Array.from({ length: Math.max(MAX_PESSOAS, nomes.length) }, (_, k) => k + 1).map((n) => <option key={n} value={n} disabled={n > MAX_PESSOAS && n !== nomes.length}>{n} {n === 1 ? 'pessoa' : 'pessoas'}</option>)}
+          {Array.from({ length: Math.max(MAX_PESSOAS, nomes.length) }, (_, k) => k + 1).map((n) => <option key={n} value={n} disabled={n > teto && n !== nomes.length}>{n} {n === 1 ? 'pessoa' : 'pessoas'}</option>)}
         </select>
-        <small>Contando o cliente (máximo {MAX_PESSOAS})</small>
+        <small>Contando o cliente (máximo {MAX_PESSOAS}). Cada pessoa ocupa uma vaga{restantes != null ? `; restam ${restantes}` : ''}.</small>
       </label>
       <div className="lista-convidados largo">
         {nomes.map((n, k) => (
@@ -557,7 +572,7 @@ function CamposConvidados({ nomes, setNomes }: { nomes: string[]; setNomes: (n: 
   );
 }
 
-function FormCliente({ rodadaId, equipe, imobs, aoSalvar }: { rodadaId: string; equipe: boolean; imobs: Imob[]; aoSalvar: () => void }) {
+function FormCliente({ rodadaId, equipe, imobs, restantes, aoSalvar }: { rodadaId: string; equipe: boolean; imobs: Imob[]; restantes: number; aoSalvar: () => void }) {
   const { avisar } = useDialogos();
   const [nomes, setNomes] = useState<string[]>(['']);
   const [telefone, setTelefone] = useState('');
@@ -585,7 +600,7 @@ function FormCliente({ rodadaId, equipe, imobs, aoSalvar }: { rodadaId: string; 
     <form className="cartao so-tela" onSubmit={enviar}>
       <h3>Confirmar cliente</h3>
       <div className="campos campos-cliente">
-        <CamposConvidados nomes={nomes} setNomes={setNomes} />
+        <CamposConvidados nomes={nomes} setNomes={setNomes} restantes={restantes} />
         <label>Telefone do cliente (opcional)
           <input value={formatarTelefone(telefone)} onChange={(e) => setTelefone(e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="tel" placeholder="(64) 99999-9999" />
         </label>

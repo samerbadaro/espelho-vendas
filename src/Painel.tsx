@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
@@ -360,6 +360,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
     : [
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(fila?.ativa ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
+      ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
       { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
@@ -389,6 +390,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (atual === '/painel/rodadas' && rodadasAtivas) pagina = <Rodadas perfil={perfil} />;
   else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
   else if (atual === '/painel/pastas' && pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
+  else if (atual === '/painel/funil' && !equipe && funilAtivo) pagina = <Funil somenteLeitura />;
   else if (atual === '/painel/funil' && equipe && funilAtivo) pagina = <Funil />;
   else if (atual === '/painel/imobiliarias' && admin) pagina = <Imobiliarias perfil={perfil} />;
   else if (atual === '/painel/empreendimento' && admin) pagina = <Empreendimento />;
@@ -439,7 +441,6 @@ function Casca({ perfil }: { perfil: Perfil }) {
         {equipe && (
           <div className="lateral-links">
             {tvAtiva && <a href="/tv" target="_blank" rel="noreferrer"><Tv size={16} /><span>Modo TV</span></a>}
-            <a href="/" target="_blank" rel="noreferrer"><ExternalLink size={16} /><span>Link público</span></a>
           </div>
         )}
         <div className="lateral-usuario">
@@ -465,8 +466,25 @@ function Casca({ perfil }: { perfil: Perfil }) {
   );
 }
 
+/** Imobiliária e corretor veem só disponível ou vendida, como na TV. O andamento fica no funil. */
+const paraParceiro = (u: Unidade): Unidade => (u.status === 'disponivel' ? u : { ...u, status: 'vendida' });
+
 function EspelhoSomenteLeitura() {
-  const esp = useEspelho();
+  const real = useEspelho();
+  const unidades = useMemo(() => real.unidades.map(paraParceiro), [real.unidades]);
+  // só destaca o que mudou entre disponível e vendida (reservada -> proposta não aparece)
+  const visto = useRef<Map<string, string>>(new Map());
+  const [recentes, setRecentes] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const novos: Record<string, number> = {};
+    unidades.forEach((u) => {
+      const antes = visto.current.get(u.id);
+      if (antes !== undefined && antes !== u.status && real.recentes[u.id]) novos[u.id] = real.recentes[u.id];
+      visto.current.set(u.id, u.status);
+    });
+    if (Object.keys(novos).length) setRecentes((r) => ({ ...r, ...novos }));
+  }, [unidades, real.recentes]);
+  const esp = { ...real, unidades, recentes };
   return (
     <section className="secao larga">
       <div className="secao-topo">
@@ -474,7 +492,7 @@ function EspelhoSomenteLeitura() {
         <StatusConexao conectado={esp.conectado} />
       </div>
       <div className="cartao espelho-cartao">
-        <Resumo unidades={esp.unidades} />
+        <Resumo unidades={esp.unidades} apenas={['disponivel', 'vendida']} />
         <Predio unidades={esp.unidades} recentes={esp.recentes} />
       </div>
     </section>
@@ -498,16 +516,6 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
 
   const atual = selecionada ? esp.unidades.find((u) => u.id === selecionada.id) ?? selecionada : null;
 
-  const alternarPublico = async () => {
-    if (!esp.config) return;
-    const ativar = !esp.config.publico_ativo;
-    if (!ativar && !(await confirmar({ titulo: 'Tirar o link público do ar?', texto: 'Quem estiver com o link aberto deixa de ver o espelho. A equipe e as imobiliárias logadas continuam vendo.', confirmar: 'Tirar do ar', perigo: true }))) return;
-    const { error } = await supabase.rpc('definir_publico', { p_ativo: ativar });
-    if (error) avisar('Não foi possível alterar o link público. Tente novamente.', 'erro');
-    else avisar(ativar ? 'Link público no ar.' : 'Link público fora do ar.');
-    esp.recarregar();
-  };
-
   return (
     <section className="secao larga">
       <div className="secao-topo">
@@ -521,13 +529,6 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
         </div>
 
         <aside className="painel-lateral">
-          {perfil.papel === 'admin' && esp.config && (
-            <div className="cartao">
-              <h3>Link público</h3>
-              <p className="sub">{esp.config.publico_ativo ? 'No ar. Qualquer pessoa com o link vê o espelho.' : 'Fora do ar. Só a equipe e as imobiliárias logadas veem o espelho.'}</p>
-              <button className="botao" onClick={alternarPublico}>{esp.config.publico_ativo ? 'Tirar do ar' : 'Colocar no ar'}</button>
-            </div>
-          )}
           <div className="cartao">
             <h3>Últimas alterações</h3>
             {historico.length === 0 ? <p className="vazio">Nenhuma alteração ainda.</p> : (

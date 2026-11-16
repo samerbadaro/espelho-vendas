@@ -1014,3 +1014,10 @@ body[data-pagina=meeting] { background: var(--fundo, #F4F3EE); }
 .meeting-corretor-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; align-items: end; }
 .meeting-corretor-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8125rem; font-weight: 600; }
 .meeting-corretor-form .botoes-linha { grid-column: 1 / -1; }
+
+/* funil: busca e rótulos parados, só os cards rolam */
+.kanban.fixo { align-items: stretch; }
+.kanban.fixo .coluna { display: flex; flex-direction: column; min-height: 0; }
+.kanban.fixo .coluna-topo { flex-shrink: 0; }
+.kanban.fixo .coluna-cards { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; margin-right: -4px; }
+.kcard.leitura { cursor: default; }
