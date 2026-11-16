@@ -12,7 +12,7 @@ const MODULOS: { k: ChaveModulo; titulo: string; texto: string; depende?: ChaveM
   { k: 'modulo_portal', titulo: 'Portal do Corretor', texto: 'Materiais de venda para imobiliárias e corretores baixarem.' },
   { k: 'modulo_rodadas', titulo: 'Rodadas de negócios', texto: 'Inscrição de clientes pelos corretores nas rodadas.' },
   { k: 'modulo_meeting', titulo: 'Meeting', texto: 'Lista de convidados e confirmação de presença na entrada do evento.' },
-  { k: 'modulo_espelho_parceiros', titulo: 'Espelho para imobiliárias e corretores', texto: 'Desligado, só a equipe vê o espelho dentro do painel. O link público é controlado na tela Espelho.' },
+  { k: 'modulo_espelho_parceiros', titulo: 'Espelho para imobiliárias e corretores', texto: 'Desligado, só a equipe vê o espelho dentro do painel.' },
   { k: 'modulo_tv', titulo: 'Modo TV', texto: 'Tela cheia do espelho para TVs do plantão e do stand.' },
   { k: 'modulo_cadastro', titulo: 'Cadastro de imobiliárias pelo link', texto: 'Página /cadastro, onde a imobiliária pede o acesso. Desligado, só você cria os logins.' },
 ];
@@ -63,7 +63,7 @@ export function Empreendimento() {
   return (
     <section className="secao">
       <div className="secao-topo">
-        <div><h2>Empreendimento</h2><p className="sub">Nome, identidade visual e módulos. As mudanças aparecem no painel, no link público e na TV.</p></div>
+        <div><h2>Empreendimento</h2><p className="sub">Nome, identidade visual e módulos. As mudanças aparecem no painel e na TV.</p></div>
       </div>
       <form onSubmit={salvar}>
         <div className="cartao">

@@ -395,7 +395,6 @@ function Casca({ perfil }: { perfil: Perfil }) {
         {equipe && (
           <div className="lateral-links">
             {tvAtiva && <a href="/tv" target="_blank" rel="noreferrer"><Tv size={16} /><span>Modo TV</span></a>}
-            <a href="/" target="_blank" rel="noreferrer"><ExternalLink size={16} /><span>Link público</span></a>
           </div>
         )}
         <div className="lateral-usuario">
@@ -471,16 +470,6 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
 
   const atual = selecionada ? esp.unidades.find((u) => u.id === selecionada.id) ?? selecionada : null;
 
-  const alternarPublico = async () => {
-    if (!esp.config) return;
-    const ativar = !esp.config.publico_ativo;
-    if (!ativar && !(await confirmar({ titulo: 'Tirar o link público do ar?', texto: 'Quem estiver com o link aberto deixa de ver o espelho. A equipe e as imobiliárias logadas continuam vendo.', confirmar: 'Tirar do ar', perigo: true }))) return;
-    const { error } = await supabase.rpc('definir_publico', { p_ativo: ativar });
-    if (error) avisar('Não foi possível alterar o link público. Tente novamente.', 'erro');
-    else avisar(ativar ? 'Link público no ar.' : 'Link público fora do ar.');
-    esp.recarregar();
-  };
-
   return (
     <section className="secao larga">
       <div className="secao-topo">
@@ -494,13 +483,6 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
         </div>
 
         <aside className="painel-lateral">
-          {perfil.papel === 'admin' && esp.config && (
-            <div className="cartao">
-              <h3>Link público</h3>
-              <p className="sub">{esp.config.publico_ativo ? 'No ar. Qualquer pessoa com o link vê o espelho.' : 'Fora do ar. Só a equipe e as imobiliárias logadas veem o espelho.'}</p>
-              <button className="botao" onClick={alternarPublico}>{esp.config.publico_ativo ? 'Tirar do ar' : 'Colocar no ar'}</button>
-            </div>
-          )}
           <div className="cartao">
             <h3>Últimas alterações</h3>
             {historico.length === 0 ? <p className="vazio">Nenhuma alteração ainda.</p> : (
