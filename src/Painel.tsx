@@ -289,7 +289,7 @@ function TrocarSenha({ aoTrocar, recuperacao }: { aoTrocar: () => void; recupera
   );
 }
 
-const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor' };
+const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor', recepcao: 'Recepcionista' };
 
 /** Estrutura do painel: menu lateral (no celular, barra inferior) e a página da vez. */
 function Casca({ perfil }: { perfil: Perfil }) {
@@ -301,6 +301,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const equipe = perfil.papel === 'admin' || perfil.papel === 'vendas';
   const admin = perfil.papel === 'admin';
   const gestor = perfil.papel === 'imobiliaria';
+  const recepcao = perfil.papel === 'recepcao';
   const pastasAtivas = marca.modulo_pastas;
   const funilAtivo = pastasAtivas && marca.modulo_funil !== false;
   const portalAtivo = marca.modulo_portal !== false;
@@ -311,9 +312,9 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const tvAtiva = marca.modulo_tv !== false;
 
   useEffect(() => {
-    if (!equipe) supabase.from('imobiliarias').select('nome').maybeSingle()
+    if (!equipe && !recepcao) supabase.from('imobiliarias').select('nome').maybeSingle()
       .then(({ data }) => setImob((data as { nome: string } | null)?.nome ?? ''));
-  }, [equipe]);
+  }, [equipe, recepcao]);
   useEffect(() => setMenuAberto(false), [rota]);
   useTitulo(marca.nome_empreendimento ? `Painel, ${marca.nome_empreendimento}` : undefined);
 
@@ -324,7 +325,9 @@ function Casca({ perfil }: { perfil: Perfil }) {
   useSaidaPorInatividade(MINUTOS_INATIVIDADE, sair);
 
   type Item = { c: string; r: string; i: ReactNode };
-  const menu: Item[] = equipe
+  const menu: Item[] = recepcao
+    ? (meetingAtivo ? [{ c: '/painel/recepcao', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : [])
+    : equipe
     ? [
       { c: '/painel', r: 'Início', i: <Home size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
@@ -357,7 +360,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
   const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
   const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
-  if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
+  if (recepcao) pagina = meetingAtivo ? <Recepcao /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
+  else if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
   else if (atual === '/painel/recepcao' && equipe && meetingAtivo) pagina = <Recepcao />;
   else if (idRodada && rodadasAtivas) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
   else if (atual === '/painel/treinamentos' && treinosAtivos) pagina = <Treinamentos perfil={perfil} />;
@@ -378,8 +382,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (espelhoParceiros) pagina = <EspelhoSomenteLeitura />;
   else pagina = <Aviso texto="Nenhum módulo liberado no momento. Fale com a equipe de vendas." />;
 
-  const nomeUsuario = equipe ? perfil.nome || perfil.email : gestor ? imob : perfil.nome || perfil.email;
-  const subtitulo = equipe ? PAPEL[perfil.papel] : gestor ? 'Imobiliária' : `Corretor, ${imob}`;
+  const nomeUsuario = equipe || recepcao ? perfil.nome || perfil.email : gestor ? imob : perfil.nome || perfil.email;
+  const subtitulo = equipe || recepcao ? PAPEL[perfil.papel] : gestor ? 'Imobiliária' : `Corretor, ${imob}`;
 
   const navegar = (c: string) => (e: React.MouseEvent) => { e.preventDefault(); ir(c); };
 

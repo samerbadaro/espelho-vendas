@@ -5,7 +5,7 @@ import { useDialogos } from './ui';
 
 interface Imob { id: string; nome: string; ativa: boolean; cnpj: string | null; creci_pj: string | null }
 
-const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor' };
+const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor', recepcao: 'Recepcionista' };
 
 /** Cadastro de imobiliárias e logins (somente administrador). */
 export function Imobiliarias({ perfil }: { perfil: Perfil }) {
@@ -240,7 +240,8 @@ function NovoLogin({ imobs, aoCriar }: { imobs: Imob[]; aoCriar: (email: string,
         <label>Perfil
           <select value={papel} onChange={(e) => setPapel(e.target.value as Perfil['papel'])}>
             <option value="imobiliaria">Imobiliária (vê todas as pastas dela)</option>
-            <option value="corretor">Corretor (vê só as pastas que criar)</option>
+            <option value="corretor">Corretor (vê as pastas atribuídas a ele)</option>
+            <option value="recepcao">Recepcionista (só o Meeting)</option>
             <option value="vendas">Sec. Vendas</option>
             <option value="admin">Administrador</option>
           </select>

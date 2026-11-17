@@ -60,6 +60,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 29. `supabase/migrations/029_corretor_responsavel.sql` (corretor responsável pela pasta: equipe e imobiliária atribuem)
 30. `supabase/migrations/030_treinamentos.sql` (agenda de treinamentos 18 e 19/11: inscrição por horário, presença e relatórios)
 31. `supabase/migrations/031_treinamentos_ajuste.sql` (18/11 a partir das 14h, 19/11 a partir das 9h, turmas de 20)
+32. `supabase/migrations/032_recepcionista.sql` (perfil Recepcionista: acesso só ao Meeting)
 
 ### Criar usuário da equipe
 
