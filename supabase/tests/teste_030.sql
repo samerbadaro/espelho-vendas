@@ -6,7 +6,7 @@ insert into treinamento_horarios (id, treinamento_id, inicio, limite) values
   ('00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000300', now() + interval '1 day 30 minutes', 25),
   ('00000000-0000-0000-0000-000000000303', '00000000-0000-0000-0000-000000000300', now() - interval '1 hour', 25);
 do $$ begin
-  raise notice '%  Agenda de 18 e 19/11 criada (34 horários)', case when (select count(*) from treinamento_horarios h join treinamentos t on t.id = h.treinamento_id where t.nome = 'Treinamento Duo Haus') = 34 then 'OK    ' else 'FALHOU' end;
+  raise notice '%  Agenda: 18/11 a partir das 14h e 19/11 a partir das 9h (28 turmas de 20)', case when (select count(*) from treinamento_horarios h join treinamentos t on t.id = h.treinamento_id where t.nome = 'Treinamento Duo Haus' and h.limite = 20) = 28 then 'OK    ' else 'FALHOU' end;
   raise notice '%  Primeiro às 09:00 e último às 19:00 (Brasília)', case when (select min((inicio at time zone 'America/Sao_Paulo')::time) from treinamento_horarios h join treinamentos t on t.id=h.treinamento_id where t.nome='Treinamento Duo Haus') = '09:00' and (select max((inicio at time zone 'America/Sao_Paulo')::time) from treinamento_horarios h join treinamentos t on t.id=h.treinamento_id where t.nome='Treinamento Duo Haus') = '19:00' then 'OK    ' else 'FALHOU' end;
 end $$;
 set role authenticated;

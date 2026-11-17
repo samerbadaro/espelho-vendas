@@ -59,6 +59,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 28. `supabase/migrations/028_funil_parceiros.sql` (imobiliária e corretor acompanham as próprias negociações no funil, só leitura)
 29. `supabase/migrations/029_corretor_responsavel.sql` (corretor responsável pela pasta: equipe e imobiliária atribuem)
 30. `supabase/migrations/030_treinamentos.sql` (agenda de treinamentos 18 e 19/11: inscrição por horário, presença e relatórios)
+31. `supabase/migrations/031_treinamentos_ajuste.sql` (18/11 a partir das 14h, 19/11 a partir das 9h, turmas de 20)
 
 ### Criar usuário da equipe
 

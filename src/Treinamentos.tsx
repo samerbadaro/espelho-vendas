@@ -169,7 +169,7 @@ export function Treinamentos({ perfil }: { perfil: Perfil }) {
       <div className="secao-topo">
         <div>
           <h2>Treinamentos</h2>
-          <p className="sub">{treino.nome}{treino.local ? ` · ${treino.local}` : ''}. Horários de início a cada 30 minutos, com até 25 pessoas por horário.</p>
+          <p className="sub">{treino.nome}{treino.local ? ` · ${treino.local}` : ''}. Horários de início a cada 30 minutos, com até {Math.max(0, ...horarios.map((h) => h.limite))} pessoas por turma.</p>
         </div>
         {equipe && (
           <div className="acoes-linha">
