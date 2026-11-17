@@ -310,7 +310,7 @@ export function Corretores({ perfil }: { perfil: Perfil }) {
   return (
     <section className="secao">
       <div className="secao-topo"><h2>Corretores</h2></div>
-      <p className="sub" style={{ marginTop: -8, marginBottom: 16 }}>Cada corretor vê somente as pastas que ele mesmo criar. Você vê as pastas de todos.</p>
+      <p className="sub" style={{ marginTop: -8, marginBottom: 16 }}>Cada corretor vê as pastas atribuídas a ele. Você vê as pastas de todos.</p>
       {senhaMostrada && (
         <div className="senha-gerada" role="status">
           <p>Login <strong>{senhaMostrada.email}</strong>, senha provisória <strong className="mono">{senhaMostrada.senha}</strong></p>
