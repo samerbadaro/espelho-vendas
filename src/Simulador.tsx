@@ -22,6 +22,8 @@ const RESERVA: ConfSimulador = {
 };
 const POSICOES: Record<Posicao, string> = { poente: 'Poente', nascente: 'Nascente' };
 const REFERENCIAS: Record<Referencia, string> = { a_partir: 'A partir de', medio: 'Preço médio' };
+/** Referências oferecidas ao corretor. Hoje só "a partir de"; o preço médio fica guardado, mas fora da tela. */
+const REFS: Referencia[] = ['a_partir'];
 const ORDEM: K[] = ['ato', 'sinal', 'mensais', 'periodicas', 'unica'];
 const ROTULO: Record<K, string> = { ato: 'Sinal (ato)', sinal: 'Sinal (30/60/90)', mensais: 'Mensais', periodicas: 'Semestrais', unica: 'Única' };
 const QTD_MAX: Record<K, number> = { ato: 1, sinal: 3, mensais: 43, periodicas: 7, unica: 1 };
@@ -166,7 +168,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
         <div className="sim-topo">
           <div>
             <h3>Simulador de pagamento</h3>
-            <p className="sub">Escolha a posição e a referência de preço. O fluxo padrão é montado e você ajusta como quiser.</p>
+            <p className="sub">Escolha a posição. O fluxo padrão é montado e você ajusta como quiser.</p>
           </div>
           {configurar}
         </div>
@@ -178,7 +180,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
                 <span>Captação mínima de {pctFmt(conf[pos].captacao)} · financiamento até {pctFmt(r2(100 - conf[pos].captacao))}</span>
               </div>
               <div className="sim-precos">
-                {(Object.keys(REFERENCIAS) as Referencia[]).map((ref) => (
+                {REFS.map((ref) => (
                   <button key={ref} className="sim-preco" onClick={() => iniciar(pos, ref)}>
                     <span>{REFERENCIAS[ref]}</span>
                     <strong>{brl2(conf[pos][ref])}</strong>
@@ -199,11 +201,13 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
       <div className="sim-topo">
         <div>
           <h3>Simulador · {POSICOES[escolha.pos]}</h3>
-          <div className="segmentado pequeno">
-            {(Object.keys(REFERENCIAS) as Referencia[]).map((ref) => (
-              <button key={ref} className={escolha.ref === ref ? 'ativo' : ''} onClick={() => setEscolha({ ...escolha, ref })}>{REFERENCIAS[ref]}: {brl2(conf[escolha.pos][ref])}</button>
-            ))}
-          </div>
+          {REFS.length > 1 ? (
+            <div className="segmentado pequeno">
+              {REFS.map((ref) => (
+                <button key={ref} className={escolha.ref === ref ? 'ativo' : ''} onClick={() => setEscolha({ ...escolha, ref })}>{REFERENCIAS[ref]}: {brl2(conf[escolha.pos][ref])}</button>
+              ))}
+            </div>
+          ) : <p className="sub">{REFERENCIAS[escolha.ref]} {brl2(conf[escolha.pos][escolha.ref])}</p>}
         </div>
         <div className="acoes-linha">
           <button className="botao pequeno" onClick={() => iniciar(escolha.pos, escolha.ref)}><RotateCcw size={14} /> Voltar ao padrão</button>
@@ -287,7 +291,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
 // Configuração (administrador)
 // ---------------------------------------------------------------------
 const ERROS_CONF: Record<string, string> = {
-  PRECO_INVALIDO: 'Preencha os 4 preços com valores maiores que zero.',
+  PRECO_INVALIDO: 'Preencha os 2 preços com valores maiores que zero.',
   CAPTACAO_INVALIDA: 'A captação mínima precisa estar entre 1% e 100%.',
   FLUXO_PADRAO_INVALIDO: 'Em cada posição, o fluxo padrão precisa somar pelo menos a captação mínima e no máximo 100%.',
   SEM_PERMISSAO: 'Só o administrador altera o simulador.',
@@ -310,8 +314,8 @@ function ConfigurarSimulador({ conf, aoFechar }: { conf: ConfSimulador; aoFechar
   const salvar = async (e: FormEvent) => {
     e.preventDefault(); setErro('');
     const p: ConfSimulador = {
-      poente: { a_partir: lerBR(f.poente.a_partir), medio: lerBR(f.poente.medio), captacao: Number(f.poente.captacao.replace(',', '.')), pct: f.poente.pct },
-      nascente: { a_partir: lerBR(f.nascente.a_partir), medio: lerBR(f.nascente.medio), captacao: Number(f.nascente.captacao.replace(',', '.')), pct: f.nascente.pct },
+      poente: { a_partir: lerBR(f.poente.a_partir), medio: lerBR(f.poente.a_partir), captacao: Number(f.poente.captacao.replace(',', '.')), pct: f.poente.pct },
+      nascente: { a_partir: lerBR(f.nascente.a_partir), medio: lerBR(f.nascente.a_partir), captacao: Number(f.nascente.captacao.replace(',', '.')), pct: f.nascente.pct },
     };
     if (p.poente.pct.unica > UNICA_MAX || p.nascente.pct.unica > UNICA_MAX) { setErro(`A única não pode passar de ${UNICA_MAX}% do preço.`); return; }
     const { error } = await supabase.rpc('salvar_simulador', { p });
@@ -334,7 +338,6 @@ function ConfigurarSimulador({ conf, aoFechar }: { conf: ConfSimulador; aoFechar
           <thead><tr><th></th><th>Poente</th><th>Nascente</th></tr></thead>
           <tbody>
             <tr><td>A partir de (R$)</td><td>{campo('poente', 'a_partir')}</td><td>{campo('nascente', 'a_partir')}</td></tr>
-            <tr><td>Preço médio (R$)</td><td>{campo('poente', 'medio')}</td><td>{campo('nascente', 'medio')}</td></tr>
             <tr><td>Captação mínima (%)</td><td>{campo('poente', 'captacao')}</td><td>{campo('nascente', 'captacao')}</td></tr>
             {ORDEM.map((k) => <tr key={k}><td>{ROTULO[k]} (%)</td><td>{pctCampo('poente', k)}</td><td>{pctCampo('nascente', k)}</td></tr>)}
             <tr className="sim-conf-fin"><td>Financiamento padrão</td>
