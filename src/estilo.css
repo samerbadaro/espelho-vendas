@@ -240,10 +240,10 @@ button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relati
 .acesso { min-height: 100vh; display: grid; grid-template-columns: 1.15fr 1fr; }
 .acesso-imagem {
   background: var(--primaria) center / cover no-repeat; color: var(--primaria-texto); position: relative;
-  display: flex; align-items: flex-end; padding: 36px;
+  display: flex; align-items: flex-end; justify-content: flex-end; padding: 36px;
 }
 .acesso-imagem::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, color-mix(in srgb, var(--primaria) 85%, transparent), transparent 55%); }
-.acesso-marca { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; }
+.acesso-marca { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 6px; }
 .acesso-marca .logo { max-height: 130px; max-width: 300px; }
 .acesso-marca .logo-texto { font-size: 2rem; color: var(--primaria-texto); }
 .acesso-marca span { opacity: 0.8; }
