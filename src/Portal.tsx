@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowLeft, BookOpen, Calculator, Download, ExternalLink, FileText, FolderArchive, History, Image, LifeBuoy, Link2,
-  Megaphone, Pencil, Plus, Rotate3d, Ruler, Sofa, Trash2, Upload, Video, X,
+  Megaphone, Pencil, Trophy, Plus, Rotate3d, Ruler, Sofa, Trash2, Upload, Video, X,
 } from 'lucide-react';
 import { zipSync } from 'fflate';
 import { supabase } from './dados';
@@ -26,6 +26,7 @@ const CATEGORIAS: Categoria[] = ([
   { valor: 'materiais_apoio', rotulo: 'Materiais de apoio', icone: <LifeBuoy size={22} /> },
   { valor: 'redes_sociais', rotulo: 'Material para redes sociais', icone: <Megaphone size={22} />, galeria: true },
   { valor: 'plantas', rotulo: 'Plantas', icone: <Ruler size={22} />, galeria: true },
+  { valor: 'premiacao', rotulo: 'Regras da premiação', icone: <Trophy size={22} /> },
   { valor: 'simulador', rotulo: 'Simulador', icone: <Calculator size={22} /> },
   { valor: 'tour_virtual', rotulo: 'Tour virtual', icone: <Rotate3d size={22} /> },
   { valor: 'videos', rotulo: 'Vídeos', icone: <Video size={22} /> },
