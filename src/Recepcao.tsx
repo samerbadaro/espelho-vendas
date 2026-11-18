@@ -7,7 +7,7 @@ import { useDialogos } from './ui';
 interface Evento { id: string; nome: string; data_hora: string | null }
 interface Participante {
   id: string; evento_id: string; nome: string; imobiliaria: string | null; telefone: string | null;
-  presente: boolean; chegada_em: string | null; incluido_na_hora: boolean;
+  presente: boolean; chegada_em: string | null; incluido_na_hora: boolean; numero: number | null;
 }
 
 /** Busca sem acento e sem diferença de maiúsculas. */
@@ -39,7 +39,7 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
   const carregar = useCallback(async () => {
     if (!eventoId) return;
     const { data, error } = await supabase.from('recepcao_participantes')
-      .select('id, evento_id, nome, imobiliaria, telefone, presente, chegada_em, incluido_na_hora')
+      .select('id, evento_id, nome, imobiliaria, telefone, presente, chegada_em, incluido_na_hora, numero')
       .eq('evento_id', eventoId).order('nome').limit(5000);
     if (error) { avisar('Não foi possível carregar a lista.', 'erro'); return; }
     setLista((data as Participante[]) ?? []);
@@ -71,11 +71,13 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
     setOcupado(p.id);
     // atualiza na hora; o banco confirma em seguida
     setLista((l) => l.map((x) => (x.id === p.id ? { ...x, presente, chegada_em: presente ? new Date().toISOString() : null } : x)));
-    const { error } = await supabase.rpc('marcar_presenca', { p_id: p.id, p_presente: presente });
+    const { data, error } = await supabase.rpc('marcar_presenca', { p_id: p.id, p_presente: presente });
     setOcupado(null);
     if (error) { avisar('Não foi possível salvar. Tente de novo.', 'erro'); carregar(); return; }
+    const numero = (data as { numero?: number | null } | null)?.numero ?? null;
+    setLista((l) => l.map((x) => (x.id === p.id ? { ...x, numero } : x)));
     if (presente) {
-      avisar(`${p.nome} confirmado(a).`);
+      avisar(numero ? `${p.nome} confirmado(a) · nº ${numero}` : `${p.nome} confirmado(a).`);
       setBusca('');
       campo.current?.focus();
     } else {
@@ -179,10 +181,10 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
 
       autoTable(doc, {
         startY: 30,
-        head: [['#', 'Nome', 'Chegada', 'Observação']],
+        head: [['Nº', 'Nome', 'Chegada', 'Observação']],
         body: linhas.map((l) => l.tipo === 'grupo'
           ? [{ content: `${l.nome}  ·  ${l.qtd} ${l.qtd === 1 ? 'presente' : 'presentes'}`, colSpan: 4 }]
-          : [String(l.n), l.p.nome, hora(l.p.chegada_em), l.p.incluido_na_hora ? 'Incluído na hora' : '']),
+          : [l.p.numero != null ? String(l.p.numero) : String(l.n), l.p.nome, hora(l.p.chegada_em), l.p.incluido_na_hora ? 'Incluído na hora' : '']),
         styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 2.2, lineColor: [225, 220, 214], lineWidth: 0.1, valign: 'middle' },
         headStyles: { fillColor: escuro, textColor: 255, fontStyle: 'bold' },
         columnStyles: { 0: { cellWidth: 11, halign: 'right', textColor: cinza }, 2: { cellWidth: 22, halign: 'center' }, 3: { cellWidth: 38, textColor: cinza } },
@@ -303,6 +305,7 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
             <ul className="lista-recepcao">
               {confirmados.map((p) => (
                 <li key={p.id}>
+                  {p.numero != null && <span className="numero-presenca" title="Número de presença (sorteio)">{p.numero}</span>}
                   <div className="pessoa">
                     <strong>{p.nome}</strong>
                     <span>{[p.imobiliaria, `chegou às ${hora(p.chegada_em)}`, p.incluido_na_hora ? 'incluído na hora' : ''].filter(Boolean).join(' · ')}</span>
@@ -319,9 +322,9 @@ export function Recepcao({ eventoFixo }: { eventoFixo?: string } = {}) {
       </div>
 
       {editando && <IncluirPessoa eventoId={eventoId} nomeInicial="" participante={editando} imobiliarias={imobsDaLista} aoFechar={() => setEditando(null)}
-        aoSalvar={(nome, confirmou) => { setEditando(null); avisar(confirmou ? `${nome}: dados salvos e presença confirmada.` : `${nome}: dados salvos.`); carregar(); }} />}
+        aoSalvar={(nome, confirmou, numero) => { setEditando(null); avisar(confirmou ? `${nome}: dados salvos e presença confirmada${numero ? ` · nº ${numero}` : ''}.` : `${nome}: dados salvos.`); carregar(); }} />}
       {incluindo && <IncluirPessoa eventoId={eventoId} nomeInicial={busca} imobiliarias={imobsDaLista} aoFechar={() => setIncluindo(false)}
-        aoSalvar={(nome) => { setIncluindo(false); setBusca(''); avisar(`${nome} incluído(a) e confirmado(a).`); carregar(); }} />}
+        aoSalvar={(nome, _c, numero) => { setIncluindo(false); setBusca(''); avisar(`${nome} incluído(a) e confirmado(a)${numero ? ` · nº ${numero}` : ''}.`); carregar(); }} />}
     </section>
   );
 }
@@ -331,7 +334,7 @@ const NOVA = '__nova__';
 /** Incluir quem não está na lista ou, com `participante`, editar os dados de um convidado. */
 function IncluirPessoa({ eventoId, nomeInicial, participante, imobiliarias, aoFechar, aoSalvar }: {
   eventoId: string; nomeInicial: string; participante?: Participante; imobiliarias: string[];
-  aoFechar: () => void; aoSalvar: (nome: string, confirmou: boolean) => void;
+  aoFechar: () => void; aoSalvar: (nome: string, confirmou: boolean, numero?: number | null) => void;
 }) {
   const edicao = !!participante;
   const imobAtual = participante?.imobiliaria?.trim() ?? '';
@@ -358,11 +361,11 @@ function IncluirPessoa({ eventoId, nomeInicial, participante, imobiliarias, aoFe
       const igual = imobiliarias.find((i) => chave(i) === chave(nova));
       if (igual) { setEscolha(igual); setNova(''); setErro(`"${igual}" já está na lista e foi selecionada. Confira e clique de novo.`); return; }
     }
-    const { error } = edicao
+    const { data, error } = edicao
       ? await supabase.rpc('editar_participante', { p_id: participante!.id, p_nome: nome, p_imobiliaria: imob, p_telefone: tel, p_confirmar: confirmar })
       : await supabase.rpc('incluir_participante', { p_evento: eventoId, p_nome: nome, p_imobiliaria: imob, p_telefone: tel });
     if (error) { setErro(edicao ? 'Não foi possível salvar. Tente de novo.' : 'Não foi possível incluir. Tente de novo.'); return; }
-    aoSalvar(nome.trim().replace(/\s+/g, ' '), edicao ? confirmar : true);
+    aoSalvar(nome.trim().replace(/\s+/g, ' '), edicao ? confirmar : true, (data as { numero?: number | null } | null)?.numero ?? null);
   };
 
   return (

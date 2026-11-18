@@ -19,7 +19,7 @@ const json = (dados: unknown, status = 200) =>
   new Response(JSON.stringify(dados), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 const erro = (mensagem: string, status = 400) => json({ erro: mensagem }, status);
 
-const PAPEIS = ['admin', 'vendas', 'imobiliaria', 'corretor'] as const;
+const PAPEIS = ['admin', 'vendas', 'imobiliaria', 'corretor', 'recepcao'] as const;
 type Papel = (typeof PAPEIS)[number];
 const emailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const digitos = (s: unknown) => String(s ?? '').replace(/\D/g, '');

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CalendarDays, Check, Copy, Download, ExternalLink, MapPin, Plus, Search, Trash2, Users } from 'lucide-react';
+import { CalendarDays, Check, Copy, Download, ExternalLink, Gift, MapPin, Plus, Search, Trash2, Users } from 'lucide-react';
 import { supabase } from './dados';
 import { formatarTelefone, type Perfil } from './util';
 import { Logo, useDialogos, useMarca } from './ui';
 import { Recepcao } from './Recepcao';
+import { Sorteio } from './Sorteio';
 
 // =====================================================================
 // Meeting: inscrição pública (como o Sympla) + confirmação de presença.
@@ -152,6 +153,7 @@ export function MeetingPainel({ perfil: _perfil }: { perfil: Perfil }) {
   const [id, setId] = useState<string>(() => new URLSearchParams(window.location.search).get('m') ?? '');
   const [aba, setAba] = useState<'inscricoes' | 'presenca'>(() => (new URLSearchParams(window.location.search).get('aba') === 'presenca' || window.location.pathname.endsWith('/recepcao') ? 'presenca' : 'inscricoes'));
   const [editando, setEditando] = useState<Evento | 'novo' | null>(null);
+  const [sorteando, setSorteando] = useState(false);
 
   const carregar = useCallback(async (selecionar?: string) => {
     const { data } = await supabase.from('recepcao_eventos').select('id, nome, slug, data_hora, local, descricao, inscricoes_abertas, vagas, encerra_em').order('data_hora', { ascending: false, nullsFirst: false });
@@ -187,6 +189,7 @@ export function MeetingPainel({ perfil: _perfil }: { perfil: Perfil }) {
             ) : <p className="sub">Crie o primeiro meeting para abrir as inscrições.</p>}
           </div>
           <div className="botoes-linha">
+            {ev && <button className="botao" onClick={() => setSorteando(true)} title="Sorteio entre os presentes, pelo número de presença"><Gift size={16} /> Sorteio</button>}
             {ev && <button className="botao" onClick={() => setEditando(ev)}>Editar meeting</button>}
             <button className="botao principal" onClick={() => setEditando('novo')}><Plus size={16} /> Novo meeting</button>
           </div>
@@ -200,6 +203,7 @@ export function MeetingPainel({ perfil: _perfil }: { perfil: Perfil }) {
         {ev && aba === 'inscricoes' && <Inscricoes ev={ev} />}
       </section>
       {ev && aba === 'presenca' && <Recepcao key={ev.id} eventoFixo={ev.id} />}
+      {sorteando && ev && <Sorteio eventoId={ev.id} nomeMeeting={ev.nome} aoFechar={() => setSorteando(false)} />}
       {editando && <EditarMeeting ev={editando === 'novo' ? null : editando} aoFechar={() => setEditando(null)}
         aoSalvar={(novo) => { setEditando(null); carregar(novo.id); mudar({ id: novo.id, aba: 'inscricoes' }); }} />}
     </div>

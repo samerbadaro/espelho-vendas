@@ -57,6 +57,11 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 26. `supabase/migrations/026_simulador_logs.sql` (preços e fluxos do simulador; registros de simulações e downloads do portal)
 27. `supabase/migrations/027_rodadas_vagas_pessoas.sql` (limite das rodadas conta pessoas: cliente + acompanhantes)
 28. `supabase/migrations/028_funil_parceiros.sql` (imobiliária e corretor acompanham as próprias negociações no funil, só leitura)
+29. `supabase/migrations/029_corretor_responsavel.sql` (corretor responsável pela pasta: equipe e imobiliária atribuem)
+30. `supabase/migrations/030_treinamentos.sql` (agenda de treinamentos 18 e 19/11: inscrição por horário, presença e relatórios)
+31. `supabase/migrations/031_treinamentos_ajuste.sql` (18/11 a partir das 14h, 19/11 a partir das 9h, turmas de 20)
+32. `supabase/migrations/032_recepcionista.sql` (perfil Recepcionista: acesso só ao Meeting)
+33. `supabase/migrations/033_treinamentos_horarios.sql` (administrador adiciona e exclui horários de treinamento)
 
 ### Criar usuário da equipe
 
@@ -160,3 +165,4 @@ Decisões de 14/11/2026: **um banco por incorporadora** (o subdomínio escolhe o
 - Simulador do Portal com cenários livres (`111_simulador_cenarios.sql`): de 1 a 30 cenários (tipologia, metragem, posição), cada um com 1 a 6 preços de referência, captação mínima e fluxo padrão; quantidade máxima de parcelas calculada pela entrega (semestrais e anuais até um mês antes). Poente/Nascente antigos viram dois cenários.
 - Etapas B a E (`112_empreendimento_atual.sql`, testes `testes_multi.sql`): cada login trabalha num empreendimento atual (troca no topo do menu); o banco filtra espelho, pastas, propostas, tabela, Meeting, Portal e fila por ele. Configuração, dados comerciais e fila por empreendimento; códigos das pastas com sigla (DH-P-001, DH-PA-001); painel consolidado; cadastro de empreendimentos com acesso por imobiliária. Empreendimento hipotético para testes: `supabase/v2/seed_residencial_teste.sql` (RT, 25 × 5 unidades).
 - Vitrine (`113_vitrine_empreendimentos.sql`): com mais de um empreendimento, o painel abre na vitrine (cards com fachada, "a partir de", entrega, espelho, VSO e avisos; consolidado da incorporadora para a equipe). Ao entrar, o endereço passa a ser `/e/<empreendimento>/painel/...` e cada pedido ao banco leva o cabeçalho `x-empreendimento`: abas diferentes podem ficar em empreendimentos diferentes. Empreendimento ganha fase, cidade e foto da fachada.
+- Meeting: número de presença e sorteio (`115_meeting_numero_sorteio.sql`): cada confirmação recebe um número sequencial do meeting (ordem de chegada, mantido se a confirmação for desfeita); botão "Sorteio" abre tela cheia para o telão, com prêmio opcional, animação e histórico; o banco sorteia entre os presentes ainda não sorteados; ganhador ausente é registrado e o sorteio repete. Recepcionista opera o Meeting inteiro.

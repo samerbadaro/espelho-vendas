@@ -5,13 +5,14 @@ import { supabase } from './dados';
 import { useMarca, useDialogos, aplicarMarca, textoSobre, FONTES, type Marca } from './ui';
 
 type Campos = Pick<Marca, 'nome_empreendimento' | 'cidade' | 'cor_primaria' | 'cor_destaque' | 'cor_apoio' | 'fonte' | 'logo_url' | 'logo_escuro_url' | 'imagem_login_url' | ChaveModulo>;
-type ChaveModulo = 'modulo_pastas' | 'modulo_funil' | 'modulo_portal' | 'modulo_rodadas' | 'modulo_meeting' | 'modulo_tv' | 'modulo_cadastro' | 'modulo_espelho_parceiros';
+type ChaveModulo = 'modulo_treinamentos' | 'modulo_pastas' | 'modulo_funil' | 'modulo_portal' | 'modulo_rodadas' | 'modulo_meeting' | 'modulo_tv' | 'modulo_cadastro' | 'modulo_espelho_parceiros';
 
 const MODULOS: { k: ChaveModulo; titulo: string; texto: string; depende?: ChaveModulo }[] = [
   { k: 'modulo_pastas', titulo: 'Pastas de compradores', texto: 'Desligado, o sistema fica só com o espelho e o status das unidades. Pastas já criadas continuam guardadas.' },
   { k: 'modulo_funil', titulo: 'Funil de vendas', texto: 'Quadro com as reservas e vendas por etapa. Depende das Pastas.', depende: 'modulo_pastas' },
   { k: 'modulo_portal', titulo: 'Portal do Corretor', texto: 'Materiais de venda para imobiliárias e corretores baixarem.' },
   { k: 'modulo_rodadas', titulo: 'Rodadas de negócios', texto: 'Inscrição de clientes pelos corretores nas rodadas.' },
+  { k: 'modulo_treinamentos', titulo: 'Treinamentos', texto: 'Agenda de horários para corretores se inscreverem, com presença e relatórios.' },
   { k: 'modulo_meeting', titulo: 'Meeting', texto: 'Lista de convidados e confirmação de presença na entrada do evento.' },
   { k: 'modulo_espelho_parceiros', titulo: 'Espelho para imobiliárias e corretores', texto: 'Desligado, só a equipe vê o espelho dentro do painel.' },
   { k: 'modulo_tv', titulo: 'Modo TV', texto: 'Tela cheia do espelho para TVs do plantão e do stand.' },
@@ -131,16 +132,39 @@ function CampoCor({ rotulo, valor, aoMudar }: { rotulo: string; valor: string; a
   );
 }
 
+/**
+ * Fotos grandes são reduzidas no navegador antes do envio (lado maior até 2560 px, JPG de boa qualidade),
+ * para não esbarrar no limite de 5 MB e para a tela de abertura carregar rápido.
+ */
+async function prepararImagem(arq: File, capa?: boolean): Promise<File> {
+  if (!/^image\/(png|jpeg|webp)$/.test(arq.type)) return arq;
+  const MAX = 2560;
+  const bmp = await createImageBitmap(arq).catch(() => null);
+  if (!bmp) return arq;
+  const escala = Math.min(1, MAX / Math.max(bmp.width, bmp.height));
+  if (escala === 1 && arq.size <= 1.5 * 1024 * 1024) { bmp.close(); return arq; }
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * escala); c.height = Math.round(bmp.height * escala);
+  c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  // capa (foto) vira JPG; logo mantém a transparência em PNG
+  const tipo = capa || arq.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+  const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, tipo, 0.86));
+  if (!blob || blob.size >= arq.size) return arq;
+  return new File([blob], arq.name.replace(/\.\w+$/, tipo === 'image/jpeg' ? '.jpg' : '.png'), { type: tipo });
+}
+
 export function EnvioImagem({ rotulo, dica, valor, aoMudar, fundo, capa }: {
   rotulo: string; dica: string; valor: string | null; aoMudar: (v: string | null) => void; fundo?: string; capa?: boolean;
 }) {
   const entrada = useRef<HTMLInputElement>(null);
   const { avisar } = useDialogos();
   const [enviando, setEnviando] = useState(false);
-  const enviar = async (arq: File) => {
-    if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(arq.type)) { avisar('Envie PNG, JPG, WEBP ou SVG.', 'erro'); return; }
-    if (arq.size > 5 * 1024 * 1024) { avisar('A imagem passa de 5 MB.', 'erro'); return; }
+  const enviar = async (original: File) => {
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(original.type)) { avisar('Envie PNG, JPG, WEBP ou SVG.', 'erro'); return; }
     setEnviando(true);
+    const arq = await prepararImagem(original, capa);
+    if (arq.size > 5 * 1024 * 1024) { setEnviando(false); avisar('Mesmo reduzida, a imagem passa de 5 MB. Tente outra.', 'erro'); return; }
     const ext = arq.name.split('.').pop()?.toLowerCase() || 'png';
     const caminho = `${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage.from('marca').upload(caminho, arq, { contentType: arq.type, upsert: false });

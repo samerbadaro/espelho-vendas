@@ -240,10 +240,10 @@ button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relati
 .acesso { min-height: 100vh; display: grid; grid-template-columns: 1.15fr 1fr; }
 .acesso-imagem {
   background: var(--primaria) center / cover no-repeat; color: var(--primaria-texto); position: relative;
-  display: flex; align-items: flex-end; padding: 36px;
+  display: flex; align-items: flex-end; justify-content: flex-end; padding: 36px;
 }
 .acesso-imagem::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, color-mix(in srgb, var(--primaria) 85%, transparent), transparent 55%); }
-.acesso-marca { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; }
+.acesso-marca { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 6px; }
 .acesso-marca .logo { max-height: 130px; max-width: 300px; }
 .acesso-marca .logo-texto { font-size: 2rem; color: var(--primaria-texto); }
 .acesso-marca span { opacity: 0.8; }
@@ -1021,3 +1021,110 @@ body[data-pagina=meeting] { background: var(--fundo, #F4F3EE); }
 .kanban.fixo .coluna-topo { flex-shrink: 0; }
 .kanban.fixo .coluna-cards { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; margin-right: -4px; }
 .kcard.leitura { cursor: default; }
+.corretor-responsavel { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin: 0 0 16px; }
+.corretor-responsavel label { min-width: 260px; }
+.corretor-responsavel .dica { margin: 0 0 8px; }
+
+/* treinamentos */
+.treino-aviso { background: var(--superficie-2); border: 1px solid var(--borda-forte); border-radius: 12px; padding: 12px 16px; margin: 4px 0 16px; }
+.treino-aviso p { margin: 0; }
+.treino-aviso.ok { border-color: var(--disponivel); background: color-mix(in srgb, var(--disponivel) 10%, var(--superficie)); }
+.treino-dias { margin: 0 0 8px; }
+.treino-dias button { text-transform: capitalize; }
+.treino-resumo { margin: 6px 0 4px; }
+.treino-periodo { margin-top: 18px; }
+.treino-periodo h3 { margin: 0 0 10px; }
+.treino-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.treino-slot { position: relative; background: var(--superficie); border: 1px solid var(--borda-forte); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.treino-slot.meu { border-color: var(--disponivel); box-shadow: 0 0 0 2px color-mix(in srgb, var(--disponivel) 35%, transparent); }
+.treino-slot.lotado .treino-barra span { background: var(--vendida); }
+.treino-slot.passou { opacity: 0.55; }
+.treino-hora { display: flex; align-items: center; gap: 6px; font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.treino-barra { height: 6px; background: var(--superficie-2); border-radius: 4px; overflow: hidden; }
+.treino-barra span { display: block; height: 100%; background: var(--disponivel); }
+.treino-vagas { font-size: 0.875rem; color: var(--tinta-2); }
+.treino-vagas strong { color: var(--tinta); }
+.treino-selo { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 3px; font-size: 0.75rem; font-weight: 600; color: var(--disponivel); }
+.treino-imob { margin-top: 22px; }
+.treino-listas { margin-top: 26px; display: grid; gap: 14px; }
+.treino-lista { padding: 14px 16px; }
+.treino-lista-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.treino-lista-topo h3 { margin: 0; font-size: 1.125rem; }
+.treino-lista-topo .sub { font-weight: 400; font-size: 0.875rem; margin-left: 6px; }
+.treino-pessoas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 6px 14px; }
+.treino-pessoas li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; }
+.treino-pessoas li.presente { background: color-mix(in srgb, var(--disponivel) 12%, transparent); }
+.treino-check { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+.treino-check input { width: 20px; height: 20px; accent-color: var(--disponivel); flex-shrink: 0; }
+.treino-check span { display: flex; flex-direction: column; min-width: 0; }
+.treino-check small { color: var(--tinta-2); }
+
+/* Treinamentos: configuração de horários (administrador) */
+.dialogo.treino-config { width: min(760px, 100%); }
+.treino-config h3 { margin: 18px 0 8px; font-size: 1.0625rem; }
+.treino-config-novo .campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.treino-config-novo .sub { margin: 10px 0 0; }
+.treino-config-novo .dialogo-acoes { margin-top: 10px; }
+.treino-config-lista { border-top: 1px solid var(--borda); margin-top: 18px; }
+.treino-config-dia { margin-top: 12px; }
+.treino-config-dia-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.treino-config-dia-topo strong { display: inline-block; }
+.treino-config-dia-topo strong::first-letter { text-transform: uppercase; }
+.treino-config-dia-topo .botao { margin-left: auto; }
+.treino-config-dia ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 14px; }
+.treino-config-dia li { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 8px; }
+.treino-config-dia li:hover { background: var(--superficie-2); }
+.treino-config-hora { font-weight: 700; font-variant-numeric: tabular-nums; width: 52px; }
+.treino-config-dia li .sub { flex: 1; font-size: 0.875rem; }
+.treino-config-limite { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; color: var(--tinta-2); }
+.treino-config-limite input { width: 72px !important; flex-shrink: 0; padding: 4px 8px; }
+.treino-config-dia .icone-botao:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Meeting: número de presença */
+.lista-recepcao .numero-presenca { flex: none; min-width: 38px; height: 30px; padding: 0 6px; border-radius: 8px; display: grid; place-items: center;
+  background: var(--primaria); color: var(--primaria-texto); font-weight: 800; font-size: 0.9375rem; font-variant-numeric: tabular-nums; }
+
+/* Meeting: sorteio (tela cheia, pensada para o telão) */
+.sorteio { position: fixed; inset: 0; z-index: 200; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr;
+  background: radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--primaria) 78%, #fff) 0%, var(--primaria) 62%);
+  color: var(--primaria-texto); }
+.sorteio-topo { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; }
+.sorteio-marca { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 1.125rem; opacity: 0.9; }
+.sorteio-marca img { max-height: 40px; max-width: 180px; object-fit: contain; }
+.sorteio-botoes { display: flex; gap: 8px; }
+.sorteio-icone { width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.08); color: inherit;
+  display: grid; place-items: center; cursor: pointer; }
+.sorteio-icone:hover { background: rgba(255, 255, 255, 0.18); }
+.sorteio-palco { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 12px 24px 40px; text-align: center; min-width: 0; }
+.sorteio-premio { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); padding: 4px 6px; }
+.sorteio-premio input { background: transparent; border: 0; color: inherit; font: inherit; font-size: 1.25rem; text-align: center; width: min(420px, 70vw); outline: none; }
+.sorteio-premio input::placeholder { color: inherit; opacity: 0.55; }
+.sorteio-numero { font-size: clamp(7rem, 26vh, 16rem); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  min-width: 3ch; padding: 0.12em 0.3em; border-radius: 0.18em; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18); }
+.sorteio-numero.girando { opacity: 0.85; }
+.sorteio-numero.ganhou { background: var(--destaque); color: #fff; box-shadow: 0 0 0 10px color-mix(in srgb, var(--destaque) 35%, transparent), 0 20px 60px rgba(0, 0, 0, 0.35);
+  animation: sorteio-pulo 0.6s ease-out; }
+@keyframes sorteio-pulo { 0% { transform: scale(0.85); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+.sorteio-ganhador { min-height: 5.5rem; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.sorteio-ganhador strong { font-size: clamp(1.75rem, 5vh, 3rem); line-height: 1.15; }
+.sorteio-ganhador span { font-size: 1.25rem; opacity: 0.85; }
+.sorteio-ganhador em { font-style: normal; font-weight: 700; font-size: 1.125rem; padding: 4px 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); margin-top: 4px; }
+.sorteio-concorrendo { font-size: 1.25rem; opacity: 0.8; }
+.sorteio-acoes { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.sorteio-sortear { display: inline-flex; align-items: center; gap: 10px; font: inherit; font-size: 1.5rem; font-weight: 800; padding: 16px 48px; border-radius: 999px; border: 0;
+  background: #fff; color: var(--primaria); cursor: pointer; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.sorteio-sortear:disabled { opacity: 0.5; cursor: default; }
+.sorteio-ausente { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 0.9375rem; background: transparent; color: inherit; border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px; padding: 8px 18px; cursor: pointer; }
+.sorteio-historico { width: 300px; margin: 0 18px 18px 0; padding: 16px; border-radius: 14px; background: rgba(0, 0, 0, 0.18); overflow-y: auto; align-self: stretch; }
+.sorteio-historico h3 { margin: 0 0 10px; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.8; }
+.sorteio-historico ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sorteio-historico li { display: flex; align-items: center; gap: 10px; font-size: 0.875rem; }
+.sorteio-historico li.ausente { opacity: 0.5; text-decoration: line-through; }
+.sorteio-h-num { flex: none; min-width: 40px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.15); font-weight: 800; }
+.sorteio-h-nome { line-height: 1.25; }
+@media (max-width: 860px) {
+  .sorteio { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; overflow-y: auto; }
+  .sorteio-historico { width: auto; margin: 0 16px 16px; max-height: 30vh; }
+}
+.sorteio .sorteio-premio input { background: transparent !important; border: 0 !important; box-shadow: none !important; color: inherit !important; padding: 6px 0; }

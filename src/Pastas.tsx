@@ -11,7 +11,7 @@ import {
 
 interface PastaResumo {
   id: string; codigo: string; comprador_nome: string; comprador_cpf: string; status: StatusPasta;
-  criada_em: string; imobiliaria_id: string; criado_por: string | null;
+  criada_em: string; imobiliaria_id: string; criado_por: string | null; criado_por_id: string | null;
   codigo_aprovacao: string | null; submetida_em: string | null;
   imobiliarias: { nome: string } | null; unidades_numeros: string | null;
 }
@@ -31,18 +31,20 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
   const [aba, setAba] = useState<'submetidas' | 'todas'>(equipe ? 'submetidas' : 'todas');
   const verCriador = equipe || perfil.papel === 'imobiliaria';
   const [corretores, setCorretores] = useState<Record<string, string>>({});
+  /** Corretor responsável pela pasta (vazio quando ninguém foi atribuído). */
+  const nomeCriador = (p: PastaResumo) => (p.criado_por_id ? corretores[p.criado_por_id] ?? '' : '');
 
   useEffect(() => {
-    if (verCriador) supabase.from('perfis').select('email, nome').then(({ data }) => {
+    if (verCriador) supabase.from('perfis').select('user_id, email, nome').then(({ data }) => {
       const m: Record<string, string> = {};
-      ((data as { email: string; nome: string | null }[]) ?? []).forEach((x) => { m[x.email] = x.nome || x.email; });
+      ((data as { user_id: string; email: string; nome: string | null }[]) ?? []).forEach((x) => { m[x.user_id] = x.nome || x.email; });
       setCorretores(m);
     });
   }, [verCriador]);
 
   useEffect(() => {
     supabase.from('pastas')
-      .select('id, codigo, codigo_aprovacao, submetida_em, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, imobiliarias(nome), unidades_numeros')
+      .select('id, codigo, codigo_aprovacao, submetida_em, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, criado_por_id, imobiliarias(nome), unidades_numeros')
       .order('criada_em', { ascending: false })
       .then(({ data, error }) => {
         if (error) setErro('Não foi possível carregar as pastas. Recarregue a página.');
@@ -64,13 +66,12 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
       && (!t || p.comprador_nome.toLowerCase().includes(t) || p.codigo.toLowerCase().includes(t)
                 || (p.codigo_aprovacao ?? '').toLowerCase().includes(t)
         || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades_numeros ?? '').includes(t)
-        || (corretores[p.criado_por ?? ''] ?? p.criado_por ?? '').toLowerCase().includes(t))
+        || nomeCriador(p).toLowerCase().includes(t))
       && (!status || p.status === status)
       && (!imob || p.imobiliaria_id === imob));
   }, [pastas, busca, status, imob, corretores, aba]);
 
   const [verResumo, setVerResumo] = useState(false);
-  const nomeCriador = (p: PastaResumo) => (p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '');
 
   const exportar = () => {
     const cab = ['Pasta', 'Aprovação (PA)', 'Cliente', 'Corretor', 'Imobiliária', 'Unidade', 'Status', 'Data de criação', 'Data de submissão'];
@@ -105,7 +106,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
       </div>
       {verResumo && pastas && (
         <ResumoPastas pastas={pastas.filter((p) => (aba === 'todas' || p.codigo_aprovacao) && (!imob || p.imobiliaria_id === imob))}
-          chave={(p) => (equipe ? p.imobiliarias?.nome ?? '—' : nomeCriador(p) || '—')}
+          chave={(p) => (equipe ? p.imobiliarias?.nome ?? '—' : nomeCriador(p) || 'Sem corretor')}
           titulo={equipe ? 'Imobiliária' : 'Corretor'}
           escopo={aba === 'submetidas' ? 'pastas submetidas ao incorporador' : 'todas as pastas criadas'} />
       )}
@@ -141,7 +142,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
             <tr>
               <th>Pasta</th><th>Aprovação</th><th>Comprador</th><th>CPF</th>
               {equipe && <th>Imobiliária</th>}
-              {verCriador && <th>Cadastrada por</th>}
+              {verCriador && <th>Corretor</th>}
               <th>Unidade</th><th>Status</th><th>Cadastro</th>
             </tr>
           </thead>
@@ -154,7 +155,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
                 <td className="celula-titulo"><strong>{p.comprador_nome}</strong></td>
                 <td className="nowrap" data-rotulo="CPF">{formatarCPF(p.comprador_cpf)}</td>
                 {equipe && <td data-rotulo="Imobiliária">{p.imobiliarias?.nome}</td>}
-                {verCriador && <td data-rotulo="Cadastrada por">{p.criado_por ? corretores[p.criado_por] ?? p.criado_por : '—'}</td>}
+                {verCriador && <td data-rotulo="Corretor">{nomeCriador(p) || <span className="pendente">Sem corretor</span>}</td>}
                 <td data-rotulo="Unidade">{p.unidades_numeros ?? '—'}</td>
                 <td><span className={`selo sp-${p.status}`}>{rotuloPasta(p.status)}</span></td>
                 <td data-rotulo="Cadastro">{formatarData(p.criada_em)}</td>
@@ -176,11 +177,11 @@ interface Pasta {
   comprador_telefone: string | null; comprador_email: string | null; estado_civil: EstadoCivil;
   conjuge_nome: string | null; conjuge_cpf: string | null; conjuge_nascimento: string | null;
   conjuge_telefone: string | null; conjuge_email: string | null; conjuge_profissao: string | null;
-  comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criada_em: string;
+  comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criado_por_id?: string | null; criada_em: string;
   codigo_aprovacao: string | null; submetida_em: string | null; submetida_por: string | null;
   imobiliarias?: { nome: string } | null; unidades_numeros?: string | null;
 }
-type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criada_em' | 'imobiliarias' | 'unidades_numeros' | 'codigo_aprovacao' | 'submetida_em' | 'submetida_por'>;
+type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criado_por_id' | 'criada_em' | 'imobiliarias' | 'unidades_numeros' | 'codigo_aprovacao' | 'submetida_em' | 'submetida_por'>;
 
 const FORM_VAZIO: Form = {
   imobiliaria_id: '', comprador_nome: '', comprador_cpf: '', comprador_nascimento: null, comprador_telefone: '',
@@ -199,6 +200,11 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
   const [salvando, setSalvando] = useState(false);
   const [imobiliarias, setImobiliarias] = useState<{ id: string; nome: string }[]>([]);
   const [recarga, setRecarga] = useState(0);
+  const gestor = perfil.papel === 'imobiliaria';
+  const podeAtribuir = equipe || gestor;
+  const [corretorNovo, setCorretorNovo] = useState('');
+  const imobDaPasta = nova ? (equipe ? form.imobiliaria_id : perfil.imobiliaria_id ?? '') : pasta?.imobiliaria_id ?? '';
+  const corretoresImob = useCorretoresDaImobiliaria(podeAtribuir ? imobDaPasta : '');
 
   const carregar = useCallback(async () => {
     if (nova) return;
@@ -259,6 +265,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
         .insert(equipe ? { ...dados, imobiliaria_id: form.imobiliaria_id } : { ...dados } as Record<string, unknown>).select('id').single();
       setSalvando(false);
       if (error || !data) { setErro('Não foi possível criar a pasta. Confira os dados e tente novamente.'); return; }
+      if (corretorNovo) await supabase.rpc('atribuir_corretor', { p_pasta: data.id, p_corretor: corretorNovo });
       ir(`/painel/pastas/${data.id}`);
     } else {
       const { error } = await supabase.from('pastas').update(dados).eq('id', id);
@@ -289,6 +296,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
         {!nova && <span className={`selo grande sp-${pasta!.status}`}>{rotuloPasta(pasta!.status)}</span>}
       </div>
 
+      {!nova && podeAtribuir && <CorretorResponsavel pasta={pasta!} corretores={corretoresImob} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && equipe && <VincularUnidade pasta={pasta!} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && !equipe && pasta!.unidades_numeros && <p className="sub">{pasta!.unidades_numeros.includes(',') ? 'Unidades' : 'Unidade'}: <strong>{pasta!.unidades_numeros}</strong></p>}
 
@@ -304,6 +312,15 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
                 <option value="">Escolha…</option>
                 {imobiliarias.map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}
               </select>
+            </label>
+          )}
+          {nova && podeAtribuir && (
+            <label className="largo">Corretor responsável
+              <select value={corretorNovo} onChange={(e) => setCorretorNovo(e.target.value)} disabled={!imobDaPasta}>
+                <option value="">{imobDaPasta ? 'Sem corretor por enquanto' : 'Escolha a imobiliária primeiro'}</option>
+                {corretoresImob.map((c) => <option key={c.user_id} value={c.user_id}>{c.nome}</option>)}
+              </select>
+              <small>O corretor escolhido acompanha esta pasta no perfil dele, inclusive no funil.</small>
             </label>
           )}
           <label className="largo">Nome completo<input {...campo('comprador_nome')} required maxLength={160} /></label>
@@ -595,6 +612,48 @@ function LinhaDocumento({ tipo, pasta, equipe, obrigatorio, docs, aoMudar }: {
 }
 
 // ---------------------------------------------------------------------
+// Corretor responsável: quem acompanha a pasta (lista, funil e andamento)
+// ---------------------------------------------------------------------
+function useCorretoresDaImobiliaria(imobiliariaId: string) {
+  const [lista, setLista] = useState<{ user_id: string; nome: string }[]>([]);
+  useEffect(() => {
+    if (!imobiliariaId) { setLista([]); return; }
+    supabase.from('perfis').select('user_id, nome, email').eq('papel', 'corretor').eq('imobiliaria_id', imobiliariaId)
+      .then(({ data }) => setLista(((data as { user_id: string; nome: string | null; email: string }[]) ?? [])
+        .map((c) => ({ user_id: c.user_id, nome: c.nome || c.email }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))));
+  }, [imobiliariaId]);
+  return lista;
+}
+
+function CorretorResponsavel({ pasta, corretores, aoMudar }: { pasta: Pasta; corretores: { user_id: string; nome: string }[]; aoMudar: () => void }) {
+  const { avisar } = useDialogos();
+  const [salvando, setSalvando] = useState(false);
+  const atual = pasta.criado_por_id ?? '';
+  const mudar = async (novo: string) => {
+    setSalvando(true);
+    const { error } = await supabase.rpc('atribuir_corretor', { p_pasta: pasta.id, p_corretor: novo || null });
+    setSalvando(false);
+    if (error) { avisar(error.message.includes('CORRETOR_INVALIDO') ? 'Esse corretor não é da imobiliária desta pasta.' : 'Não foi possível trocar o corretor. Confira se a migração 029 foi aplicada.', 'erro'); return; }
+    avisar(novo ? `Pasta atribuída a ${corretores.find((c) => c.user_id === novo)?.nome}.` : 'A pasta ficou sem corretor.');
+    aoMudar();
+  };
+  const semNaLista = atual && !corretores.some((c) => c.user_id === atual);
+  return (
+    <div className="corretor-responsavel">
+      <label>Corretor responsável
+        <select value={atual} disabled={salvando} onChange={(e) => mudar(e.target.value)}>
+          <option value="">Sem corretor</option>
+          {semNaLista && <option value={atual}>(login removido ou de outra imobiliária)</option>}
+          {corretores.map((c) => <option key={c.user_id} value={c.user_id}>{c.nome}</option>)}
+        </select>
+      </label>
+      <span className="dica">{corretores.length ? 'Ele vê a pasta, o funil e o andamento das unidades desta venda.' : 'Esta imobiliária ainda não tem corretores cadastrados.'}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
 function HistoricoPasta({ pastaId, recarga }: { pastaId: string; recarga: number }) {
   const [itens, setItens] = useState<{ id: number; acao: string; detalhes: Record<string, unknown> | null; usuario_email: string | null; criado_em: string }[]>([]);
   useEffect(() => {
@@ -605,7 +664,7 @@ function HistoricoPasta({ pastaId, recarga }: { pastaId: string; recarga: number
   const descrever = (d: Record<string, unknown> | null) => {
     if (!d) return '';
     if (Array.isArray(d.campos)) return `Campos: ${(d.campos as string[]).map((c) => c.replace(/_/g, ' ')).join(', ')}`;
-    return [d.codigo, d.documento, d.arquivo, d.unidade && `Unidade ${d.unidade}`, d.motivo && `Motivo: ${d.motivo}`].filter(Boolean).join('; ');
+    return [d.codigo, d.documento, d.arquivo, d.unidade && `Unidade ${d.unidade}`, d.corretor && `Corretor: ${d.corretor}`, d.motivo && `Motivo: ${d.motivo}`].filter(Boolean).join('; ');
   };
   return (
     <div className="cartao">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library,
+  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap,
   FileSignature, BarChart3, ListOrdered, Table2, ArrowLeft,
 } from 'lucide-react';
 import {
@@ -22,6 +22,7 @@ import { Empreendimento } from './Empreendimento';
 import { Funil } from './Funil';
 import { Rodadas, DetalheRodada } from './Rodadas';
 import { MeetingCorretor, MeetingPainel } from './Meeting';
+import { Treinamentos } from './Treinamentos';
 import { Portal } from './Portal';
 import { ListaPropostas, PaginaProposta } from './proposta/Propostas';
 import { useRota, ir, CAMPOS_PERFIL, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, ERROS_CADASTRO, type Perfil } from './util';
@@ -295,7 +296,7 @@ function TrocarSenha({ aoTrocar, recuperacao }: { aoTrocar: () => void; recupera
   );
 }
 
-const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor' };
+const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor', recepcao: 'Recepcionista' };
 
 /** Estrutura do painel: menu lateral (no celular, barra inferior) e a página da vez. */
 function Casca({ perfil }: { perfil: Perfil }) {
@@ -307,18 +308,20 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const equipe = perfil.papel === 'admin' || perfil.papel === 'vendas';
   const admin = perfil.papel === 'admin';
   const gestor = perfil.papel === 'imobiliaria';
+  const recepcao = perfil.papel === 'recepcao';
   const pastasAtivas = marca.modulo_pastas;
   const funilAtivo = pastasAtivas && marca.modulo_funil !== false;
   const portalAtivo = marca.modulo_portal !== false;
   const rodadasAtivas = marca.modulo_rodadas !== false;
+  const treinosAtivos = (marca as { modulo_treinamentos?: boolean }).modulo_treinamentos !== false;
   const meetingAtivo = marca.modulo_meeting !== false;
   const espelhoParceiros = marca.modulo_espelho_parceiros !== false;
   const tvAtiva = marca.modulo_tv !== false;
 
   useEffect(() => {
-    if (!equipe) supabase.from('imobiliarias').select('nome').maybeSingle()
+    if (!equipe && !recepcao) supabase.from('imobiliarias').select('nome').maybeSingle()
       .then(({ data }) => setImob((data as { nome: string } | null)?.nome ?? ''));
-  }, [equipe]);
+  }, [equipe, recepcao]);
   useEffect(() => setMenuAberto(false), [rota]);
   useTitulo(marca.nome_empreendimento ? `Painel, ${marca.nome_empreendimento}` : undefined);
 
@@ -340,7 +343,9 @@ function Casca({ perfil }: { perfil: Perfil }) {
     return () => window.removeEventListener('focus', sincronizar);
   }, [idEmpAba]);
   type Item = { c: string; r: string; i: ReactNode };
-  const menu: Item[] = equipe
+  const menu: Item[] = recepcao
+    ? (meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : [])
+    : equipe
     ? [
       { c: '/painel', r: 'Painéis', i: <BarChart3 size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
@@ -351,6 +356,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(pastasAtivas ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
+      ...(treinosAtivos ? [{ c: '/painel/treinamentos', r: 'Treinamentos', i: <GraduationCap size={18} /> }] : []),
       ...(meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : []),
       ...(admin ? [
         { c: '/painel/imobiliarias', r: 'Imobiliárias e logins', i: <Building2 size={18} /> },
@@ -365,6 +371,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
+      ...(treinosAtivos ? [{ c: '/painel/treinamentos', r: 'Treinamentos', i: <GraduationCap size={18} /> }] : []),
       ...(meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : []),
       ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
       ...(espelhoParceiros ? [{ c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> }] : []),
@@ -379,7 +386,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
   const idProposta = atual.match(/^\/painel\/propostas\/([^/]+)$/)?.[1];
   const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
-  if (atual === '/painel/escolha') pagina = <EscolhaUnidades perfil={perfil} />;
+  if (recepcao) pagina = meetingAtivo ? <MeetingPainel perfil={perfil} /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
+  else if (atual === '/painel/escolha') pagina = <EscolhaUnidades perfil={perfil} />;
   else if (idProposta) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
   else if (atual === '/painel/propostas') pagina = <ListaPropostas perfil={perfil} />;
   else if (atual === '/painel/tabela') pagina = <TabelaVendas perfil={perfil} />;
@@ -387,6 +395,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if ((atual === '/painel/meeting' || atual === '/painel/recepcao') && equipe && meetingAtivo) pagina = <MeetingPainel perfil={perfil} />;
   else if (atual === '/painel/meeting' && meetingAtivo) pagina = <MeetingCorretor perfil={perfil} />;
   else if (idRodada && rodadasAtivas) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;
+  else if (atual === '/painel/treinamentos' && treinosAtivos) pagina = <Treinamentos perfil={perfil} />;
   else if (atual === '/painel/rodadas' && rodadasAtivas) pagina = <Rodadas perfil={perfil} />;
   else if (idPasta && pastasAtivas) pagina = <DetalhePasta key={idPasta} id={idPasta} perfil={perfil} />;
   else if (atual === '/painel/pastas' && pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
@@ -404,8 +413,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (espelhoParceiros) pagina = <EspelhoSomenteLeitura />;
   else pagina = <Aviso texto="Nenhum módulo liberado no momento. Fale com a equipe de vendas." />;
 
-  const nomeUsuario = equipe ? perfil.nome || perfil.email : gestor ? imob : perfil.nome || perfil.email;
-  const subtitulo = equipe ? PAPEL[perfil.papel] : gestor ? 'Imobiliária' : `Corretor, ${imob}`;
+  const nomeUsuario = equipe || recepcao ? perfil.nome || perfil.email : gestor ? imob : perfil.nome || perfil.email;
+  const subtitulo = equipe || recepcao ? PAPEL[perfil.papel] : gestor ? 'Imobiliária' : `Corretor, ${imob}`;
 
   const navegar = (c: string) => (e: React.MouseEvent) => { e.preventDefault(); ir(c); };
 
