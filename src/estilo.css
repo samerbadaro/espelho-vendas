@@ -837,3 +837,24 @@ small.bloco { display: block; color: var(--tinta-2); }
 .treino-check input { width: 20px; height: 20px; accent-color: var(--disponivel); flex-shrink: 0; }
 .treino-check span { display: flex; flex-direction: column; min-width: 0; }
 .treino-check small { color: var(--tinta-2); }
+
+/* Treinamentos: configuração de horários (administrador) */
+.dialogo.treino-config { width: min(760px, 100%); }
+.treino-config h3 { margin: 18px 0 8px; font-size: 1.0625rem; }
+.treino-config-novo .campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.treino-config-novo .sub { margin: 10px 0 0; }
+.treino-config-novo .dialogo-acoes { margin-top: 10px; }
+.treino-config-lista { border-top: 1px solid var(--borda); margin-top: 18px; }
+.treino-config-dia { margin-top: 12px; }
+.treino-config-dia-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.treino-config-dia-topo strong { display: inline-block; }
+.treino-config-dia-topo strong::first-letter { text-transform: uppercase; }
+.treino-config-dia-topo .botao { margin-left: auto; }
+.treino-config-dia ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 14px; }
+.treino-config-dia li { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 8px; }
+.treino-config-dia li:hover { background: var(--superficie-2); }
+.treino-config-hora { font-weight: 700; font-variant-numeric: tabular-nums; width: 52px; }
+.treino-config-dia li .sub { flex: 1; font-size: 0.875rem; }
+.treino-config-limite { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; color: var(--tinta-2); }
+.treino-config-limite input { width: 72px !important; flex-shrink: 0; padding: 4px 8px; }
+.treino-config-dia .icone-botao:disabled { opacity: 0.3; cursor: not-allowed; }

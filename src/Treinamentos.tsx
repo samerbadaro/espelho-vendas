@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Check, Clock, FileDown, Search, UserPlus, X } from 'lucide-react';
+import { Check, Clock, FileDown, Search, Settings, Trash2, UserPlus, X } from 'lucide-react';
 import { supabase } from './dados';
 import { useDialogos } from './ui';
 import type { Perfil } from './util';
@@ -28,6 +28,13 @@ const ERROS: Record<string, string> = {
   NOME_OBRIGATORIO: 'Informe o nome completo.',
   PRESENCA_JA_CONFIRMADA: 'A presença já foi confirmada; a inscrição não pode mais ser cancelada.',
   SEM_PERMISSAO: 'Você não tem permissão para isso.',
+  HORARIO_COM_INSCRITOS: 'Esse horário tem inscritos. Remova as inscrições antes de excluir o horário.',
+  HORARIO_NAO_ENCONTRADO: 'Esse horário já tinha sido excluído.',
+  FIM_ANTES_DO_INICIO: 'O último horário precisa ser igual ou depois do primeiro.',
+  INTERVALO_INVALIDO: 'O intervalo precisa ficar entre 5 e 480 minutos.',
+  LIMITE_INVALIDO: 'O limite de pessoas precisa ficar entre 1 e 1000.',
+  HORARIO_INVALIDO: 'Informe o dia e o horário.',
+  LIMITE_ABAIXO_DOS_INSCRITOS: 'O limite não pode ficar abaixo do número de inscritos.',
 };
 const msg = (e: { message: string } | null) => (e ? ERROS[e.message] ?? 'Não foi possível concluir. Tente de novo.' : '');
 
@@ -44,6 +51,7 @@ export function Treinamentos({ perfil }: { perfil: Perfil }) {
   const [busca, setBusca] = useState('');
   const [incluir, setIncluir] = useState<Horario | null>(null);
   const [gerando, setGerando] = useState('');
+  const [configurar, setConfigurar] = useState(false);
 
   const carregar = useCallback(async () => {
     const { data: t, error } = await supabase.from('treinamentos').select('*').order('criado_em', { ascending: false }).limit(1).maybeSingle();
@@ -169,10 +177,11 @@ export function Treinamentos({ perfil }: { perfil: Perfil }) {
       <div className="secao-topo">
         <div>
           <h2>Treinamentos</h2>
-          <p className="sub">{treino.nome}{treino.local ? ` · ${treino.local}` : ''}. Horários de início a cada 30 minutos, com até {Math.max(0, ...horarios.map((h) => h.limite))} pessoas por turma.</p>
+          <p className="sub">{treino.nome}{treino.local ? ` · ${treino.local}` : ''}. Até {Math.max(0, ...horarios.map((h) => h.limite))} pessoas por turma.</p>
         </div>
         {equipe && (
           <div className="acoes-linha">
+            {perfil.papel === 'admin' && <button className="botao" onClick={() => setConfigurar(true)}><Settings size={16} /> Configurar horários</button>}
             {perfil.papel === 'admin' && <button className="botao" onClick={alternarAbertas}>{treino.inscricoes_abertas ? 'Encerrar inscrições' : 'Reabrir inscrições'}</button>}
             <button className="botao" onClick={() => relatorio('dia')} disabled={!!gerando}><FileDown size={16} /> {gerando === 'dia' ? 'Gerando…' : 'Relatório do dia'}</button>
             <button className="botao principal" onClick={() => relatorio('consolidado')} disabled={!!gerando}><FileDown size={16} /> {gerando === 'consolidado' ? 'Gerando…' : 'Consolidado'}</button>
@@ -252,6 +261,7 @@ export function Treinamentos({ perfil }: { perfil: Perfil }) {
         </div>
       )}
       {incluir && <IncluirNoTreino horario={incluir} aoFechar={() => setIncluir(null)} aoSalvar={() => { setIncluir(null); carregar(); }} />}
+      {configurar && <ConfigurarHorarios treino={treino} horarios={horarios} vagas={vagas} diaAtual={dia} aoFechar={() => setConfigurar(false)} aoMudar={carregar} />}
     </section>
   );
 }
@@ -309,6 +319,154 @@ function IncluirNoTreino({ horario, aoFechar, aoSalvar }: { horario: Horario; ao
           <button className="botao principal">Incluir</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+const INTERVALOS = [15, 20, 30, 45, 60, 90, 120];
+const minutos = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const hhmm = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+
+/** Administrador cria e exclui horários e muda o limite de cada turma. */
+function ConfigurarHorarios({ treino, horarios, vagas, diaAtual, aoFechar, aoMudar }: {
+  treino: Treinamento; horarios: Horario[]; vagas: Record<string, Vaga>; diaAtual: string; aoFechar: () => void; aoMudar: () => void;
+}) {
+  const { avisar, confirmar } = useDialogos();
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  const [novoDia, setNovoDia] = useState(diaAtual || hoje);
+  const [ini, setIni] = useState('09:00');
+  const [fim, setFim] = useState('11:30');
+  const [intervalo, setIntervalo] = useState(30);
+  const [limite, setLimite] = useState(String(Math.max(20, ...horarios.map((h) => h.limite))));
+  const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [limites, setLimites] = useState<Record<string, string>>({});
+
+  const previa = useMemo(() => {
+    if (!ini || !fim || minutos(fim) < minutos(ini)) return [];
+    const l: string[] = [];
+    for (let m = minutos(ini); m <= minutos(fim) && l.length < 200; m += intervalo) l.push(hhmm(m));
+    return l;
+  }, [ini, fim, intervalo]);
+  const existentes = new Set(horarios.filter((h) => diaDe(h.inicio) === novoDia).map((h) => hora(h.inicio)));
+  const novos = previa.filter((h) => !existentes.has(h));
+  const porDia = useMemo(() => {
+    const m = new Map<string, Horario[]>();
+    horarios.forEach((h) => { const d = diaDe(h.inicio); m.set(d, [...(m.get(d) ?? []), h]); });
+    return [...m.entries()];
+  }, [horarios]);
+  const inscritos = (h: Horario) => vagas[h.id]?.inscritos ?? 0;
+
+  const adicionar = async (e: FormEvent) => {
+    e.preventDefault(); setErro('');
+    if (!novos.length) { setErro(previa.length ? 'Esses horários já existem nesse dia.' : 'Confira o primeiro e o último horário.'); return; }
+    setSalvando(true);
+    const { data, error } = await supabase.rpc('adicionar_horarios_treinamento', {
+      p_treinamento: treino.id, p_dia: novoDia, p_inicio: ini, p_fim: fim, p_intervalo: intervalo, p_limite: Number(limite),
+    });
+    setSalvando(false);
+    if (error) { setErro(msg(error)); return; }
+    avisar(`${data ?? novos.length} horário(s) adicionado(s) em ${rotuloDia(novoDia)}.`);
+    aoMudar();
+  };
+  const remover = async (h: Horario) => {
+    const ok = await confirmar({ titulo: `Excluir o horário das ${hora(h.inicio)}?`, texto: `${rotuloDia(diaDe(h.inicio), true)}. Ele deixa de aparecer para os corretores.`, confirmar: 'Excluir', perigo: true });
+    if (!ok) return;
+    const { error } = await supabase.rpc('remover_horario_treinamento', { p_horario: h.id });
+    if (error) { avisar(msg(error), 'erro'); return; }
+    avisar('Horário excluído.');
+    aoMudar();
+  };
+  const removerVazios = async (d: string, lista: Horario[]) => {
+    const vazios = lista.filter((h) => inscritos(h) === 0);
+    if (!vazios.length) return;
+    const ok = await confirmar({
+      titulo: `Excluir ${vazios.length} horário(s) sem inscritos?`,
+      texto: `${rotuloDia(d, true)}. Os horários com inscritos continuam.`, confirmar: 'Excluir', perigo: true,
+    });
+    if (!ok) return;
+    for (const h of vazios) {
+      const { error } = await supabase.rpc('remover_horario_treinamento', { p_horario: h.id });
+      if (error && error.message !== 'HORARIO_NAO_ENCONTRADO') { avisar(msg(error), 'erro'); break; }
+    }
+    aoMudar();
+  };
+  const salvarLimite = async (h: Horario) => {
+    const v = limites[h.id];
+    if (v === undefined || Number(v) === h.limite) return;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1) { avisar('Informe um número inteiro de pessoas.', 'erro'); setLimites((l) => ({ ...l, [h.id]: String(h.limite) })); return; }
+    const { error } = await supabase.rpc('ajustar_limite_horario', { p_horario: h.id, p_limite: n });
+    if (error) {
+      avisar(error.message === 'LIMITE_ABAIXO_DOS_INSCRITOS' ? `Esse horário já tem ${inscritos(h)} inscritos; o limite não pode ser menor.` : msg(error), 'erro');
+      setLimites((l) => ({ ...l, [h.id]: String(h.limite) }));
+      return;
+    }
+    aoMudar();
+  };
+
+  return (
+    <div className="fundo-dialogo" onClick={aoFechar}>
+      <div className="dialogo treino-config" role="dialog" aria-modal="true" aria-labelledby="cfg-treino" onClick={(e) => e.stopPropagation()}>
+        <div className="dialogo-topo">
+          <h2 id="cfg-treino">Configurar horários</h2>
+          <button className="icone-botao" onClick={aoFechar} aria-label="Fechar"><X size={20} /></button>
+        </div>
+
+        <form className="treino-config-novo" onSubmit={adicionar}>
+          <h3>Adicionar horários</h3>
+          <div className="campos">
+            <label>Dia<input type="date" value={novoDia} onChange={(e) => setNovoDia(e.target.value)} required /></label>
+            <label>Primeiro horário<input type="time" value={ini} onChange={(e) => setIni(e.target.value)} required /></label>
+            <label>Último horário<input type="time" value={fim} onChange={(e) => setFim(e.target.value)} required /></label>
+            <label>A cada
+              <select value={intervalo} onChange={(e) => setIntervalo(Number(e.target.value))}>
+                {INTERVALOS.map((m) => <option key={m} value={m}>{m < 60 ? `${m} minutos` : m === 60 ? '1 hora' : `${m / 60} horas`.replace('.', ',')}</option>)}
+              </select>
+            </label>
+            <label>Pessoas por turma<input type="number" min={1} max={1000} value={limite} onChange={(e) => setLimite(e.target.value)} required /></label>
+          </div>
+          <p className="sub">
+            {novos.length
+              ? <>Serão criados <strong>{novos.length}</strong> horário(s): {novos.slice(0, 14).join(', ')}{novos.length > 14 ? '…' : ''}.{previa.length > novos.length ? ` ${previa.length - novos.length} já existe(m) e fica(m) como está(ão).` : ''}</>
+              : previa.length ? 'Todos esses horários já existem nesse dia.' : 'O último horário precisa ser igual ou depois do primeiro.'}
+          </p>
+          {erro && <p className="erro">{erro}</p>}
+          <div className="dialogo-acoes"><button className="botao principal" disabled={salvando || !novos.length}>{salvando ? 'Adicionando…' : 'Adicionar horários'}</button></div>
+        </form>
+
+        <div className="treino-config-lista">
+          <h3>Horários cadastrados</h3>
+          {!porDia.length && <p className="vazio">Nenhum horário cadastrado.</p>}
+          {porDia.map(([d, lista]) => (
+            <div key={d} className="treino-config-dia">
+              <div className="treino-config-dia-topo">
+                <strong>{rotuloDia(d, true)}</strong>
+                <span className="sub">{lista.length} horário(s), {lista.reduce((a, h) => a + inscritos(h), 0)} inscritos</span>
+                {lista.some((h) => inscritos(h) === 0) && <button className="botao pequeno" onClick={() => removerVazios(d, lista)}><Trash2 size={14} /> Excluir os sem inscritos</button>}
+              </div>
+              <ul>
+                {lista.map((h) => {
+                  const n = inscritos(h);
+                  return (
+                    <li key={h.id}>
+                      <span className="treino-config-hora">{hora(h.inicio)}</span>
+                      <span className="sub">{n} inscrito(s)</span>
+                      <label className="treino-config-limite">Limite
+                        <input type="number" min={Math.max(1, n)} value={limites[h.id] ?? String(h.limite)}
+                          onChange={(e) => setLimites((l) => ({ ...l, [h.id]: e.target.value }))}
+                          onBlur={() => salvarLimite(h)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+                      </label>
+                      <button className="icone-botao" onClick={() => remover(h)} disabled={n > 0}
+                        aria-label={`Excluir ${hora(h.inicio)}`} title={n > 0 ? 'Tem inscritos: remova as inscrições antes' : 'Excluir horário'}><Trash2 size={16} /></button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -61,6 +61,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 30. `supabase/migrations/030_treinamentos.sql` (agenda de treinamentos 18 e 19/11: inscrição por horário, presença e relatórios)
 31. `supabase/migrations/031_treinamentos_ajuste.sql` (18/11 a partir das 14h, 19/11 a partir das 9h, turmas de 20)
 32. `supabase/migrations/032_recepcionista.sql` (perfil Recepcionista: acesso só ao Meeting)
+33. `supabase/migrations/033_treinamentos_horarios.sql` (administrador adiciona e exclui horários de treinamento)
 
 ### Criar usuário da equipe
 
