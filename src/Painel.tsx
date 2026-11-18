@@ -348,7 +348,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(treinosAtivos ? [{ c: '/painel/treinamentos', r: 'Treinamentos', i: <GraduationCap size={18} /> }] : []),
-      ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
+      ...(gestor ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
       ...(espelhoParceiros ? [{ c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> }] : []),
     ];
   if (!menu.length) menu.push({ c: '/painel/sem-modulos', r: 'Início', i: <Home size={18} /> });
