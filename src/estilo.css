@@ -865,3 +865,26 @@ small.bloco { display: block; color: var(--tinta-2); }
 .logins-topo h3 small { font-weight: 400; margin-left: 6px; }
 .logins-topo .busca-funil { min-width: 280px; }
 .logins-topo select { width: auto; }
+
+/* Simulador no celular: cada série vira um bloco (sem rolagem lateral) */
+@media (max-width: 640px) {
+  .sim-rolagem { overflow: visible; margin: 0; padding: 0; }
+  .sim-rolagem .sim-tabela { min-width: 0; }
+  .sim-tabela thead { display: none; }
+  .sim-tabela tbody tr, .sim-tabela tfoot tr { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 10px; padding: 12px 0; border-bottom: 1px solid var(--borda); }
+  .sim-tabela td { border: 0; padding: 0; }
+  .sim-tabela tbody td:nth-child(1) { font-weight: 600; }
+  .sim-tabela tbody td:nth-child(2) { justify-self: end; }
+  .sim-tabela tbody td:nth-child(3) { grid-column: 1 / -1; }
+  .sim-tabela tbody td:nth-child(4) { text-align: left; color: var(--tinta-2); font-size: 0.875rem; }
+  .sim-tabela tr.sim-fin { padding: 12px 10px; border-radius: 10px; margin-top: 4px; background: var(--superficie-2); }
+  .sim-tabela tr.sim-fin td { background: none; }
+  .sim-tabela tr.sim-fin td:nth-child(2), .sim-tabela tr.sim-fin td:nth-child(4) { display: none; }
+  .sim-tabela tr.sim-fin td:nth-child(3) { grid-column: auto; }
+  .sim-tabela tfoot td[colspan] { grid-column: auto; }
+  .sim-pct { justify-content: flex-start; }
+  .sim-fixo { padding-left: 0; }
+  .sim-rodape .acoes-linha { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; white-space: normal; }
+  .sim-rodape .acoes-linha .botao { flex: 1 1 140px; justify-content: center; margin-left: 0 !important; }
+  .sim-tabela tr.sim-fin td:nth-child(5) { grid-column: 1 / -1; text-align: right; }
+}
