@@ -129,3 +129,18 @@ do $$ begin
   raise notice '%  Função interna de aprovação fechada para todos', case when not has_function_privilege('authenticated', 'aprovar_proposta_interno(uuid, text)', 'execute')
     and not has_function_privilege('anon', 'aprovar_proposta_interno(uuid, text)', 'execute') then 'OK    ' else 'FALHOU' end;
 end $$;
+
+-- 5) Empreendimento: o administrador consegue gravar todas as chaves de módulo
+do $$ declare faltam text; begin
+  select string_agg(column_name, ', ') into faltam from information_schema.columns c
+   where table_schema = 'public' and table_name = 'config' and column_name like 'modulo%'
+     and not has_column_privilege('authenticated', 'public.config', column_name, 'UPDATE');
+  raise notice '%  Todas as chaves de módulo podem ser salvas (%)', case when faltam is null then 'OK    ' else 'FALHOU' end, coalesce(faltam, 'todas');
+end $$;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \g /dev/null
+do $$ begin
+  update config set modulo_rodadas = false, modulo_propostas = false, atualizado_em = now() where id = 1;
+  raise notice 'OK      Administrador desliga Rodadas pela tela de Empreendimento';
+exception when others then raise notice 'FALHOU  salvar Empreendimento (%)', sqlerrm; end $$;
+reset role;
