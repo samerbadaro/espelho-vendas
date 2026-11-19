@@ -65,6 +65,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 34. `supabase/migrations/034_portal_premiacao.sql` (Portal do Corretor: categoria Regras da premiação)
 35. `supabase/manutencao/035_backup_antes.sql` e depois `supabase/migrations/035_propostas.sql` (Propostas, trazidas da v2; módulo começa desligado). Para voltar atrás: `supabase/manutencao/035_reverter.sql`.
 36. `supabase/migrations/036_propostas_permissao.sql` (libera salvar a chave Propostas em Empreendimento)
+37. `supabase/migrations/037_rodadas_convite.sql` (convite da rodada: o administrador anexa; baixa quem tem cliente confirmado)
 
 ### Criar usuário da equipe
 

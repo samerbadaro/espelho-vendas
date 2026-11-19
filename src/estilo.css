@@ -888,3 +888,13 @@ small.bloco { display: block; color: var(--tinta-2); }
   .sim-rodape .acoes-linha .botao { flex: 1 1 140px; justify-content: center; margin-left: 0 !important; }
   .sim-tabela tr.sim-fin td:nth-child(5) { grid-column: 1 / -1; text-align: right; }
 }
+
+/* Convite da rodada */
+.convite-rodada { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-left: 4px solid var(--destaque); }
+.convite-icone { width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--destaque) 14%, transparent); color: var(--destaque); display: grid; place-items: center; flex-shrink: 0; }
+.convite-texto { flex: 1; min-width: 200px; }
+.convite-texto h3 { margin: 0; }
+.convite-texto .sub { margin: 2px 0 0; }
+.convite-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.convite-acoes .botao.desativado { opacity: .6; pointer-events: none; }
+@media (max-width: 640px) { .convite-acoes { width: 100%; } .convite-acoes .botao { flex: 1; justify-content: center; } }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, CalendarDays, Download, FileText, MapPin, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Download, FileText, Mail, MapPin, Pencil, Plus, Trash2, Upload, Users, X } from 'lucide-react';
 import { supabase } from './dados';
 import { formatarTelefone, ir, type Perfil } from './util';
 import { useDialogos } from './ui';
@@ -7,6 +7,7 @@ import { useDialogos } from './ui';
 interface Rodada {
   id: string; nome: string; data_hora: string; local: string | null; observacoes: string | null;
   limite_clientes: number; inscricoes_abertas: boolean; todas_imobiliarias: boolean;
+  convite_caminho?: string | null; convite_nome?: string | null; convite_tipo?: string | null;
 }
 interface Vagas { rodada_id: string; clientes: number; pessoas: number }
 interface Inscricao {
@@ -31,6 +32,7 @@ const ERROS: Record<string, string> = {
   NOME_COMPLETO_OBRIGATORIO: 'Informe nome e sobrenome de cada convidado.',
   RODADA_LOTADA: 'As vagas desta rodada acabaram. Fale com a Sec. Vendas.',
   CLIENTE_JA_CONFIRMADO: 'Este cliente já está confirmado nesta rodada.',
+  CAMINHO_INVALIDO: 'Não foi possível anexar o convite. Tente novamente.',
   INSCRICAO_NAO_ENCONTRADA: 'Confirmação não encontrada.',
 };
 const mensagem = (e: { message: string; hint?: string } | null) => {
@@ -458,9 +460,11 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
 
       <div className="cartao so-tela"><BarraVagas r={rodada} v={vagas} /></div>
 
+      <ConviteRodada rodada={rodada} admin={admin} equipe={equipe} temCliente={lista.length > 0} aoMudar={carregar} />
+
       {podeConfirmar ? (
         <FormCliente rodadaId={rodada.id} equipe={equipe} restantes={Math.max(0, rodada.limite_clientes - (vagas?.pessoas ?? 0))} imobs={rodada.todas_imobiliarias ? imobs : imobs.filter((i) => liberadas.includes(i.id))}
-          aoSalvar={() => carregar()} />
+          aoSalvar={() => { carregar(); if (rodada.convite_caminho) setTimeout(() => document.querySelector('.convite-rodada')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400); }} />
       ) : (
         <div className="cartao aviso-rodada so-tela">
           {realizada ? 'Esta rodada já aconteceu.'
@@ -539,6 +543,71 @@ export function DetalheRodada({ id, perfil }: { id: string; perfil: Perfil }) {
       )}
       {editando && <EditarCliente insc={editando} aoFechar={() => setEditando(null)} aoSalvar={() => { setEditando(null); carregar(); }} />}
     </section>
+  );
+}
+
+const nomeArquivoSeguro = (n: string) => n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-').slice(-80);
+
+/** Convite da rodada: o administrador anexa; baixa quem tem cliente confirmado (e a equipe). */
+function ConviteRodada({ rodada, admin, equipe, temCliente, aoMudar }: {
+  rodada: Rodada; admin: boolean; equipe: boolean; temCliente: boolean; aoMudar: () => void;
+}) {
+  const { avisar, confirmar } = useDialogos();
+  const [enviando, setEnviando] = useState(false);
+  const tem = !!rodada.convite_caminho;
+  if (!tem && !admin) return null;
+
+  const baixar = async () => {
+    const { data, error } = await supabase.storage.from('rodadas').createSignedUrl(rodada.convite_caminho!, 120, { download: rodada.convite_nome ?? true });
+    if (error || !data) { avisar(equipe ? 'Não foi possível baixar o convite.' : 'O convite fica disponível depois que você confirmar um cliente.', 'erro'); return; }
+    const a = document.createElement('a'); a.href = data.signedUrl; a.rel = 'noopener'; a.click();
+  };
+  const enviar = async (f: File | undefined) => {
+    if (!f) return;
+    if (!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(f.type)) { avisar('Envie uma imagem (JPG, PNG ou WebP) ou um PDF.', 'erro'); return; }
+    if (f.size > 20 * 1024 * 1024) { avisar('O convite pode ter no máximo 20 MB.', 'erro'); return; }
+    setEnviando(true);
+    const caminho = `${rodada.id}/${crypto.randomUUID()}-${nomeArquivoSeguro(f.name)}`;
+    const up = await supabase.storage.from('rodadas').upload(caminho, f, { contentType: f.type, upsert: false });
+    if (up.error) { setEnviando(false); avisar('Não foi possível enviar o convite. Tente novamente.', 'erro'); return; }
+    const { data, error } = await supabase.rpc('definir_convite_rodada', { p_rodada: rodada.id, p_caminho: caminho, p_nome: f.name, p_tipo: f.type });
+    setEnviando(false);
+    if (error) { await supabase.storage.from('rodadas').remove([caminho]); avisar(mensagem(error), 'erro'); return; }
+    if (data) await supabase.storage.from('rodadas').remove([data as string]);
+    avisar('Convite anexado. Corretores com cliente confirmado já podem baixar.');
+    aoMudar();
+  };
+  const remover = async () => {
+    if (!(await confirmar({ titulo: 'Remover o convite?', texto: 'Os corretores deixam de ver o botão de baixar.', confirmar: 'Remover', perigo: true }))) return;
+    const { data, error } = await supabase.rpc('definir_convite_rodada', { p_rodada: rodada.id, p_caminho: null });
+    if (error) { avisar(mensagem(error), 'erro'); return; }
+    if (data) await supabase.storage.from('rodadas').remove([data as string]);
+    avisar('Convite removido.');
+    aoMudar();
+  };
+
+  return (
+    <div className="cartao convite-rodada so-tela">
+      <div className="convite-icone"><Mail size={22} /></div>
+      <div className="convite-texto">
+        <h3>Convite da rodada</h3>
+        {admin && !tem && <p className="sub">Anexe o convite (imagem ou PDF). Ele fica disponível para o corretor assim que ele confirmar um cliente.</p>}
+        {tem && (equipe
+          ? <p className="sub">{rodada.convite_nome}{admin ? ' · liberado para quem tem cliente confirmado' : ''}</p>
+          : <p className="sub">{temCliente ? 'Baixe e envie ao seu cliente junto com a confirmação.' : 'Fica disponível depois que você confirmar um cliente.'}</p>)}
+      </div>
+      <div className="convite-acoes">
+        {tem && (equipe || temCliente) && <button className="botao principal" onClick={baixar}><Download size={16} /> Baixar convite</button>}
+        {admin && (
+          <label className={`botao${enviando ? ' desativado' : ''}`}>
+            <Upload size={16} /> {enviando ? 'Enviando…' : tem ? 'Trocar' : 'Anexar convite'}
+            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden disabled={enviando}
+              onChange={(e) => { enviar(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+        )}
+        {admin && tem && <button className="botao recusar" onClick={remover}><Trash2 size={16} /> Remover</button>}
+      </div>
+    </div>
   );
 }
 
