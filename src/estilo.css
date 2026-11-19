@@ -898,3 +898,6 @@ small.bloco { display: block; color: var(--tinta-2); }
 .convite-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
 .convite-acoes .botao.desativado { opacity: .6; pointer-events: none; }
 @media (max-width: 640px) { .convite-acoes { width: 100%; } .convite-acoes .botao { flex: 1; justify-content: center; } }
+
+/* Faixa do ambiente de homologação (não aparece na produção) */
+.faixa-ambiente { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 100000; background: #B0730F; color: #fff; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 14px; border-radius: 0 0 6px 6px; pointer-events: none; }

@@ -120,3 +120,15 @@ Conecte o repositório no Cloudflare Pages com estas configurações:
 - `src/Empreendimento.tsx`: nome, marca e módulos
 - `src/ui.tsx`: marca, confirmações, avisos e saída por inatividade
 - `src/estilo.css`: visual
+
+## Homologação (teste antes da produção)
+
+| | Homologação | Produção |
+|---|---|---|
+| Endereço | homolog.gestorlm.com.br | casa7.gestorlm.com.br |
+| Branch | `homologacao` | `main` |
+| Supabase | duo-haus-homolog (`iujmvrnxfwsyqpzktfjr`) | `mtlzwuiqznsyqasmdkew` |
+| Cloudflare | `espelho-vendas-homolog` (`wrangler.homolog.jsonc`, `npm run build:homolog`) | `espelho-vendas` |
+
+Fluxo: tudo entra primeiro na `homologacao` (e o SQL no banco de homologação); depois de aprovado, vai para a `main` e o mesmo SQL é rodado na produção.
+Banco novo de homologação: `sh supabase/homolog/montar.sh` gera `estrutura_completa.sql` (todas as migrações) e depois roda-se `supabase/homolog/semente.sql` (dados fictícios; tem trava contra produção).

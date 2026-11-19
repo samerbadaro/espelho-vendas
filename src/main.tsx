@@ -13,6 +13,16 @@ if (rota !== '/tv' && rota !== '/cadastro' && !painel) window.location.replace('
 const Pagina = rota === '/tv' ? TV : rota === '/cadastro' ? CadastroImobiliaria : Painel;
 document.body.dataset.pagina = rota === '/tv' ? 'tv' : 'painel';
 
+// Faixa de aviso quando não é a produção (homologação)
+const ambiente = import.meta.env.VITE_AMBIENTE as string | undefined;
+if (ambiente) {
+  const faixa = document.createElement('div');
+  faixa.className = 'faixa-ambiente';
+  faixa.textContent = ambiente;
+  document.body.prepend(faixa);
+  document.title = `[HOMOLOGAÇÃO] ${document.title}`;
+}
+
 createRoot(document.getElementById('root')!).render(
   <ProvedorMarca>
     <ProvedorDialogos>
