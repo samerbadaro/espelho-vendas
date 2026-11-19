@@ -858,3 +858,10 @@ small.bloco { display: block; color: var(--tinta-2); }
 .treino-config-limite { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; color: var(--tinta-2); }
 .treino-config-limite input { width: 72px !important; flex-shrink: 0; padding: 4px 8px; }
 .treino-config-dia .icone-botao:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Busca de logins (administrador) */
+.logins-topo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.logins-topo h3 { margin: 0; margin-right: auto; }
+.logins-topo h3 small { font-weight: 400; margin-left: 6px; }
+.logins-topo .busca-funil { min-width: 280px; }
+.logins-topo select { width: auto; }

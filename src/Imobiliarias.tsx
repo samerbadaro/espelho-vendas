@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Search } from 'lucide-react';
 import { supabase } from './dados';
 import { chamarApi, gerarSenha, CAMPOS_PERFIL, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, ERROS_CADASTRO, type Perfil } from './util';
 import { useDialogos } from './ui';
 
 interface Imob { id: string; nome: string; ativa: boolean; cnpj: string | null; creci_pj: string | null }
+
+const semAcento = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 const PAPEL: Record<Perfil['papel'], string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor', recepcao: 'Recepcionista' };
 
@@ -14,6 +17,8 @@ export function Imobiliarias({ perfil }: { perfil: Perfil }) {
   const [usuarios, setUsuarios] = useState<Perfil[]>([]);
   const [editImob, setEditImob] = useState<Imob | 'nova' | null>(null);
   const [editLogin, setEditLogin] = useState<Perfil | null>(null);
+  const [busca, setBusca] = useState('');
+  const [filtroPapel, setFiltroPapel] = useState('');
   const [senhaMostrada, setSenhaMostrada] = useState<{ email: string; senha: string } | null>(null);
 
   const carregar = useCallback(async () => {
@@ -48,6 +53,16 @@ export function Imobiliarias({ perfil }: { perfil: Perfil }) {
   };
 
   const nomeImob = (id: string | null) => imobs.find((i) => i.id === id)?.nome ?? '—';
+  const filtrados = useMemo(() => {
+    const t = semAcento(busca.trim());
+    const dig = busca.replace(/\D/g, '');
+    return usuarios.filter((u) => {
+      if (filtroPapel && u.papel !== filtroPapel) return false;
+      if (!t) return true;
+      const texto = semAcento([u.nome, u.email, u.imobiliaria_id ? nomeImob(u.imobiliaria_id) : '', u.creci, PAPEL[u.papel]].join(' '));
+      return t.split(/\s+/).every((p) => texto.includes(p)) || (dig.length >= 3 && (u.cpf ?? '').includes(dig));
+    });
+  }, [usuarios, imobs, busca, filtroPapel]);
 
   return (
     <section className="secao">
@@ -100,11 +115,19 @@ export function Imobiliarias({ perfil }: { perfil: Perfil }) {
       </div>
 
       <div className="cartao">
-        <h3>Logins</h3>
-        <table className="tabela compacta">
+        <div className="logins-topo">
+          <h3>Logins <small className="sub">{filtrados.length === usuarios.length ? usuarios.length : `${filtrados.length} de ${usuarios.length}`}</small></h3>
+          <label className="busca-funil"><Search size={16} /><input type="search" placeholder="Buscar por nome, e-mail ou imobiliária" value={busca} onChange={(e) => setBusca(e.target.value)} /></label>
+          <select value={filtroPapel} onChange={(e) => setFiltroPapel(e.target.value)} aria-label="Filtrar por perfil">
+            <option value="">Todos os perfis</option>
+            {(Object.keys(PAPEL) as Perfil['papel'][]).map((p) => <option key={p} value={p}>{PAPEL[p]}</option>)}
+          </select>
+        </div>
+        {!filtrados.length && <p className="vazio">Nenhum login encontrado{busca ? ` para "${busca}"` : ''}.</p>}
+        {!!filtrados.length && <table className="tabela compacta">
           <thead><tr><th>E-mail</th><th>Perfil</th><th>Imobiliária</th><th>CPF / CRECI</th><th>Situação</th><th></th></tr></thead>
           <tbody>
-            {usuarios.map((u) => (
+            {filtrados.map((u) => (
               <tr key={u.user_id}>
                 <td>{u.email}{u.nome ? ` (${u.nome})` : ''}</td>
                 <td>{PAPEL[u.papel]}</td>
@@ -125,7 +148,7 @@ export function Imobiliarias({ perfil }: { perfil: Perfil }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>}
       </div>
       {editImob && <EditarImob imob={editImob === 'nova' ? null : editImob} aoFechar={() => setEditImob(null)} aoSalvar={() => { setEditImob(null); avisar('Imobiliária salva.'); carregar(); }} />}
       {editLogin && <EditarDadosLogin login={editLogin} aoFechar={() => setEditLogin(null)} aoSalvar={() => { setEditLogin(null); avisar('Dados salvos.'); carregar(); }} />}
