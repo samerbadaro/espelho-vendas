@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowLeft, BookOpen, Calculator, Download, ExternalLink, FileText, FolderArchive, History, Image, LifeBuoy, Link2,
-  Megaphone, Pencil, Trophy, Plus, Rotate3d, Ruler, Sofa, Trash2, Upload, Video, X,
+  Megaphone, Pencil, Sparkles, Trophy, Plus, Rotate3d, Ruler, Sofa, Trash2, Upload, Video, X,
 } from 'lucide-react';
 import { zipSync } from 'fflate';
 import { supabase } from './dados';
@@ -9,6 +9,7 @@ import { ir, type Perfil } from './util';
 import { useDialogos } from './ui';
 import { Simulador } from './Simulador';
 import { Registros } from './PortalRegistros';
+import { caminhoVersao, enviarVersoes, esquecerLinks, linksGuardados, podeOtimizar } from './imagens';
 
 interface Item {
   id: string; categoria: string; titulo: string; descricao: string | null; link: string | null;
@@ -98,16 +99,47 @@ function CategoriaPortal({ perfil, cat, itens, carregando, equipe, recarregar }:
   const [adicionando, setAdicionando] = useState(false);
   const [editando, setEditando] = useState<Item | null>(null);
   const [baixando, setBaixando] = useState('');
+  const [semVersao, setSemVersao] = useState<string[]>([]);
+  const [otimizando, setOtimizando] = useState('');
+  const [rodadaMini, setRodadaMini] = useState(0);
 
   const imagens = useMemo(() => itens.filter((i) => i.caminho && ehImagem(i)), [itens]);
+  // grade: miniatura leve; se ainda não existir, mostra a original (como antes)
   useEffect(() => {
     if (!imagens.length) return;
-    supabase.storage.from('portal').createSignedUrls(imagens.map((i) => i.caminho!), 3600).then(({ data }) => {
+    let vivo = true;
+    (async () => {
+      const minis = await linksGuardados(imagens.map((i) => caminhoVersao(i.caminho!, 'mini')));
+      const faltam = imagens.filter((i) => !minis[caminhoVersao(i.caminho!, 'mini')]);
+      const originais = faltam.length ? await linksGuardados(faltam.map((i) => i.caminho!)) : {};
+      if (!vivo) return;
       const m: Record<string, string> = {};
-      (data ?? []).forEach((d, k) => { if (d.signedUrl) m[imagens[k].id] = d.signedUrl; });
+      imagens.forEach((i) => { const u = minis[caminhoVersao(i.caminho!, 'mini')] ?? originais[i.caminho!]; if (u) m[i.id] = u; });
       setMiniaturas(m);
-    });
-  }, [imagens]);
+      setSemVersao(faltam.filter((i) => podeOtimizar(i.tipo_mime)).map((i) => i.id));
+    })();
+    return () => { vivo = false; };
+  }, [imagens, rodadaMini]);
+
+  const otimizar = async () => {
+    const lista = imagens.filter((i) => semVersao.includes(i.id));
+    let ok = 0;
+    for (let k = 0; k < lista.length; k++) {
+      const i = lista[k];
+      setOtimizando(`Otimizando ${k + 1} de ${lista.length}…`);
+      try {
+        const { data } = await supabase.storage.from('portal').createSignedUrl(i.caminho!, 600);
+        if (!data) continue;
+        const resp = await fetch(data.signedUrl);
+        if (!resp.ok) continue;
+        if (await enviarVersoes(i.caminho!, await resp.blob())) ok++;
+      } catch { /* segue para a próxima */ }
+    }
+    esquecerLinks(lista.flatMap((i) => [caminhoVersao(i.caminho!, 'mini'), caminhoVersao(i.caminho!, 'media')]));
+    setOtimizando('');
+    avisar(ok === lista.length ? `${ok} ${ok === 1 ? 'imagem otimizada' : 'imagens otimizadas'}.` : `${ok} de ${lista.length} imagens otimizadas. As outras continuam com a original.`, ok === lista.length ? undefined : 'erro');
+    setRodadaMini((n) => n + 1);
+  };
 
   const registrar = (i: Item | null, modo: 'arquivo' | 'link' | 'visualizar' | 'zip', titulo?: string) => {
     // o .then dispara a chamada (sem ele o pedido nunca sai do navegador)
@@ -126,6 +158,9 @@ function CategoriaPortal({ perfil, cat, itens, carregando, equipe, recarregar }:
   const abrir = async (i: Item) => {
     registrar(i, i.link ? 'link' : 'visualizar');
     if (i.link) { window.open(i.link, '_blank', 'noopener'); return; }
+    // imagem: abre a versão média (leve); sem ela, a original
+    const media = ehImagem(i) ? (await linksGuardados([caminhoVersao(i.caminho!, 'media')]))[caminhoVersao(i.caminho!, 'media')] : undefined;
+    if (media) { window.open(media, '_blank', 'noopener'); return; }
     const { data } = await supabase.storage.from('portal').createSignedUrl(i.caminho!, 600);
     if (data) window.open(data.signedUrl, '_blank', 'noopener');
   };
@@ -164,7 +199,12 @@ function CategoriaPortal({ perfil, cat, itens, carregando, equipe, recarregar }:
     if (!(await confirmar({ titulo: `Remover "${i.titulo}"?`, texto: 'Corretores e imobiliárias deixam de ver este item.', confirmar: 'Remover', perigo: true }))) return;
     const { data, error } = await supabase.rpc('remover_item_portal', { p_id: i.id });
     if (error) { avisar(ERROS[error.message] ?? 'Não foi possível remover.', 'erro'); return; }
-    if (data) await supabase.storage.from('portal').remove([data as string]);
+    if (data) {
+      const c = data as string;
+      const todos = [c, caminhoVersao(c, 'mini'), caminhoVersao(c, 'media')];
+      await supabase.storage.from('portal').remove(todos);
+      esquecerLinks(todos);
+    }
     avisar('Item removido.'); recarregar();
   };
 
@@ -201,6 +241,11 @@ function CategoriaPortal({ perfil, cat, itens, carregando, equipe, recarregar }:
         <div className="acoes-topo">
           {arquivos.length > 1 && (
             <button className="botao" onClick={baixarTudo} disabled={!!baixando}><FolderArchive size={16} /> {baixando || 'Baixar tudo (.zip)'}</button>
+          )}
+          {equipe && semVersao.length > 0 && (
+            <button className="botao" onClick={otimizar} disabled={!!otimizando} title="Cria versões leves das imagens já enviadas. A original continua igual para o Baixar.">
+              <Sparkles size={16} /> {otimizando || `Otimizar imagens (${semVersao.length})`}
+            </button>
           )}
           {equipe && <button className="botao principal" onClick={() => setAdicionando(true)}><Plus size={16} /> Adicionar</button>}
         </div>
@@ -295,6 +340,10 @@ function AdicionarItem({ cat, aoFechar, aoSalvar }: { cat: Categoria; aoFechar: 
         p_caminho: caminho, p_nome_arquivo: f.name, p_tamanho: f.size, p_tipo: f.type || null,
       });
       if (error) { await supabase.storage.from('portal').remove([caminho]); setErro(ERROS[error.message] ?? 'Não foi possível salvar.'); break; }
+      if (podeOtimizar(f.type)) {
+        setProgresso(`Gerando versão leve de ${f.name}…`);
+        await enviarVersoes(caminho, f);   // se falhar, a grade usa a original
+      }
       ok++;
     }
     setProgresso('');
