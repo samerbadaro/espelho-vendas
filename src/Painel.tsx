@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap,
+  Home, FileSignature, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -18,6 +18,7 @@ import { Rodadas, DetalheRodada } from './Rodadas';
 import { Recepcao } from './Recepcao';
 import { Treinamentos } from './Treinamentos';
 import { Portal } from './Portal';
+import { ListaPropostas, PaginaProposta } from './proposta/Propostas';
 import { useRota, ir, CAMPOS_PERFIL, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, ERROS_CADASTRO, type Perfil } from './util';
 import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
 
@@ -306,6 +307,10 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const funilAtivo = pastasAtivas && marca.modulo_funil !== false;
   const portalAtivo = marca.modulo_portal !== false;
   const rodadasAtivas = marca.modulo_rodadas !== false;
+  // Propostas: coluna só existe depois do 035; desligado, só o administrador vê (para testar)
+  const propostasExiste = 'modulo_propostas' in marca;
+  const propostasLigadas = propostasExiste && marca.modulo_propostas === true && pastasAtivas;
+  const propostasVisiveis = equipe ? (propostasLigadas || (admin && propostasExiste)) : propostasLigadas;
   const treinosAtivos = (marca as { modulo_treinamentos?: boolean }).modulo_treinamentos !== false;
   const meetingAtivo = marca.modulo_meeting !== false;
   const espelhoParceiros = marca.modulo_espelho_parceiros !== false;
@@ -333,6 +338,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
+      ...(propostasVisiveis ? [{ c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(treinosAtivos ? [{ c: '/painel/treinamentos', r: 'Treinamentos', i: <GraduationCap size={18} /> }] : []),
@@ -345,6 +351,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
     : [
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
+      ...(propostasVisiveis ? [{ c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(treinosAtivos ? [{ c: '/painel/treinamentos', r: 'Treinamentos', i: <GraduationCap size={18} /> }] : []),
@@ -359,8 +366,11 @@ function Casca({ perfil }: { perfil: Perfil }) {
   let pagina: ReactNode;
   const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
   const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
+  const idProposta = atual.match(/^\/painel\/propostas\/([^/]+)$/)?.[1];
   const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
   if (recepcao) pagina = meetingAtivo ? <Recepcao /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
+  else if (idProposta && propostasVisiveis) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
+  else if (atual === '/painel/propostas' && propostasVisiveis) pagina = <ListaPropostas perfil={perfil} />;
   else if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
   else if (atual === '/painel/recepcao' && equipe && meetingAtivo) pagina = <Recepcao />;
   else if (idRodada && rodadasAtivas) pagina = <DetalheRodada key={idRodada} id={idRodada} perfil={perfil} />;

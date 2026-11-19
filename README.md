@@ -63,6 +63,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 32. `supabase/migrations/032_recepcionista.sql` (perfil Recepcionista: acesso só ao Meeting)
 33. `supabase/migrations/033_treinamentos_horarios.sql` (administrador adiciona e exclui horários de treinamento)
 34. `supabase/migrations/034_portal_premiacao.sql` (Portal do Corretor: categoria Regras da premiação)
+35. `supabase/manutencao/035_backup_antes.sql` e depois `supabase/migrations/035_propostas.sql` (Propostas, trazidas da v2; módulo começa desligado). Para voltar atrás: `supabase/manutencao/035_reverter.sql`.
 
 ### Criar usuário da equipe
 
