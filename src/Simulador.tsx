@@ -51,11 +51,11 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
         doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 108, 192);
         doc.save(`${nome}.pdf`);
       }
-      void supabase.rpc('registrar_simulacao', {
+      supabase.rpc('registrar_simulacao', {
         p_posicao: POSICOES[escolha.pos], p_referencia: REFERENCIAS[escolha.ref], p_preco: preco,
         p_captacao: captacao, p_financiamento: fin, p_formato: formato,
         p_fluxo: linhas.map((l) => ({ serie: l.rotulo, parcelas: l.qtd, valor: l.parcela, total: l.total, pct: l.pct })),
-      });
+      }).then(({ error }) => { if (error) console.warn('Registro da simulação falhou:', error.message); }); // o .then dispara a chamada
     } finally { setGerando(''); }
   };
 

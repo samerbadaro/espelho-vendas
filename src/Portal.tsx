@@ -110,7 +110,9 @@ function CategoriaPortal({ perfil, cat, itens, carregando, equipe, recarregar }:
   }, [imagens]);
 
   const registrar = (i: Item | null, modo: 'arquivo' | 'link' | 'visualizar' | 'zip', titulo?: string) => {
-    void supabase.rpc('registrar_download_portal', { p_item: i?.id ?? null, p_modo: modo, p_titulo: titulo ?? null, p_categoria: cat.valor });
+    // o .then dispara a chamada (sem ele o pedido nunca sai do navegador)
+    supabase.rpc('registrar_download_portal', { p_item: i?.id ?? null, p_modo: modo, p_titulo: titulo ?? null, p_categoria: cat.valor })
+      .then(({ error }) => { if (error) console.warn('Registro do download falhou:', error.message); });
   };
 
   const baixar = async (i: Item) => {
