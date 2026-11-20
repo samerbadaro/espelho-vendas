@@ -2,7 +2,7 @@
 // O navegador da equipe baixa os documentos, reduz as fotos e monta o pedido; o servidor
 // (/api/contrato/ler) confere o login e repassa à IA com a chave secreta.
 import { supabase } from '../dados';
-import { cpfValido, soDigitos } from '../util';
+import { cpfValido, soDigitos, chamarApi } from '../util';
 
 export const MODELO_IA = 'claude-sonnet-5-5';
 
@@ -118,9 +118,10 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
     if (/pix/i.test(d.tipo)) continue;   // comprovante de pagamento não entra no contrato
     nomes[codigo] = d.tipo;
     progresso(`Preparando ${i + 1} de ${ctx.documentos.length}: ${d.tipo}…`);
-    const { data: link } = await supabase.storage.from('documentos').createSignedUrl(d.caminho, 120);
-    if (!link) { ignorados.push(`${d.tipo} (${d.arquivo}): não foi possível baixar`); continue; }
-    const blob = await fetch(link.signedUrl).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
+    // mesmo caminho do botão "abrir": o servidor confere a permissão e registra a visualização
+    const link = await chamarApi('/api/documentos/link', { documento_id: d.id });
+    if (!link.url) { ignorados.push(`${d.tipo} (${d.arquivo}): ${link.erro || 'não foi possível baixar'}`); continue; }
+    const blob = await fetch(link.url).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
     if (!blob) { ignorados.push(`${d.tipo} (${d.arquivo}): não foi possível baixar`); continue; }
     const ehPdf = (d.mime || blob.type) === 'application/pdf' || /\.pdf$/i.test(d.arquivo);
     let bloco: unknown;
