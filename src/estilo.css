@@ -943,3 +943,4 @@ small.bloco { display: block; color: var(--tinta-2); }
 .dc-areas td, .dc-areas th { white-space: nowrap; font-size: 0.8rem; }
 @media (max-width: 760px) { .ct-comissao { grid-template-columns: 1fr 1fr; } }
 .ct-busca { margin-bottom: 12px; }
+.ct-acoes { flex-wrap: wrap; } .ct-acoes label.botao { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }

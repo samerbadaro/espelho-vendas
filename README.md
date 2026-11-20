@@ -70,6 +70,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 39. `supabase/migrations/039_regime_bens.sql` (regime de bens; em separação total/obrigatória o cônjuge pode ficar fora do contrato)
 40. `supabase/migrations/040_pessoa_juridica.sql` (comprador pessoa jurídica: razão social, CNPJ, representante legal e documentos da empresa)
 41. `supabase/migrations/041_contratos.sql` (módulo Contratos: dados da incorporação, quadro de áreas, conferência do pagamento e documentos emitidos)
+42. `supabase/migrations/042_contratos_versoes.sql` (contratos: Word editável e versões ajustadas antes da assinatura)
 
 ### Criar usuário da equipe
 

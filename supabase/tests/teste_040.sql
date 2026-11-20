@@ -68,3 +68,19 @@ do $$ declare u text; n int; m int; begin
       case u when '0000000000c1' then 'Corretor' when '00000000000d' then 'Imobiliária' else 'Sec. Vendas' end, n, m;
   end loop;
 end $$;
+
+-- 042: versões ajustadas
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false) \g /dev/null
+do $$ declare c contratos; begin
+  c := registrar_contrato((select pasta from _c), (select proposta from _c), 'normas', 'Normas', (select pasta from _c)::text || '/n.pdf', '{}', (select pasta from _c)::text || '/n.docx');
+  raise notice '%  Emitido com PDF e Word (versão %)', case when c.caminho_docx is not null and c.versao = 1 and (select count(*) from contrato_versoes where contrato_id = c.id) = 1 then 'OK    ' else 'FALHOU' end, c.versao;
+  c := validar_contrato(c.id);
+  c := enviar_versao_contrato(c.id, (select pasta from _c)::text || '/n2.docx', null);
+  raise notice '%  Ajuste vira versão 2 e volta para aguardando validação', case when c.versao = 2 and c.validacao = 'aguardando' and c.caminho is null then 'OK    ' else 'FALHOU' end;
+  begin perform enviar_versao_contrato(c.id, null, null); raise notice 'FALHOU  aceitou ajuste sem arquivo';
+  exception when others then raise notice 'OK      Ajuste exige arquivo'; end;
+  begin perform enviar_versao_contrato(c.id, 'outra/x.docx', null); raise notice 'FALHOU  aceitou arquivo de outra pasta';
+  exception when others then raise notice 'OK      Ajuste só na pasta do cliente'; end;
+end $$;
+reset role;

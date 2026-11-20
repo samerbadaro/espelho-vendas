@@ -49,13 +49,18 @@ const ROTULO_PER: Record<string, string> = { Unica: 'ÚNICA', Financiamento: 'FI
 const A4 = { w: 210, h: 297 }, M = 20, LARG = A4.w - 2 * M, TOPO = 20, BASE = A4.h - 18;
 type AutoTable = (doc: JsPDF, o: UserOptions) => void;
 
+export interface OpPara { negrito?: boolean; centro?: boolean; recuo?: number; tam?: number; italico?: boolean; antes?: number; depois?: number; secao?: boolean }
+export type Item =
+  | { k: 'p'; texto: string; o: OpPara }
+  | { k: 'tabela'; o: UserOptions }
+  | { k: 'assin'; nomes: string[][]; colunas: number }
+  | { k: 'espaco'; mm: number };
+
+/** Monta o conteúdo do documento (independente do formato de saída). */
 class Escritor {
-  y = TOPO;
+  itens: Item[] = [];
   faltando = new Set<string>();
-  constructor(public doc: JsPDF, public tabela: AutoTable, public ctx: ContextoContrato) {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(20);
-  }
-  garantir(h: number) { if (this.y + h > BASE) { this.doc.addPage(); this.y = TOPO; } }
+  constructor(public ctx: ContextoContrato) {}
   campo(t: string) {
     return t.replace(/\{\{([\w.]+)\}\}/g, (_, k: string) => {
       const v = this.ctx.campos[k];
@@ -63,14 +68,33 @@ class Escritor {
       return v;
     });
   }
+  para(texto: string, o: OpPara = {}) { this.itens.push({ k: 'p', texto: this.campo(texto), o }); }
+  espaco(mm: number) { this.itens.push({ k: 'espaco', mm }); }
+  autoTabela(o: UserOptions) { this.itens.push({ k: 'tabela', o }); }
+  assinaturas(nomes: string[][], colunas = 2) { this.itens.push({ k: 'assin', nomes, colunas }); }
+  tabelaDados(linhas: [string, string, string?, string?][]) {
+    const body: RowInput[] = linhas.map(([a, b, c, d]) => c === undefined
+      ? [{ content: a, styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }, { content: b, colSpan: 3 }]
+      : [{ content: a, styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }, b, { content: c, styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }, d ?? '']);
+    this.autoTabela({ body, columnStyles: { 0: { cellWidth: 40 }, 2: { cellWidth: 36 } } });
+  }
+}
+
+/** Desenha o conteúdo em PDF (jsPDF). */
+class EscritorPdf {
+  y = TOPO;
+  constructor(public doc: JsPDF, public tabela: AutoTable) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(20);
+  }
+  garantir(h: number) { if (this.y + h > BASE) { this.doc.addPage(); this.y = TOPO; } }
   /** Parágrafo justificado com quebra de página. */
-  para(texto: string, o: { negrito?: boolean; centro?: boolean; recuo?: number; tam?: number; italico?: boolean; antes?: number; depois?: number } = {}) {
+  para(texto: string, o: OpPara = {}) {
     const { doc } = this;
     const tam = o.tam ?? 9.5, lh = tam * 0.46, recuo = o.recuo ?? 0, larg = LARG - recuo, x = M + recuo;
     doc.setFont('helvetica', o.negrito ? (o.italico ? 'bolditalic' : 'bold') : o.italico ? 'italic' : 'normal');
     doc.setFontSize(tam);
     this.y += o.antes ?? 0;
-    for (const bloco of this.campo(texto).split('\n')) {
+    for (const bloco of texto.split('\n')) {
       const linhas: string[] = doc.splitTextToSize(bloco, larg);
       linhas.forEach((l, i) => {
         this.garantir(lh);
@@ -92,12 +116,6 @@ class Escritor {
     if (esp > 4) { doc.text(linha, x, this.y); return; }
     let cx = x;
     for (const p of palavras) { doc.text(p, cx, this.y); cx += doc.getTextWidth(p) + esp; }
-  }
-  tabelaDados(linhas: [string, string, string?, string?][]) {
-    const body: RowInput[] = linhas.map(([a, b, c, d]) => c === undefined
-      ? [{ content: a, styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }, { content: b, colSpan: 3 }]
-      : [{ content: a, styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }, b, { content: c, styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }, d ?? '']);
-    this.autoTabela({ body, columnStyles: { 0: { cellWidth: 40 }, 2: { cellWidth: 36 } } });
   }
   autoTabela(o: UserOptions) {
     this.garantir(12);
@@ -202,6 +220,7 @@ function blocoPagamento(e: Escritor) {
       [{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: real(total), styles: { fontStyle: 'bold' } }, { content: '100,00%', styles: { fontStyle: 'bold' } }, { content: '', colSpan: 2 }],
     ],
     styles: { fontSize: 8, cellPadding: 1.2, halign: 'center', lineColor: [160, 160, 160], lineWidth: 0.1, textColor: 20 },
+    columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 28 }, 2: { cellWidth: 13 }, 3: { cellWidth: 25 }, 4: { cellWidth: 25 }, 5: { cellWidth: 15 }, 6: { cellWidth: 25 }, 7: { cellWidth: 27 } },
   });
 
   // 4.2 sinal — cada parcela do sinal vira um subitem
@@ -251,7 +270,7 @@ function blocoComissao(e: Escritor) {
 }
 
 function blocoRubrica(e: Escritor) {
-  e.para('Assinatura do(s) COMPRADOR(ES):', { negrito: true, antes: 2 });
+  e.para('Assinatura do(s) COMPRADOR(ES):', { negrito: true, antes: 2, secao: true });
   e.assinaturas(nomesCompradores(e.ctx));
 }
 
@@ -261,12 +280,12 @@ function blocoLocalData(e: Escritor) {
 }
 
 function blocoAssinaturasFinais(e: Escritor) {
-  e.y += 4;
-  e.para('VENDEDORA', { negrito: true });
+  e.espaco(4);
+  e.para('VENDEDORA', { negrito: true, secao: true });
   e.assinaturas([[up(e.campo('{{vendedora.assinante}}')), 'VENDEDORA']], 1);
-  e.para('COMPRADOR(ES):', { negrito: true });
+  e.para('COMPRADOR(ES):', { negrito: true, secao: true });
   e.assinaturas(nomesCompradores(e.ctx));
-  e.para('TESTEMUNHAS', { negrito: true });
+  e.para('TESTEMUNHAS', { negrito: true, secao: true });
   e.assinaturas([
     [`NOME: ${up(e.campo('{{testemunha1.nome}}'))}`, `CPF: ${e.campo('{{testemunha1.cpf}}')}`],
     [`NOME: ${up(e.campo('{{testemunha2.nome}}'))}`, `CPF: ${e.campo('{{testemunha2.cpf}}')}`],
@@ -278,31 +297,148 @@ const BLOCOS: Record<string, (e: Escritor) => void> = {
   rubrica_compradores: blocoRubrica, local_data: blocoLocalData, assinaturas_finais: blocoAssinaturasFinais,
 };
 
-/** Gera o PDF. Devolve o arquivo e os campos do cadastro que estavam vazios. */
-export async function gerarDocumento(tipo: TipoDocumento, ctx: ContextoContrato): Promise<{ pdf: Blob; faltando: string[] }> {
-  const [{ jsPDF }, { default: autoTable }, modelo] = await Promise.all([
-    import('jspdf'), import('jspdf-autotable'),
-    tipo === 'quadro_resumo' ? import('./modelos/quadroResumo').then((m) => m.QUADRO_RESUMO) : import('./modelos/normas').then((m) => m.NORMAS),
-  ]);
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-  const e = new Escritor(doc, autoTable as unknown as AutoTable, ctx);
+/** Lê o modelo e monta o conteúdo (lista de itens) com os dados do contrato. */
+async function montar(tipo: TipoDocumento, ctx: ContextoContrato) {
+  const modelo = tipo === 'quadro_resumo'
+    ? (await import('./modelos/quadroResumo')).QUADRO_RESUMO
+    : (await import('./modelos/normas')).NORMAS;
+  const e = new Escritor(ctx);
   for (const bruto of modelo.split(/\n\s*\n/)) {
     const p = bruto.trim();
     if (!p) continue;
     if (p.startsWith('@')) { BLOCOS[p.slice(1)]?.(e); continue; }
-    if (p.startsWith('== ')) { e.garantir(14); e.para(p.slice(3), { negrito: true, antes: 2.5, depois: 1.6 }); continue; }
+    if (p.startsWith('== ')) { e.para(p.slice(3), { negrito: true, antes: 2.5, depois: 1.6, secao: true }); continue; }
     if (p.startsWith('= ')) { e.para(p.slice(2), { negrito: true, centro: true, tam: 11, depois: 3 }); continue; }
     if (p.startsWith('## ')) { e.para(p.slice(3), { negrito: true, depois: 1.6 }); continue; }
     if (p.startsWith('~ ')) { e.para(p.slice(2), { italico: true, tam: 8, depois: 2 }); continue; }
     if (p.startsWith('> ')) { e.para(p.slice(2), { recuo: 8 }); continue; }
     e.para(p);
   }
-  // rodapé
+  return e;
+}
+const rodape = (tipo: TipoDocumento, ctx: ContextoContrato) => `${NOME_DOCUMENTO[tipo]} · Unidade ${ctx.unidade} · ${ctx.referencia}`;
+
+/** Gera o PDF. Devolve o arquivo e os campos do cadastro que estavam vazios. */
+export async function gerarDocumento(tipo: TipoDocumento, ctx: ContextoContrato): Promise<{ pdf: Blob; faltando: string[] }> {
+  const [{ jsPDF }, { default: autoTable }, e] = await Promise.all([import('jspdf'), import('jspdf-autotable'), montar(tipo, ctx)]);
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  const w = new EscritorPdf(doc, autoTable as unknown as AutoTable);
+  for (const it of e.itens) {
+    if (it.k === 'p') { if (it.o.secao) w.garantir(14); w.para(it.texto, it.o); }
+    else if (it.k === 'tabela') w.autoTabela(it.o);
+    else if (it.k === 'assin') w.assinaturas(it.nomes, it.colunas);
+    else w.y += it.mm;
+  }
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(120);
-    doc.text(`${NOME_DOCUMENTO[tipo]} · Unidade ${ctx.unidade} · ${ctx.referencia}`, M, A4.h - 10);
+    doc.text(rodape(tipo, ctx), M, A4.h - 10);
     doc.text(`Página ${i} de ${n}`, A4.w - M, A4.h - 10, { align: 'right' });
   }
   return { pdf: doc.output('blob'), faltando: [...e.faltando] };
+}
+
+// ---------- Word (.docx) editável, com o mesmo conteúdo ----------
+type Celula = string | { content?: unknown; colSpan?: number; styles?: { fontStyle?: string; fillColor?: unknown; halign?: string } };
+const TW = 56.7; // twips por mm
+
+/** Gera o Word editável (fonte Arial, A4, mesmas margens do PDF). */
+export async function gerarWord(tipo: TipoDocumento, ctx: ContextoContrato): Promise<{ docx: Blob; faltando: string[] }> {
+  const [D, e] = await Promise.all([import('docx'), montar(tipo, ctx)]);
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, Footer, PageNumber, TabStopType, ShadingType } = D;
+  const larg = Math.round(LARG * TW);
+  const texto = (t: string, o: { b?: boolean; i?: boolean; tam?: number } = {}) =>
+    t.split('\n').map((l, k) => new TextRun({ text: l, bold: o.b, italics: o.i, size: Math.round((o.tam ?? 9.5) * 2), font: 'Arial', break: k ? 1 : undefined }));
+  const sem = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+  const fino = { style: BorderStyle.SINGLE, size: 4, color: 'A0A0A0' };
+
+  const tabela = (o: UserOptions) => {
+    const cab = ((o.head as Celula[][] | undefined) ?? []);
+    const corpo = (o.body as Celula[][] | undefined) ?? [];
+    const ncol = Math.max(...[...cab, ...corpo].map((l) => l.reduce((n: number, c) => n + (typeof c === 'object' && c?.colSpan ? c.colSpan : 1), 0)));
+    const cs = (o.columnStyles ?? {}) as Record<number, { cellWidth?: number }>;
+    const fixos = Array.from({ length: ncol }, (_, i) => cs[i]?.cellWidth ?? 0);
+    const resto = (LARG - fixos.reduce((a, b) => a + b, 0)) / Math.max(1, fixos.filter((x) => !x).length);
+    const larguras = fixos.map((x) => Math.round((x || resto) * TW));
+    const centro = (o.styles as { halign?: string } | undefined)?.halign === 'center';
+    const linha = (l: Celula[], cabecalho: boolean) => {
+      let col = 0;
+      return new TableRow({
+        tableHeader: cabecalho, cantSplit: true,
+        children: l.map((c) => {
+          const obj = typeof c === 'object' && c ? c : null;
+          const span = obj?.colSpan ?? 1;
+          const w = larguras.slice(col, col + span).reduce((a, b) => a + b, 0); col += span;
+          const negrito = cabecalho || obj?.styles?.fontStyle === 'bold';
+          const fundo = cabecalho ? 'E6E6E6' : obj?.styles?.fillColor ? 'F2F2F2' : undefined;
+          return new TableCell({
+            columnSpan: span > 1 ? span : undefined, width: { size: w, type: WidthType.DXA },
+            shading: fundo ? { type: ShadingType.CLEAR, color: 'auto', fill: fundo } : undefined,
+            margins: { top: 40, bottom: 40, left: 70, right: 70 },
+            children: [new Paragraph({ alignment: cabecalho || centro ? AlignmentType.CENTER : AlignmentType.LEFT, children: texto(String(obj ? obj.content ?? '' : c ?? ''), { b: negrito, tam: 8.3 }) })],
+          });
+        }),
+      });
+    };
+    return new Table({
+      width: { size: larg, type: WidthType.DXA }, columnWidths: larguras,
+      borders: { top: fino, bottom: fino, left: fino, right: fino, insideHorizontal: fino, insideVertical: fino },
+      rows: [...cab.map((l) => linha(l, true)), ...corpo.map((l) => linha(l, false))],
+    });
+  };
+
+  const assinaturas = (nomes: string[][], colunas: number) => {
+    const w = Math.round(larg / colunas);
+    const grupos: string[][][] = [];
+    for (let i = 0; i < nomes.length; i += colunas) grupos.push(nomes.slice(i, i + colunas));
+    return new Table({
+      width: { size: larg, type: WidthType.DXA }, columnWidths: Array(colunas).fill(w),
+      borders: { top: sem, bottom: sem, left: sem, right: sem, insideHorizontal: sem, insideVertical: sem },
+      rows: grupos.map((g) => new TableRow({
+        cantSplit: true,
+        children: Array.from({ length: colunas }, (_, k) => new TableCell({
+          width: { size: w, type: WidthType.DXA }, margins: { left: 200, right: 200 },
+          children: g[k] ? [
+            new Paragraph({ spacing: { before: 600 }, children: [] }),
+            ...g[k].map((t, j) => new Paragraph({
+              alignment: AlignmentType.CENTER,
+              border: j === 0 ? { top: { style: BorderStyle.SINGLE, size: 6, color: '444444', space: 4 } } : undefined,
+              spacing: { after: j === g[k].length - 1 ? 240 : 0 },
+              children: texto(t, { b: j === 0, tam: 8.3 }),
+            })),
+          ] : [new Paragraph({ children: [] })],
+        })),
+      })),
+    });
+  };
+
+  const filhos: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] = [];
+  for (const it of e.itens) {
+    if (it.k === 'p') {
+      const o = it.o;
+      filhos.push(new Paragraph({
+        alignment: o.centro ? AlignmentType.CENTER : AlignmentType.JUSTIFIED, keepNext: !!o.secao,
+        indent: o.recuo ? { left: Math.round(o.recuo * TW) } : undefined,
+        spacing: { before: Math.round((o.antes ?? 0) * TW), after: Math.round((o.depois ?? 2.2) * TW), line: 264 },
+        children: texto(it.texto, { b: o.negrito, i: o.italico, tam: o.tam }),
+      }));
+    } else if (it.k === 'tabela') { filhos.push(tabela(it.o)); filhos.push(new Paragraph({ spacing: { after: 80 }, children: [] })); }
+    else if (it.k === 'assin') filhos.push(assinaturas(it.nomes, it.colunas));
+    else filhos.push(new Paragraph({ spacing: { after: Math.round(it.mm * TW) }, children: [] }));
+  }
+
+  const doc = new Document({
+    creator: 'Gestor Launch Machine', title: `${NOME_DOCUMENTO[tipo]} — Unidade ${ctx.unidade}`,
+    styles: { default: { document: { run: { font: 'Arial', size: 19 } } } },
+    sections: [{
+      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: Math.round(TOPO * TW), bottom: Math.round(18 * TW), left: Math.round(M * TW), right: Math.round(M * TW) } } },
+      footers: { default: new Footer({ children: [new Paragraph({
+        tabStops: [{ type: TabStopType.RIGHT, position: larg }],
+        children: [new TextRun({ text: rodape(tipo, ctx), size: 15, color: '787878', font: 'Arial' }),
+          new TextRun({ children: ['\tPágina ', PageNumber.CURRENT, ' de ', PageNumber.TOTAL_PAGES], size: 15, color: '787878', font: 'Arial' })],
+      })] }) },
+      children: filhos,
+    }],
+  });
+  return { docx: await Packer.toBlob(doc), faltando: [...e.faltando] };
 }

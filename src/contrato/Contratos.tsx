@@ -2,7 +2,7 @@
 // Etapas: 1) partes (leitura com IA)  2) unidade (quadro de áreas)  3) pagamento e comissão
 // 4) emissão do Quadro Resumo e das Normas em PDF, com validação, cancelamento e download.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Circle, Download, Eye, FileText, Plus, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, Circle, Download, Eye, FileText, FileUp, Plus, Search, Trash2 } from 'lucide-react';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
 import { ir, conjugeNoContrato, formatarCNPJ, soDigitos, type EstadoCivil, type Perfil } from '../util';
@@ -19,13 +19,14 @@ interface Linha {
 }
 interface Registro { pasta_id: string; status: string; dados: Dados; comissao: Comissao[]; pagamento_conferido_em: string | null; pagamento_conferido_por: string | null }
 interface Emitido {
-  id: string; numero: number; documento: TipoDocumento; nome: string; caminho: string; validacao: 'aguardando' | 'validado'; assinatura: string;
+  id: string; numero: number; documento: TipoDocumento; nome: string; caminho: string | null; caminho_docx: string | null; versao: number; validacao: 'aguardando' | 'validado'; assinatura: string;
   gerado_em: string; gerado_por: string | null; validado_por: string | null; cancelado_em: string | null;
 }
 
 type ComissaoUI = Omit<Comissao, 'valor'> & { valor: string };
 const paraTxt = (v: number) => fmtNum(Number(v) || 0, 2);
 const doTxt = (t: string) => Number(t.replace(/\./g, '').replace(',', '.')) || 0;
+const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const nomeCliente = (p: Linha['pastas']) => p?.empresa_razao_social || p?.comprador_nome || '—';
 
 export function ListaContratos() {
@@ -201,16 +202,20 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     const tipos = (Object.keys(escolha) as TipoDocumento[]).filter((t) => escolha[t]);
     if (!(await confirmar({ titulo: `Emitir ${tipos.map((t) => NOME_DOCUMENTO[t]).join(' e ')}?`, texto: 'Os documentos ficam registrados na pasta, com número, aguardando validação.', confirmar: 'Emitir' }))) return;
     try {
-      const { gerarDocumento } = await import('./gerador');
+      const { gerarDocumento, gerarWord } = await import('./gerador');
       for (const t of tipos) {
         setOcupado(`Gerando ${NOME_DOCUMENTO[t]}…`);
         const ctx = contexto();
-        const { pdf } = await gerarDocumento(t, ctx);
-        const caminho = `${pasta.id}/${crypto.randomUUID()}.pdf`;
-        const up = await supabase.storage.from('contratos').upload(caminho, pdf, { contentType: 'application/pdf' });
-        if (up.error) throw new Error('Falha ao guardar o PDF.');
+        const [{ pdf }, { docx }] = await Promise.all([gerarDocumento(t, ctx), gerarWord(t, ctx)]);
+        const base = `${pasta.id}/${crypto.randomUUID()}`;
+        const caminho = `${base}.pdf`, caminhoDocx = `${base}.docx`;
+        const [u1, u2] = await Promise.all([
+          supabase.storage.from('contratos').upload(caminho, pdf, { contentType: 'application/pdf' }),
+          supabase.storage.from('contratos').upload(caminhoDocx, docx, { contentType: DOCX }),
+        ]);
+        if (u1.error || u2.error) throw new Error('Falha ao guardar os arquivos.');
         const { error } = await supabase.rpc('registrar_contrato', {
-          p_pasta: pasta.id, p_proposta: prop.id, p_documento: t, p_nome: `${NOME_DOCUMENTO[t]} — Unidade ${ctx.unidade}`, p_caminho: caminho,
+          p_pasta: pasta.id, p_proposta: prop.id, p_documento: t, p_nome: `${NOME_DOCUMENTO[t]} — Unidade ${ctx.unidade}`, p_caminho: caminho, p_caminho_docx: caminhoDocx,
           p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas },
         });
         if (error) throw new Error(error.message.includes('NAO_CONFERIDO') ? 'Confira as partes e o pagamento antes de emitir.' : 'Não foi possível registrar o documento.');
@@ -220,9 +225,35 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     finally { setOcupado(''); carregar(); }
   };
 
-  const baixar = async (c: Emitido) => {
-    const { data } = await supabase.storage.from('contratos').createSignedUrl(c.caminho, 60, { download: `${c.numero} - ${c.nome}.pdf` });
+  const baixar = async (c: Emitido, word = false) => {
+    const caminho = word ? c.caminho_docx : c.caminho;
+    if (!caminho) return;
+    const { data } = await supabase.storage.from('contratos').createSignedUrl(caminho, 60, { download: `${c.numero} - ${c.nome} (v${c.versao}).${word ? 'docx' : 'pdf'}` });
     if (data?.signedUrl) window.location.href = data.signedUrl; else avisar('Não foi possível baixar.', 'erro');
+  };
+
+  /** Ajuste: Word (.docx) e/ou PDF escolhidos juntos viram a próxima versão. */
+  const enviarAjuste = async (c: Emitido, arquivos: FileList) => {
+    const docx = [...arquivos].find((f) => /\.docx$/i.test(f.name));
+    const pdf = [...arquivos].find((f) => /\.pdf$/i.test(f.name));
+    if (!docx && !pdf) { avisar('Envie o arquivo em Word (.docx) ou PDF.', 'erro'); return; }
+    if ([docx, pdf].some((f) => f && f.size > 25 * 1024 * 1024)) { avisar('Arquivo maior que 25 MB.', 'erro'); return; }
+    if (!(await confirmar({ titulo: `Enviar versão ${c.versao + 1} do nº ${c.numero}?`, texto: `${[docx && 'Word', pdf && 'PDF'].filter(Boolean).join(' e ')} ajustado(s). A validação volta para pendente.${docx && !pdf ? ' O PDF desta versão será gerado pela D4Sign no envio para assinatura.' : ''}`, confirmar: 'Enviar versão' }))) return;
+    setOcupado(`Enviando a versão ${c.versao + 1}…`);
+    try {
+      const base = `${pasta.id}/${crypto.randomUUID()}`;
+      const sobe = async (f: File | undefined, ext: string, tipo: string) => {
+        if (!f) return null;
+        const { error } = await supabase.storage.from('contratos').upload(`${base}.${ext}`, f, { contentType: tipo });
+        if (error) throw new Error('Falha ao guardar o arquivo.');
+        return `${base}.${ext}`;
+      };
+      const [cd, cp] = await Promise.all([sobe(docx, 'docx', DOCX), sobe(pdf, 'pdf', 'application/pdf')]);
+      const { error } = await supabase.rpc('enviar_versao_contrato', { p_id: c.id, p_caminho_docx: cd, p_caminho_pdf: cp });
+      if (error) throw new Error(error.message.includes('JA_ENVIADO') ? 'Este documento já foi enviado para assinatura.' : 'Não foi possível registrar a versão.');
+      avisar(`Versão ${c.versao + 1} registrada. Confira e valide.`);
+    } catch (e) { avisar((e as Error).message, 'erro'); }
+    finally { setOcupado(''); carregar(); }
   };
   const acao = async (c: Emitido, rpc: 'validar_contrato' | 'cancelar_contrato') => {
     if (rpc === 'cancelar_contrato' && !(await confirmar({ titulo: `Cancelar o documento nº ${c.numero}?`, texto: 'Ele continua no histórico, marcado como cancelado.', confirmar: 'Cancelar documento', perigo: true }))) return;
@@ -332,25 +363,33 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         {emit.length > 0 && (
           <div className="tabela-rolagem">
             <table className="tabela ct-emitidos">
-              <thead><tr><th>Número</th><th>Documento</th><th>Assinatura</th><th>Validação</th><th /></tr></thead>
+              <thead><tr><th>Número</th><th>Documento</th><th>Versão</th><th>Assinatura</th><th>Validação</th><th /></tr></thead>
               <tbody>
                 {emit.map((c) => (
                   <tr key={c.id} className={c.cancelado_em ? 'cancelado' : ''}>
                     <td className="mono">{c.numero}</td>
                     <td><strong>{c.nome}</strong><br /><small className="sub">Gerado em {formatarDataHora(c.gerado_em)} por {c.gerado_por}</small></td>
+                    <td>v{c.versao}{c.versao > 1 && <><br /><small className="sub">{c.caminho ? 'ajustada' : 'Word ajustado'}</small></>}</td>
                     <td>{c.cancelado_em ? <span className="selo sp-pendente_correcao">Cancelado</span> : <span className="selo sp-incompleta" title="Envio pela D4Sign na próxima etapa">Não enviado</span>}</td>
                     <td>{c.cancelado_em ? '—' : c.validacao === 'validado'
                       ? <span className="selo sp-aprovada" title={`por ${c.validado_por}`}>Validado</span>
                       : <button type="button" className="botao" onClick={() => acao(c, 'validar_contrato')}>Validar</button>}</td>
                     <td className="ct-acoes">
-                      <button type="button" className="botao pequeno" title="Baixar" onClick={() => baixar(c)}><Download size={16} /></button>
-                      {!c.cancelado_em && <button type="button" className="botao" onClick={() => acao(c, 'cancelar_contrato')}>Cancelar</button>}
+                      {c.caminho && <button type="button" className="botao pequeno" title="Baixar PDF" onClick={() => baixar(c)}><Download size={14} /> PDF</button>}
+                      {c.caminho_docx && <button type="button" className="botao pequeno" title="Baixar Word editável" onClick={() => baixar(c, true)}><Download size={14} /> Word</button>}
+                      {!c.cancelado_em && c.assinatura === 'nao_enviado' && (
+                        <label className="botao pequeno" title="Enviar o Word (e, se quiser, o PDF) ajustado">
+                          <FileUp size={14} /> Enviar ajuste
+                          <input type="file" hidden multiple accept=".docx,.pdf" disabled={!!ocupado} onChange={(e) => { if (e.target.files?.length) enviarAjuste(c, e.target.files); e.target.value = ''; }} />
+                        </label>
+                      )}
+                      {!c.cancelado_em && <button type="button" className="botao pequeno" onClick={() => acao(c, 'cancelar_contrato')}>Cancelar</button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="sub">Envio para assinatura eletrônica (D4Sign) entra na próxima etapa.</p>
+            <p className="sub">Para ajustar a formatação: baixe o Word, edite, e use “Enviar ajuste” (pode mandar só o Word, ou o Word e o PDF juntos). A versão mais recente é a que segue para a D4Sign, que entra na próxima etapa.</p>
           </div>
         )}
       </div>
