@@ -73,6 +73,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 42. `supabase/migrations/042_contratos_versoes.sql` (contratos: Word editável e versões ajustadas antes da assinatura)
 43. `supabase/migrations/043_modelos_contrato.sql` (modelos de contrato em Word com marcadores, um ativo por documento)
 44. `supabase/migrations/044_d4sign.sql` (assinatura eletrônica D4Sign: assinantes, situações, PDF assinado; requer D4SIGN_TOKEN e D4SIGN_CRYPTKEY no Cloudflare)
+45. `supabase/migrations/045_pix_sinal.sql` (Pix do sinal: comprovante anexado ou Pix gerado pelo sistema, configurável; provedor simulado para testes)
 
 ### Criar usuário da equipe
 

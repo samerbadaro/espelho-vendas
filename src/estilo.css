@@ -967,3 +967,16 @@ small.bloco { display: block; color: var(--tinta-2); }
 .ass-dica { flex: 1; }
 .ass-reenviar { margin-left: 6px; }
 .ass-nota { margin-top: 6px; }
+.pix-modos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.pix-modo { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--borda); border-radius: 10px; padding: 12px; cursor: pointer; }
+.pix-modo.ativo { border-color: var(--primaria); background: var(--superficie-2); }
+.pix-campos { margin-top: 6px; }
+.pix-gerado { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.pix-gerado img { border: 1px solid var(--borda); border-radius: 8px; }
+.pix-info { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 6px; }
+.pix-info strong { font-size: 1.4rem; }
+.pix-info textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 0.8rem; }
+.pix-pago { display: flex; align-items: center; gap: 12px; color: #1E6B34; }
+.pix-pago > div { flex: 1; color: var(--tinta); }
+.pix-dica { flex: 1; }
+@media (max-width: 640px) { .pix-modos { grid-template-columns: 1fr; } }

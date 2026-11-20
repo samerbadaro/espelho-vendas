@@ -3,6 +3,7 @@ import { supabase, formatarDataHora } from './dados';
 import { useDialogos } from './ui';
 import { FileSpreadsheet, BarChart3, FileArchive } from 'lucide-react';
 import { zipSync } from 'fflate';
+import { PixDaPasta, useConfigPix } from './PixSinal';
 import {
   ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarCNPJ, cnpjValido, formatarTelefone, formatarData, formatarTamanho,
   ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC, REGIMES, ehSeparacao, conjugeNoContrato, type RegimeBens, type TipoPessoa,
@@ -193,6 +194,8 @@ const FORM_VAZIO: Form = {
 
 export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
   const nova = id === 'nova';
+  const { config: cfgPix } = useConfigPix();
+  const pixIntegrado = cfgPix?.pix_modo === 'integrado';
   const equipe = ehEquipe(perfil);
   const [pasta, setPasta] = useState<Pasta | null>(null);
   const [form, setForm] = useState<Form>(FORM_VAZIO);
@@ -415,7 +418,8 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       </form>
 
       {!nova && <Submissao pasta={pasta!} equipe={equipe} aoSubmeter={() => setRecarga((n) => n + 1)} />}
-      {!nova && <Documentos pasta={pasta!} estadoCivil={pasta!.estado_civil} conjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa, pasta!.tipo_pessoa)} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
+      {!nova && pixIntegrado && <PixDaPasta pastaId={id} codigoPasta={pasta!.codigo} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
+      {!nova && <Documentos pixIntegrado={pixIntegrado} pasta={pasta!} estadoCivil={pasta!.estado_civil} conjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa, pasta!.tipo_pessoa)} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && <HistoricoPasta pastaId={id} recarga={recarga} />}
     </section>
   );
@@ -439,7 +443,7 @@ function VincularUnidade({ pasta }: { pasta: Pasta; aoMudar?: () => void }) {
 // =====================================================================
 // Documentos
 // =====================================================================
-interface Tipo { id: number; nome: string; pessoa: 'comprador' | 'conjuge' | 'geral'; obrigatorio_para: EstadoCivil[]; exibir_para: EstadoCivil[]; multiplo: boolean; ordem: number; aplica_a: 'pf' | 'pj' | 'ambos'; obrigatorio_pj: boolean }
+interface Tipo { id: number; nome: string; pessoa: 'comprador' | 'conjuge' | 'geral'; obrigatorio_para: EstadoCivil[]; exibir_para: EstadoCivil[]; multiplo: boolean; ordem: number; aplica_a: 'pf' | 'pj' | 'ambos'; obrigatorio_pj: boolean; eh_pix?: boolean }
 interface Documento {
   id: string; tipo_id: number; caminho: string; nome_arquivo: string; tamanho: number | null; status: StatusDocumento;
   motivo_recusa: string | null; atual: boolean; enviado_por: string | null; enviado_em: string;
@@ -454,7 +458,7 @@ const PESSOAS: { valor: Tipo['pessoa']; titulo: string }[] = [
   { valor: 'geral', titulo: 'Documentos complementares' },
 ];
 
-function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar }: { pasta: Pasta; estadoCivil: EstadoCivil; conjuge: boolean; equipe: boolean; aoMudar: () => void }) {
+function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar, pixIntegrado }: { pasta: Pasta; estadoCivil: EstadoCivil; conjuge: boolean; equipe: boolean; aoMudar: () => void; pixIntegrado: boolean }) {
   const [tipos, setTipos] = useState<Tipo[]>([]);
   const [docs, setDocs] = useState<Documento[]>([]);
   const [recarga, setRecarga] = useState(0);
@@ -499,9 +503,9 @@ function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar }: { pasta: P
     setRecarga((n) => n + 1);
   };
   const pj = pasta.tipo_pessoa === 'pj';
-  const visiveis = tipos.filter((t) => pj
+  const visiveis = tipos.filter((t) => !(pixIntegrado && t.eh_pix) && (pj
     ? t.aplica_a !== 'pf'
-    : t.aplica_a !== 'pj' && (t.pessoa !== 'conjuge' || conjuge) && (t.exibir_para.length === 0 || t.exibir_para.includes(estadoCivil)));
+    : t.aplica_a !== 'pj' && (t.pessoa !== 'conjuge' || conjuge) && (t.exibir_para.length === 0 || t.exibir_para.includes(estadoCivil))));
 
   return (
     <div className="cartao">
@@ -753,6 +757,7 @@ function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolea
     setEnviando(false);
     if (error) {
       setErro(error.message.includes('DOCUMENTOS_FALTANDO') ? 'Ainda falta anexar documento obrigatório.'
+        : error.message.includes('PIX_PENDENTE') ? 'O Pix do sinal ainda não foi pago.'
         : error.message.includes('REGIME_NAO_INFORMADO') ? 'Informe o regime de bens do casamento (Editar dados) antes de submeter.'
         : error.message.includes('DADOS_CONJUGE_INCOMPLETOS') ? 'Preencha nome, CPF e profissão do cônjuge antes de submeter.'
         : error.message.includes('DADOS_INCOMPLETOS') ? 'Preencha telefone, e-mail e profissão do comprador antes de submeter.'

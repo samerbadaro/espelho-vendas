@@ -3,6 +3,7 @@ import { ImageUp, Trash2 } from 'lucide-react';
 import { supabase } from './dados';
 import { useMarca, useDialogos, aplicarMarca, textoSobre, FONTES, type Marca } from './ui';
 import { ConfigContrato } from './contrato/ConfigContrato';
+import { ConfigPixSinal } from './PixSinal';
 
 type Campos = Pick<Marca, 'nome_empreendimento' | 'cidade' | 'cor_primaria' | 'cor_destaque' | 'cor_apoio' | 'fonte' | 'logo_url' | 'logo_escuro_url' | 'imagem_login_url' | ChaveModulo>;
 type ChaveModulo = 'modulo_propostas' | 'modulo_treinamentos' | 'modulo_pastas' | 'modulo_funil' | 'modulo_portal' | 'modulo_rodadas' | 'modulo_meeting' | 'modulo_tv' | 'modulo_cadastro' | 'modulo_espelho_parceiros';
@@ -117,6 +118,7 @@ export function Empreendimento() {
 
         <div className="acoes"><button className="botao principal" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar alterações'}</button></div>
       </form>
+      <ConfigPixSinal />
       {'modulo_propostas' in marca && <ConfigContrato />}
     </section>
   );
