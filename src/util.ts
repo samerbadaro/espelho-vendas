@@ -70,8 +70,9 @@ export const REGIMES: { valor: RegimeBens; rotulo: string }[] = [
 ];
 export const ehSeparacao = (r: string | null | undefined) => r === 'separacao_total' || r === 'separacao_obrigatoria';
 /** O cônjuge entra no contrato (dados e documentos exigidos)? Mesma regra do banco (conjuge_no_contrato). */
-export const conjugeNoContrato = (e: EstadoCivil, regime: string | null | undefined, participa: boolean | null | undefined) =>
-  temConjuge(e) && (!ehSeparacao(regime) || participa !== false);
+export const conjugeNoContrato = (e: EstadoCivil, regime: string | null | undefined, participa: boolean | null | undefined, tipo: string | null | undefined = 'pf') =>
+  (tipo ?? 'pf') === 'pf' && temConjuge(e) && (!ehSeparacao(regime) || participa !== false);
+export type TipoPessoa = 'pf' | 'pj';
 
 export type StatusPasta = 'incompleta' | 'pronta' | 'aguardando_analise' | 'em_analise' | 'pendente_correcao' | 'aprovada';
 export const STATUS_PASTA: { valor: StatusPasta; rotulo: string }[] = [

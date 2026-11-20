@@ -3,15 +3,14 @@ import { supabase, formatarDataHora } from './dados';
 import { useDialogos } from './ui';
 import { FileSpreadsheet, BarChart3, FileArchive } from 'lucide-react';
 import { zipSync } from 'fflate';
-import { DadosContrato } from './contrato/DadosContrato';
 import {
-  ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarTelefone, formatarData, formatarTamanho,
-  ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC, REGIMES, ehSeparacao, conjugeNoContrato, type RegimeBens,
+  ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarCNPJ, cnpjValido, formatarTelefone, formatarData, formatarTamanho,
+  ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC, REGIMES, ehSeparacao, conjugeNoContrato, type RegimeBens, type TipoPessoa,
   type EstadoCivil, type StatusPasta, type StatusDocumento, type Perfil,
 } from './util';
 
 interface PastaResumo {
-  id: string; codigo: string; comprador_nome: string; comprador_cpf: string; status: StatusPasta;
+  id: string; codigo: string; comprador_nome: string; comprador_cpf: string; status: StatusPasta; empresa_razao_social?: string | null;
   criada_em: string; imobiliaria_id: string; criado_por: string | null; criado_por_id: string | null;
   codigo_aprovacao: string | null; submetida_em: string | null;
   imobiliarias: { nome: string } | null; unidades_numeros: string | null;
@@ -45,7 +44,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     supabase.from('pastas')
-      .select('id, codigo, codigo_aprovacao, submetida_em, comprador_nome, comprador_cpf, status, criada_em, imobiliaria_id, criado_por, criado_por_id, imobiliarias(nome), unidades_numeros')
+      .select('id, codigo, codigo_aprovacao, submetida_em, comprador_nome, comprador_cpf, empresa_razao_social, status, criada_em, imobiliaria_id, criado_por, criado_por_id, imobiliarias(nome), unidades_numeros')
       .order('criada_em', { ascending: false })
       .then(({ data, error }) => {
         if (error) setErro('Não foi possível carregar as pastas. Recarregue a página.');
@@ -64,7 +63,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
     const d = soDigitos(busca);
     return (pastas ?? []).filter((p) =>
       (aba === 'todas' || p.codigo_aprovacao)
-      && (!t || p.comprador_nome.toLowerCase().includes(t) || p.codigo.toLowerCase().includes(t)
+      && (!t || p.comprador_nome.toLowerCase().includes(t) || (p.empresa_razao_social ?? '').toLowerCase().includes(t) || p.codigo.toLowerCase().includes(t)
                 || (p.codigo_aprovacao ?? '').toLowerCase().includes(t)
         || (d.length >= 3 && p.comprador_cpf.includes(d)) || (p.unidades_numeros ?? '').includes(t)
         || nomeCriador(p).toLowerCase().includes(t))
@@ -153,7 +152,7 @@ export function ListaPastas({ perfil }: { perfil: Perfil }) {
                 onKeyDown={(e) => e.key === 'Enter' && ir(`/painel/pastas/${p.id}`)}>
                 <td className="mono" data-rotulo="Pasta">{p.codigo}</td>
                 <td className="mono" data-rotulo="Aprovação">{p.codigo_aprovacao ?? '—'}</td>
-                <td className="celula-titulo"><strong>{p.comprador_nome}</strong></td>
+                <td className="celula-titulo"><strong>{p.empresa_razao_social || p.comprador_nome}</strong>{p.empresa_razao_social && <small className="sub"> · rep. {p.comprador_nome}</small>}</td>
                 <td className="nowrap" data-rotulo="CPF">{formatarCPF(p.comprador_cpf)}</td>
                 {equipe && <td data-rotulo="Imobiliária">{p.imobiliarias?.nome}</td>}
                 {verCriador && <td data-rotulo="Corretor">{nomeCriador(p) || <span className="pendente">Sem corretor</span>}</td>}
@@ -177,6 +176,7 @@ interface Pasta {
   comprador_nome: string; comprador_cpf: string; comprador_nascimento: string | null;
   comprador_telefone: string | null; comprador_email: string | null; estado_civil: EstadoCivil;
   regime_bens: RegimeBens | '' | null; conjuge_participa: boolean;
+  tipo_pessoa: TipoPessoa; empresa_razao_social: string | null; empresa_cnpj: string | null;
   conjuge_nome: string | null; conjuge_cpf: string | null; conjuge_nascimento: string | null;
   conjuge_telefone: string | null; conjuge_email: string | null; conjuge_profissao: string | null;
   comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criado_por_id?: string | null; criada_em: string;
@@ -187,7 +187,7 @@ type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por'
 
 const FORM_VAZIO: Form = {
   imobiliaria_id: '', comprador_nome: '', comprador_cpf: '', comprador_nascimento: null, comprador_telefone: '',
-  comprador_email: '', comprador_profissao: '', estado_civil: 'solteiro', regime_bens: '', conjuge_participa: true, conjuge_nome: '', conjuge_cpf: '', conjuge_nascimento: null,
+  comprador_email: '', comprador_profissao: '', estado_civil: 'solteiro', regime_bens: '', conjuge_participa: true, tipo_pessoa: 'pf', empresa_razao_social: '', empresa_cnpj: '', conjuge_nome: '', conjuge_cpf: '', conjuge_nascimento: null,
   conjuge_telefone: '', conjuge_email: '', conjuge_profissao: '', observacoes: '',
 };
 
@@ -217,7 +217,8 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     setForm({
       imobiliaria_id: p.imobiliaria_id, comprador_nome: p.comprador_nome, comprador_cpf: formatarCPF(p.comprador_cpf),
       comprador_nascimento: p.comprador_nascimento, comprador_telefone: formatarTelefone(p.comprador_telefone),
-      comprador_email: p.comprador_email ?? '', comprador_profissao: p.comprador_profissao ?? '', estado_civil: p.estado_civil, regime_bens: p.regime_bens ?? '', conjuge_participa: p.conjuge_participa ?? true, conjuge_nome: p.conjuge_nome ?? '',
+      comprador_email: p.comprador_email ?? '', comprador_profissao: p.comprador_profissao ?? '', estado_civil: p.estado_civil, regime_bens: p.regime_bens ?? '', conjuge_participa: p.conjuge_participa ?? true,
+      tipo_pessoa: p.tipo_pessoa ?? 'pf', empresa_razao_social: p.empresa_razao_social ?? '', empresa_cnpj: formatarCNPJ(p.empresa_cnpj), conjuge_nome: p.conjuge_nome ?? '',
       conjuge_cpf: formatarCPF(p.conjuge_cpf), conjuge_nascimento: p.conjuge_nascimento,
       conjuge_telefone: formatarTelefone(p.conjuge_telefone), conjuge_email: p.conjuge_email ?? '', conjuge_profissao: p.conjuge_profissao ?? '',
       observacoes: p.observacoes ?? '',
@@ -238,13 +239,16 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
   const salvar = async (e: FormEvent) => {
     e.preventDefault();
     setErro(''); setAviso('');
-    if (form.comprador_nome.trim().length < 3) { setErro('Informe o nome completo do comprador.'); return; }
+    const pj = form.tipo_pessoa === 'pj';
+    if (pj && (form.empresa_razao_social || '').trim().length < 3) { setErro('Informe a razão social da empresa.'); return; }
+    if (pj && !cnpjValido(form.empresa_cnpj || '')) { setErro('O CNPJ da empresa não é válido. Confira os números.'); return; }
+    if (form.comprador_nome.trim().length < 3) { setErro(pj ? 'Informe o nome completo do representante legal.' : 'Informe o nome completo do comprador.'); return; }
     if (!cpfValido(form.comprador_cpf)) { setErro('O CPF do comprador não é válido. Confira os números.'); return; }
     if (soDigitos(form.comprador_telefone || '').length < 10) { setErro('Informe o telefone do comprador com DDD.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((form.comprador_email || '').trim())) { setErro('Informe um e-mail válido para o comprador.'); return; }
     if ((form.comprador_profissao || '').trim().length < 2) { setErro('Informe a profissão do comprador.'); return; }
-    if (temConjuge(form.estado_civil) && !form.regime_bens) { setErro('Informe o regime de bens do casamento.'); return; }
-    const casal = conjugeNoContrato(form.estado_civil, form.regime_bens, form.conjuge_participa);
+    if (!pj && temConjuge(form.estado_civil) && !form.regime_bens) { setErro('Informe o regime de bens do casamento.'); return; }
+    const casal = conjugeNoContrato(form.estado_civil, form.regime_bens, form.conjuge_participa, form.tipo_pessoa);
     if (casal && form.conjuge_cpf && !cpfValido(form.conjuge_cpf)) { setErro('O CPF do cônjuge não é válido. Confira os números.'); return; }
     if (casal && (form.conjuge_profissao || '').trim().length < 2) { setErro('Informe a profissão do cônjuge.'); return; }
     if (nova && equipe && !form.imobiliaria_id) { setErro('Escolha a imobiliária responsável pela pasta.'); return; }
@@ -254,6 +258,9 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       comprador_nome: form.comprador_nome.trim(), comprador_cpf: soDigitos(form.comprador_cpf),
       comprador_nascimento: form.comprador_nascimento || null, comprador_telefone: vazioNulo(soDigitos(form.comprador_telefone || '')),
       comprador_email: vazioNulo(form.comprador_email), comprador_profissao: vazioNulo(form.comprador_profissao), estado_civil: form.estado_civil,
+      tipo_pessoa: form.tipo_pessoa,
+      empresa_razao_social: pj ? (form.empresa_razao_social || '').trim() : null,
+      empresa_cnpj: pj ? soDigitos(form.empresa_cnpj || '') : null,
       regime_bens: temConjuge(form.estado_civil) ? form.regime_bens || null : null,
       conjuge_participa: ehSeparacao(form.regime_bens) ? form.conjuge_participa : true,
       conjuge_nome: casal ? vazioNulo(form.conjuge_nome) : null,
@@ -282,13 +289,14 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
 
   if (!nova && !pasta) return <section className="secao">{erro ? <p className="erro">{erro}</p> : <p className="vazio">Carregando…</p>}</section>;
 
-  const casal = conjugeNoContrato(form.estado_civil, form.regime_bens, form.conjuge_participa);
+  const casal = conjugeNoContrato(form.estado_civil, form.regime_bens, form.conjuge_participa, form.tipo_pessoa);
+  const pj = form.tipo_pessoa === 'pj';
   return (
     <section className="secao pasta">
       <button className="voltar" onClick={() => ir('/painel/pastas')}>‹ Pastas</button>
       <div className="secao-topo">
         <div>
-          <h2>{nova ? 'Nova pasta' : pasta!.comprador_nome}</h2>
+          <h2>{nova ? 'Nova pasta' : pasta!.empresa_razao_social || pasta!.comprador_nome}</h2>
           {!nova && (
             <p className="sub">
               <span className="mono">{pasta!.codigo}</span>
@@ -307,7 +315,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
 
       <form className="cartao" onSubmit={salvar}>
         <div className="cartao-topo">
-          <h3>Dados do comprador</h3>
+          <h3>{pj ? 'Comprador pessoa jurídica' : 'Dados do comprador'}</h3>
           {!nova && !editando && (equipe || !pasta!.codigo_aprovacao) && <button type="button" className="botao" onClick={() => setEditando(true)}>Editar dados</button>}
         </div>
         <fieldset disabled={!editando || salvando} className="grade-campos">
@@ -328,7 +336,21 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
               <small>O corretor escolhido acompanha esta pasta no perfil dele, inclusive no funil.</small>
             </label>
           )}
-          <label className="largo">Nome completo<input {...campo('comprador_nome')} required maxLength={160} /></label>
+          <label className="largo">Tipo de comprador
+            <select value={form.tipo_pessoa} onChange={(e) => setForm((f) => ({ ...f, tipo_pessoa: e.target.value as TipoPessoa }))}>
+              <option value="pf">Pessoa física</option>
+              <option value="pj">Pessoa jurídica (empresa)</option>
+            </select>
+          </label>
+          {pj && (
+            <>
+              <label className="largo">Razão social<input {...campo('empresa_razao_social')} required maxLength={200} /></label>
+              <label>CNPJ<input {...campo('empresa_cnpj')} inputMode="numeric" required
+                onChange={(e) => setForm((f) => ({ ...f, empresa_cnpj: formatarCNPJ(e.target.value) }))} /></label>
+              <p className="largo sub pj-rep">Representante legal (quem assina pela empresa):</p>
+            </>
+          )}
+          <label className="largo">{pj ? 'Nome completo do representante' : 'Nome completo'}<input {...campo('comprador_nome')} required maxLength={160} /></label>
           <label>CPF<input {...campo('comprador_cpf')} inputMode="numeric" required
             onChange={(e) => setForm((f) => ({ ...f, comprador_cpf: formatarCPF(e.target.value) }))} /></label>
           <label>Data de nascimento<input type="date" {...campo('comprador_nascimento')} /></label>
@@ -341,7 +363,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
               {ESTADOS_CIVIS.map((e) => <option key={e.valor} value={e.valor}>{e.rotulo}</option>)}
             </select>
           </label>
-          {temConjuge(form.estado_civil) && (
+          {!pj && temConjuge(form.estado_civil) && (
             <label>Regime de bens
               <select {...campo('regime_bens')} required>
                 <option value="">Selecione…</option>
@@ -349,7 +371,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
               </select>
             </label>
           )}
-          {temConjuge(form.estado_civil) && ehSeparacao(form.regime_bens) && (
+          {!pj && temConjuge(form.estado_civil) && ehSeparacao(form.regime_bens) && (
             <label>O cônjuge participa do contrato?
               <select value={form.conjuge_participa ? 'sim' : 'nao'} onChange={(e) => setForm((f) => ({ ...f, conjuge_participa: e.target.value === 'sim' }))}>
                 <option value="sim">Sim, o cônjuge também assina</option>
@@ -393,8 +415,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       </form>
 
       {!nova && <Submissao pasta={pasta!} equipe={equipe} aoSubmeter={() => setRecarga((n) => n + 1)} />}
-      {!nova && <Documentos pasta={pasta!} estadoCivil={pasta!.estado_civil} conjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa)} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
-      {!nova && equipe && <DadosContrato pastaId={id} temConjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa)} aoMudar={() => setRecarga((n) => n + 1)} />}
+      {!nova && <Documentos pasta={pasta!} estadoCivil={pasta!.estado_civil} conjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa, pasta!.tipo_pessoa)} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && <HistoricoPasta pastaId={id} recarga={recarga} />}
     </section>
   );
@@ -418,7 +439,7 @@ function VincularUnidade({ pasta }: { pasta: Pasta; aoMudar?: () => void }) {
 // =====================================================================
 // Documentos
 // =====================================================================
-interface Tipo { id: number; nome: string; pessoa: 'comprador' | 'conjuge' | 'geral'; obrigatorio_para: EstadoCivil[]; exibir_para: EstadoCivil[]; multiplo: boolean; ordem: number }
+interface Tipo { id: number; nome: string; pessoa: 'comprador' | 'conjuge' | 'geral'; obrigatorio_para: EstadoCivil[]; exibir_para: EstadoCivil[]; multiplo: boolean; ordem: number; aplica_a: 'pf' | 'pj' | 'ambos'; obrigatorio_pj: boolean }
 interface Documento {
   id: string; tipo_id: number; caminho: string; nome_arquivo: string; tamanho: number | null; status: StatusDocumento;
   motivo_recusa: string | null; atual: boolean; enviado_por: string | null; enviado_em: string;
@@ -477,8 +498,10 @@ function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar }: { pasta: P
     avisar(`${r.arquivos.length} documentos baixados.`);
     setRecarga((n) => n + 1);
   };
-  const visiveis = tipos.filter((t) => (t.pessoa !== 'conjuge' || conjuge)
-    && (t.exibir_para.length === 0 || t.exibir_para.includes(estadoCivil)));
+  const pj = pasta.tipo_pessoa === 'pj';
+  const visiveis = tipos.filter((t) => pj
+    ? t.aplica_a !== 'pf'
+    : t.aplica_a !== 'pj' && (t.pessoa !== 'conjuge' || conjuge) && (t.exibir_para.length === 0 || t.exibir_para.includes(estadoCivil)));
 
   return (
     <div className="cartao">
@@ -499,7 +522,7 @@ function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar }: { pasta: P
             <ul className="docs">
               {lista.map((t) => (
                 <LinhaDocumento key={t.id} tipo={t} pasta={pasta} equipe={equipe}
-                  obrigatorio={t.obrigatorio_para.includes(estadoCivil)}
+                  obrigatorio={pj ? t.obrigatorio_pj : t.obrigatorio_para.includes(estadoCivil)}
                   docs={docs.filter((d) => d.tipo_id === t.id)} aoMudar={atualizar} />
               ))}
             </ul>

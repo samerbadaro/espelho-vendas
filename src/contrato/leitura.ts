@@ -18,12 +18,17 @@ export const CAMPOS_ENDERECO = [
 ] as const;
 
 export type Pessoa = Partial<Record<(typeof CAMPOS_PESSOA)[number][0], string>> & { endereco?: Partial<Record<(typeof CAMPOS_ENDERECO)[number][0], string>> };
-export interface DadosContrato { comprador?: Pessoa; conjuge?: Pessoa }
+export const CAMPOS_EMPRESA = [
+  ['razao_social', 'Razão social'], ['cnpj', 'CNPJ'], ['atividade', 'Atividade econômica'], ['registro_junta', 'Registro na junta comercial'],
+  ['data_abertura', 'Data de abertura'], ['telefone', 'Telefone'], ['email', 'E-mail'],
+] as const;
+export type Empresa = Partial<Record<(typeof CAMPOS_EMPRESA)[number][0], string>> & { endereco?: Partial<Record<(typeof CAMPOS_ENDERECO)[number][0], string>> };
+export interface DadosContrato { comprador?: Pessoa; conjuge?: Pessoa; empresa?: Empresa }
 export interface Alerta { nivel: 'atencao' | 'info'; texto: string }
 
 interface DocInfo { id: string; caminho: string; arquivo: string; mime: string | null; tipo: string; pessoa: string }
 interface Contexto {
-  pasta: { codigo: string; estado_civil: string; regime_bens: string | null; conjuge_no_contrato: boolean; comprador: Record<string, string | null>; conjuge: Record<string, string | null> };
+  pasta: { codigo: string; tipo_pessoa?: 'pf' | 'pj'; empresa?: Record<string, string | null> | null; estado_civil: string; regime_bens: string | null; conjuge_no_contrato: boolean; comprador: Record<string, string | null>; conjuge: Record<string, string | null> };
   documentos: DocInfo[];
 }
 
@@ -65,6 +70,13 @@ const FERRAMENTA = {
     properties: {
       comprador: pessoaSchema,
       conjuge: pessoaSchema,
+      empresa: {
+        type: 'object', description: 'Só quando o comprador é pessoa jurídica.',
+        properties: {
+          ...Object.fromEntries(CAMPOS_EMPRESA.map(([k]) => [k, { type: 'string' }])),
+          endereco: { type: 'object', properties: Object.fromEntries(CAMPOS_ENDERECO.map(([k]) => [k, { type: 'string' }])) },
+        },
+      },
       fontes: { type: 'object', description: 'Para cada campo preenchido, o código do documento de onde veio (ex.: {"comprador.rg": "D1", "comprador.endereco.cep": "D2"}).', additionalProperties: { type: 'string' } },
       alertas: {
         type: 'array',
@@ -85,6 +97,7 @@ Regras:
 - Estado civil e regime de bens: da certidão de casamento, quando houver. Se o regime da certidão for diferente do informado na pasta, gere um alerta.
 - Se a pasta disser que o cônjuge NÃO participa do contrato, não preencha "conjuge".
 - Endereço: do comprovante de endereço.
+- Se a pasta for de PESSOA JURÍDICA: preencha "empresa" com os dados do contrato social, da última alteração e do cartão CNPJ (endereço da empresa pelo comprovante da empresa ou cartão CNPJ), e use "comprador" para o REPRESENTANTE LEGAL (quem assina pela empresa). Confira se o representante tem poderes no contrato social e gere alerta se não tiver. Não preencha "conjuge".
 - Em "fontes", indique de qual documento (D1, D2...) veio cada campo preenchido.
 - Em "alertas" (nivel "atencao"), aponte em português simples:
   * CPF, nome ou data de nascimento diferentes do que foi digitado na pasta;
@@ -121,7 +134,16 @@ export function padronizar(d: DadosContrato): DadosContrato {
     }
     return n;
   };
-  return { ...d, comprador: um(d.comprador), conjuge: um(d.conjuge) };
+  const emp = d.empresa ? { ...d.empresa, endereco: d.empresa.endereco ? { ...d.empresa.endereco } : undefined } : undefined;
+  if (emp) {
+    if (emp.razao_social) emp.razao_social = emp.razao_social.trim().toUpperCase();
+    if (emp.atividade) emp.atividade = capitalizar(emp.atividade);
+    if (emp.endereco) {
+      for (const k of CAPITALIZAR_END) if (emp.endereco[k]) emp.endereco[k] = capitalizar(emp.endereco[k]!);
+      if (emp.endereco.uf) emp.endereco.uf = emp.endereco.uf.trim().toUpperCase();
+    }
+  }
+  return { ...d, comprador: um(d.comprador), conjuge: um(d.conjuge), empresa: emp };
 }
 
 export interface ResultadoLeitura { dados: DadosContrato; fontes: Record<string, string>; alertas: Alerta[]; lidos: number; ignorados: string[]; tokensEntrada: number; tokensSaida: number }
@@ -135,10 +157,11 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
 
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const rotuloRegime = REGIMES.find((x) => x.valor === ctx.pasta.regime_bens)?.rotulo ?? '';
-  const temConj = ctx.pasta.conjuge_no_contrato !== false && ['casado', 'uniao_estavel'].includes(ctx.pasta.estado_civil);
+  const pj = ctx.pasta.tipo_pessoa === 'pj';
+  const temConj = !pj && ctx.pasta.conjuge_no_contrato !== false && ['casado', 'uniao_estavel'].includes(ctx.pasta.estado_civil);
   const conteudo: unknown[] = [{
     type: 'text',
-    text: `Pasta ${ctx.pasta.codigo}. Estado civil informado: ${ctx.pasta.estado_civil}.${ctx.pasta.regime_bens ? ` Regime de bens informado: ${rotuloRegime}.` : ''}${temConj ? '' : ' O cônjuge NÃO participa do contrato.'}\nDados digitados na pasta (para comparar):\n${JSON.stringify({ comprador: ctx.pasta.comprador, conjuge: ctx.pasta.conjuge })}\n\nDocumentos a seguir:`,
+    text: `Pasta ${ctx.pasta.codigo}.${pj ? ` COMPRADOR PESSOA JURÍDICA: ${ctx.pasta.empresa?.razao_social ?? ''}, CNPJ ${ctx.pasta.empresa?.cnpj ?? ''}. Os dados de pessoa abaixo são do representante legal.` : ''} Estado civil informado: ${ctx.pasta.estado_civil}.${ctx.pasta.regime_bens ? ` Regime de bens informado: ${rotuloRegime}.` : ''}${temConj ? '' : ' O cônjuge NÃO participa do contrato.'}\nDados digitados na pasta (para comparar):\n${JSON.stringify({ comprador: ctx.pasta.comprador, conjuge: ctx.pasta.conjuge })}\n\nDocumentos a seguir:`,
   }];
   const ignorados: string[] = [];
   const nomes: Record<string, string> = {};
@@ -192,10 +215,16 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
     try { uso = m ? JSON.parse(m[0]) : null; } catch { uso = null; }
   }
   if (!uso) throw new Error('A IA não devolveu os dados. Tente de novo.');
-
-  const dados: DadosContrato = { comprador: uso.comprador ?? {}, conjuge: temConj ? uso.conjuge ?? undefined : undefined };
-  if (rotuloRegime) for (const q of ['comprador', 'conjuge'] as const) { const p = dados[q]; if (p && !p.regime_bens) p.regime_bens = rotuloRegime; }
   const alertas: Alerta[] = Array.isArray(uso.alertas) ? uso.alertas : [];
+
+  const dados: DadosContrato = { comprador: uso.comprador ?? {}, conjuge: temConj ? uso.conjuge ?? undefined : undefined, empresa: pj ? uso.empresa ?? {} : undefined };
+  if (pj && dados.empresa) {
+    dados.empresa.razao_social ||= ctx.pasta.empresa?.razao_social ?? '';
+    dados.empresa.cnpj ||= ctx.pasta.empresa?.cnpj ?? '';
+    if (dados.empresa.cnpj && ctx.pasta.empresa?.cnpj && soDigitos(dados.empresa.cnpj) !== soDigitos(ctx.pasta.empresa.cnpj))
+      alertas.push({ nivel: 'atencao', texto: 'CNPJ nos documentos é diferente do digitado na pasta.' });
+  }
+  if (rotuloRegime) for (const q of ['comprador', 'conjuge'] as const) { const p = dados[q]; if (p && !p.regime_bens) p.regime_bens = rotuloRegime; }
   // completa com o que já está na pasta (e-mail, telefone, profissão) quando a IA não achou
   for (const quem of ['comprador', 'conjuge'] as const) {
     const base = ctx.pasta[quem];

@@ -3,14 +3,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Info, Sparkles } from 'lucide-react';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
-import { CAMPOS_ENDERECO, CAMPOS_PESSOA, lerDocumentosComIA, MODELO_IA, padronizar, type Alerta, type DadosContrato as Dados, type Pessoa } from './leitura';
+import { CAMPOS_EMPRESA, CAMPOS_ENDERECO, CAMPOS_PESSOA, lerDocumentosComIA, MODELO_IA, padronizar, type Alerta, type DadosContrato as Dados, type Empresa, type Pessoa } from './leitura';
 
 interface Registro {
   dados: Dados; fontes: Record<string, string>; alertas: Alerta[]; status: 'rascunho' | 'conferido';
   lido_em: string | null; lido_por: string | null; conferido_em: string | null; conferido_por: string | null;
 }
 
-export function DadosContrato({ pastaId, temConjuge, aoMudar }: { pastaId: string; temConjuge: boolean; aoMudar: () => void }) {
+export function DadosContrato({ pastaId, temConjuge, pj = false, aoMudar }: { pastaId: string; temConjuge: boolean; pj?: boolean; aoMudar: () => void }) {
   const { avisar, confirmar } = useDialogos();
   const [liberado, setLiberado] = useState<boolean | null>(null);
   const [reg, setReg] = useState<Registro | null>(null);
@@ -58,6 +58,16 @@ export function DadosContrato({ pastaId, temConjuge, aoMudar }: { pastaId: strin
     await carregar(); aoMudar();
   };
 
+  const mudarEmpresa = (campo: string, valor: string, endereco = false) => {
+    setAlterado(true);
+    setDados((d) => {
+      const m: Empresa = { ...(d.empresa ?? {}) };
+      if (endereco) m.endereco = { ...(m.endereco ?? {}), [campo]: valor };
+      else (m as Record<string, string>)[campo] = valor;
+      return { ...d, empresa: m };
+    });
+  };
+
   const mudar = (quem: 'comprador' | 'conjuge', campo: string, valor: string, endereco = false) => {
     setAlterado(true);
     setDados((d) => {
@@ -69,13 +79,13 @@ export function DadosContrato({ pastaId, temConjuge, aoMudar }: { pastaId: strin
   };
 
   const alertas = reg?.alertas ?? [];
-  const pessoas: ('comprador' | 'conjuge')[] = temConjuge ? ['comprador', 'conjuge'] : ['comprador'];
+  const pessoas: ('comprador' | 'conjuge')[] = temConjuge && !pj ? ['comprador', 'conjuge'] : ['comprador'];
 
   return (
     <div className="cartao dados-contrato">
       <div className="cartao-topo">
         <div>
-          <h3>Dados para contrato</h3>
+          <h3>Partes do contrato</h3>
           <p className="sub">
             {!reg ? 'A IA lê os documentos da pasta e preenche os campos. Depois a equipe confere.'
               : reg.status === 'conferido' ? <>Conferido por {reg.conferido_por} em {formatarDataHora(reg.conferido_em!)}</>
@@ -97,12 +107,32 @@ export function DadosContrato({ pastaId, temConjuge, aoMudar }: { pastaId: strin
         </ul>
       )}
 
+      {(reg || alterado) && pj && (
+        <fieldset className="dc-pessoa">
+          <legend>Empresa compradora</legend>
+          <div className="dc-grade">
+            {CAMPOS_EMPRESA.map(([k, rot]) => (
+              <label key={k} className={k === 'razao_social' || k === 'atividade' ? 'dc-largo' : ''}>
+                <span>{rot}{reg?.fontes?.[`empresa.${k}`] && <small className="dc-fonte">{reg.fontes[`empresa.${k}`]}</small>}</span>
+                <input value={(dados.empresa as Record<string, string> | undefined)?.[k] ?? ''} onChange={(e) => mudarEmpresa(k, e.target.value)} />
+              </label>
+            ))}
+            {CAMPOS_ENDERECO.map(([k, rot]) => (
+              <label key={k} className={k === 'logradouro' ? 'dc-largo' : ''}>
+                <span>{rot}</span>
+                <input value={dados.empresa?.endereco?.[k] ?? ''} onChange={(e) => mudarEmpresa(k, e.target.value, true)} />
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
       {(reg || alterado) && pessoas.map((quem) => {
         const p = dados[quem] ?? {};
         const fonte = (c: string) => reg?.fontes?.[`${quem}.${c}`];
         return (
           <fieldset key={quem} className="dc-pessoa">
-            <legend>{quem === 'comprador' ? 'Comprador' : 'Cônjuge'}</legend>
+            <legend>{quem === 'conjuge' ? 'Cônjuge' : pj ? 'Representante legal' : 'Comprador'}</legend>
             <div className="dc-grade">
               {CAMPOS_PESSOA.map(([k, rot]) => (
                 <label key={k} className={k === 'nome' ? 'dc-largo' : ''}>

@@ -917,3 +917,29 @@ small.bloco { display: block; color: var(--tinta-2); }
 .dc-fonte { font-size: 0.6875rem; color: var(--tinta-2); background: var(--superficie-2); border-radius: 4px; padding: 0 5px; font-weight: 500; }
 .dc-dica { flex: 1; margin: 0; }
 @media (max-width: 640px) { .dc-grade .dc-largo { grid-column: auto; } }
+.pj-rep { margin: 6px 0 -4px; font-weight: 600; color: var(--tinta); }
+
+/* Módulo Contratos */
+.dc-grade .dc-inteiro { grid-column: 1 / -1; }
+.dc-grade textarea { width: 100%; resize: vertical; }
+.ct-etapas { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.ct-etapa { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--superficie-2); color: var(--tinta-2); font-size: 0.875rem; font-weight: 600; }
+.ct-etapa.feito { background: #E6F4EA; color: #1E6B34; }
+.ct-areas { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 16px; margin: 0; }
+.ct-areas dt { font-size: 0.75rem; color: var(--tinta-2); }
+.ct-areas dd { margin: 0; font-weight: 600; }
+.ct-fluxo td, .ct-fluxo th { text-align: center; white-space: nowrap; }
+.ct-fluxo tr.total td { font-weight: 700; border-top: 2px solid var(--borda); }
+.ct-sub { margin: 18px 0 8px; font-size: 0.95rem; }
+.ct-comissao { display: grid; grid-template-columns: 2fr 1.3fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 8px; }
+.ct-total-com { flex: 1; text-align: right; }
+.ct-pendencias { margin: 0 0 12px; padding-left: 18px; color: #8A3B0C; font-size: 0.9rem; }
+.ct-pendencias:empty { display: none; }
+.ct-escolha { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.ct-doc { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.ct-doc .botao.link { margin-left: auto; }
+.ct-emitidos tr.cancelado td { opacity: 0.55; }
+.ct-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+.dc-areas td, .dc-areas th { white-space: nowrap; font-size: 0.8rem; }
+@media (max-width: 760px) { .ct-comissao { grid-template-columns: 1fr 1fr; } }
+.ct-busca { margin-bottom: 12px; }
