@@ -84,3 +84,21 @@ do $$ declare c contratos; begin
   exception when others then raise notice 'OK      Ajuste só na pasta do cliente'; end;
 end $$;
 reset role;
+
+-- 043: modelos de contrato
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false) \g /dev/null
+do $$ begin
+  perform salvar_modelo_contrato('quadro_resumo', 'x', 'modelos/x.docx'); raise notice 'FALHOU  Sec. Vendas trocou o modelo';
+exception when others then raise notice 'OK      Só administrador troca o modelo'; end $$;
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false) \g /dev/null
+do $$ declare m modelos_contrato; begin
+  perform salvar_modelo_contrato('quadro_resumo', 'v1', 'modelos/a.docx');
+  m := salvar_modelo_contrato('quadro_resumo', 'v2', 'modelos/b.docx');
+  raise notice '%  Só um modelo ativo por documento', case when (select count(*) from modelos_contrato where documento = 'quadro_resumo' and ativo) = 1 and m.ativo then 'OK    ' else 'FALHOU' end;
+  perform usar_modelo_padrao('quadro_resumo');
+  raise notice '%  Voltar ao padrão desativa o enviado', case when not exists (select 1 from modelos_contrato where ativo) then 'OK    ' else 'FALHOU' end;
+end $$;
+reset role;

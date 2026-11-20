@@ -944,3 +944,11 @@ small.bloco { display: block; color: var(--tinta-2); }
 @media (max-width: 760px) { .ct-comissao { grid-template-columns: 1fr 1fr; } }
 .ct-busca { margin-bottom: 12px; }
 .ct-acoes { flex-wrap: wrap; } .ct-acoes label.botao { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.mc-linha { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda); flex-wrap: wrap; }
+.mc-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.mc-acoes label.botao { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.mc-marcadores { margin-top: 10px; }
+.mc-tabela td { vertical-align: top; font-size: 0.85rem; }
+.mc-tabela td:first-child { white-space: nowrap; }
+.mc-tabela td:last-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-copiar { margin-left: 6px; padding: 2px 5px; }

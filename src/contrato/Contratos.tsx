@@ -125,6 +125,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const [emp, setEmp] = useState<Record<string, string>>({});
   const [emit, setEmit] = useState<Emitido[]>([]);
   const [comissao, setComissao] = useState<ComissaoUI[]>([]);
+  const [modelos, setModelos] = useState<Partial<Record<TipoDocumento, string>>>({});
   const [escolha, setEscolha] = useState<Record<TipoDocumento, boolean>>({ quadro_resumo: true, normas: true });
   const [ocupado, setOcupado] = useState('');
   const [erro, setErro] = useState('');
@@ -141,6 +142,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       supabase.from('empreendimento_contrato').select('dados').maybeSingle(),
       supabase.from('contratos').select('*').eq('pasta_id', pr.pasta_id).order('numero', { ascending: false }),
     ]);
+    const { data: ms } = await supabase.from('modelos_contrato').select('documento, caminho').eq('ativo', true);
+    setModelos(Object.fromEntries(((ms as { documento: TipoDocumento; caminho: string }[]) ?? []).map((m) => [m.documento, m.caminho])));
     const pc = pa as unknown as PastaC;
     setPasta(pc);
     const rg = (r as Registro) ?? null;
@@ -188,13 +191,31 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     };
   };
 
+  /** Preenche o modelo em Word do documento (o enviado pelo administrador ou o padrão). */
+  const wordPreenchido = async (tipo: TipoDocumento, ctx: ReturnType<typeof contexto>) => {
+    const { preencherModelo, dadosParaModelo } = await import('./marcadores');
+    let modelo: ArrayBuffer;
+    if (modelos[tipo]) {
+      const { data, error } = await supabase.storage.from('contratos').download(modelos[tipo]!);
+      if (error || !data) throw new Error('Não foi possível baixar o modelo do contrato.');
+      modelo = await data.arrayBuffer();
+    } else modelo = await (await (await import('./modeloBase')).modeloPadrao(tipo)).arrayBuffer();
+    return preencherModelo(modelo, dadosParaModelo(ctx));
+  };
+
   const previa = async (tipo: TipoDocumento) => {
     setOcupado(`Montando ${NOME_DOCUMENTO[tipo]}…`);
     try {
-      const { gerarDocumento } = await import('./gerador');
-      const { pdf } = await gerarDocumento(tipo, contexto());
-      window.open(URL.createObjectURL(pdf), '_blank');
-    } catch (e) { avisar(`Não foi possível montar o PDF. ${(e as Error).message}`, 'erro'); }
+      if (!modelos[tipo]) {
+        const { gerarDocumento } = await import('./gerador');
+        const { pdf } = await gerarDocumento(tipo, contexto());
+        window.open(URL.createObjectURL(pdf), '_blank');
+      } else {
+        const { docx, vazios } = await wordPreenchido(tipo, contexto());
+        const a = document.createElement('a'); a.href = URL.createObjectURL(docx); a.download = `Prévia - ${NOME_DOCUMENTO[tipo]}.docx`; a.click();
+        if (vazios.length) avisar(`Marcadores sem valor: ${vazios.slice(0, 6).join(', ')}`, 'erro');
+      }
+    } catch (e) { avisar(`Não foi possível montar o documento. ${(e as Error).message}`, 'erro'); }
     finally { setOcupado(''); }
   };
 
@@ -202,15 +223,16 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     const tipos = (Object.keys(escolha) as TipoDocumento[]).filter((t) => escolha[t]);
     if (!(await confirmar({ titulo: `Emitir ${tipos.map((t) => NOME_DOCUMENTO[t]).join(' e ')}?`, texto: 'Os documentos ficam registrados na pasta, com número, aguardando validação.', confirmar: 'Emitir' }))) return;
     try {
-      const { gerarDocumento, gerarWord } = await import('./gerador');
+      const { gerarDocumento } = await import('./gerador');
       for (const t of tipos) {
         setOcupado(`Gerando ${NOME_DOCUMENTO[t]}…`);
         const ctx = contexto();
-        const [{ pdf }, { docx }] = await Promise.all([gerarDocumento(t, ctx), gerarWord(t, ctx)]);
+        // Word sempre a partir do modelo; PDF só quando o modelo é o padrão (com modelo próprio, o PDF sai na D4Sign)
+        const [{ docx }, pdf] = await Promise.all([wordPreenchido(t, ctx), modelos[t] ? null : gerarDocumento(t, ctx).then((x) => x.pdf)]);
         const base = `${pasta.id}/${crypto.randomUUID()}`;
-        const caminho = `${base}.pdf`, caminhoDocx = `${base}.docx`;
+        const caminho = pdf ? `${base}.pdf` : null, caminhoDocx = `${base}.docx`;
         const [u1, u2] = await Promise.all([
-          supabase.storage.from('contratos').upload(caminho, pdf, { contentType: 'application/pdf' }),
+          pdf ? supabase.storage.from('contratos').upload(caminho!, pdf, { contentType: 'application/pdf' }) : { error: null },
           supabase.storage.from('contratos').upload(caminhoDocx, docx, { contentType: DOCX }),
         ]);
         if (u1.error || u2.error) throw new Error('Falha ao guardar os arquivos.');
@@ -350,8 +372,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
           {(Object.keys(NOME_DOCUMENTO) as TipoDocumento[]).map((t) => (
             <label key={t} className="ct-doc">
               <input type="checkbox" checked={escolha[t]} onChange={(e) => setEscolha({ ...escolha, [t]: e.target.checked })} />
-              <FileText size={16} /> {NOME_DOCUMENTO[t]}
-              <button type="button" className="botao pequeno" disabled={!!ocupado} onClick={() => previa(t)}><Eye size={14} /> Pré-visualizar</button>
+              <FileText size={16} /> {NOME_DOCUMENTO[t]} <small className="sub">{modelos[t] ? 'modelo do empreendimento (Word)' : 'modelo padrão'}</small>
+              <button type="button" className="botao pequeno" disabled={!!ocupado} onClick={() => previa(t)}><Eye size={14} /> {modelos[t] ? 'Prévia em Word' : 'Pré-visualizar'}</button>
             </label>
           ))}
         </div>

@@ -30,11 +30,11 @@ export type TipoDocumento = 'quadro_resumo' | 'normas';
 export const NOME_DOCUMENTO: Record<TipoDocumento, string> = { quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais' };
 
 // ---------- formatação ----------
-const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-const up = (s?: string | null) => (s ?? '').toLocaleUpperCase('pt-BR');
-const data = (s?: string | null) => (!s ? '' : /^\d{4}-\d{2}-\d{2}/.test(s) ? fmtData(s.slice(0, 10)) : s);
-const real = (v: number) => fmtReal(v).replace(/ /g, ' ');
-const valorExt = (v: number) => `${real(v)} (${extensoReais(v)})`;
+export const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+export const up = (s?: string | null) => (s ?? '').toLocaleUpperCase('pt-BR');
+export const data = (s?: string | null) => (!s ? '' : /^\d{4}-\d{2}-\d{2}/.test(s) ? fmtData(s.slice(0, 10)) : s);
+export const real = (v: number) => fmtReal(v).replace(/ /g, ' ');
+export const valorExt = (v: number) => `${real(v)} (${extensoReais(v)})`;
 const cep = (s?: string) => { const d = soDigitos(s ?? ''); return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : (s ?? ''); };
 export function enderecoTexto(e?: Endereco | null) {
   if (!e) return '';
@@ -54,7 +54,8 @@ export type Item =
   | { k: 'p'; texto: string; o: OpPara }
   | { k: 'tabela'; o: UserOptions }
   | { k: 'assin'; nomes: string[][]; colunas: number }
-  | { k: 'espaco'; mm: number };
+  | { k: 'espaco'; mm: number }
+  | { k: 'assinLoop'; lista: string };   // só nos modelos com marcadores: uma assinatura por item da lista
 
 /** Monta o conteúdo do documento (independente do formato de saída). */
 class Escritor {
@@ -150,7 +151,7 @@ class EscritorPdf {
 }
 
 // ---------- blocos ----------
-function nomesCompradores(c: ContextoContrato): string[][] {
+export function nomesCompradores(c: ContextoContrato): string[][] {
   if (c.tipoPessoa === 'pj') return [[up(c.empresa?.razao_social), `p.p. ${up(c.comprador.nome)}`]];
   return [[up(c.comprador.nome), 'COMPRADOR(A)'], ...(c.conjuge?.nome ? [[up(c.conjuge.nome), 'COMPRADOR(A)']] : [])];
 }
@@ -208,36 +209,30 @@ function blocoUnidade(e: Escritor) {
   ]);
 }
 
-function blocoPagamento(e: Escritor) {
-  const s = e.ctx.series.filter((x) => x.qtd > 0 && x.valor > 0);
-  const total = s.reduce((t, x) => t + x.qtd * x.valor, 0);
-  e.para(`4.1. O preço, certo e ajustado, para aquisição e pagamento da unidade autônoma de apartamento indicada no item “3.1” acima é de ${valorExt(total)}, que deverá ser integralmente pago ou amortizado pelo(s) COMPRADOR(ES) nas seguintes condições:`);
-  e.autoTabela({
-    head: [['Série', 'Periodicidade', 'Quant.', 'Valor unitário', 'Valor total', '%', '1º vencimento', 'Correção']],
-    body: [
-      ...s.map((x, i): RowInput => [ROMANOS[i] ?? String(i + 1), ROTULO_PER[x.periodicidade] ?? up(x.periodicidade), String(x.qtd), real(x.valor),
-        real(x.qtd * x.valor), `${fmtNum((x.qtd * x.valor * 100) / total, 2)}%`, fmtData(x.vencimento), x.periodicidade === 'Sinal' ? 'Fixa' : 'Reajustável']),
-      [{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: real(total), styles: { fontStyle: 'bold' } }, { content: '100,00%', styles: { fontStyle: 'bold' } }, { content: '', colSpan: 2 }],
-    ],
-    styles: { fontSize: 8, cellPadding: 1.2, halign: 'center', lineColor: [160, 160, 160], lineWidth: 0.1, textColor: 20 },
-    columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 28 }, 2: { cellWidth: 13 }, 3: { cellWidth: 25 }, 4: { cellWidth: 25 }, 5: { cellWidth: 15 }, 6: { cellWidth: 25 }, 7: { cellWidth: 27 } },
-  });
+export const TEXTO_HABITE_1 = 'A parcela “de Habite-se” poderá ser paga com recursos próprios ou, a critério do(s) COMPRADOR(ES), por meio de financiamento bancário junto a instituição financeira idônea, sendo que o(s) COMPRADOR(ES) declara(m) estar ciente(s) de que a responsabilidade pela obtenção de eventual financiamento bancário competirá única e exclusivamente a ele(s), COMPRADOR(ES), sem qualquer responsabilidade ou participação da VENDEDORA, especialmente no que se refere à obtenção dos documentos que venham a ser exigidos pela instituição financeira. O não pagamento desta parcela “de Habite-se” na data prevista de seu vencimento, independentemente do motivo, colocará o(s) COMPRADOR(ES) em automática mora, sujeitando-o às penalidades previstas nas normas contratuais.';
+export const TEXTO_HABITE_2 = 'O(s) COMPRADOR(ES) declara(m) ter conhecimento que a utilização de recursos do FGTS para pagamento de parte do preço somente será aceita para quitação do saldo devedor e apenas para as parcelas cujo vencimento seja posterior à emissão do habite-se do empreendimento e averbação deste junto ao Cartório de Registro de Imóveis competente, sendo rigorosamente certo que o pagamento só será considerado efetivamente realizado e o valor quitado na data em que a quantia correspondente for liberada para uso imediato pela VENDEDORA. A responsabilidade pela apresentação de todos e quaisquer documentos necessários e exigidos pela instituição financeira para liberação e saque de recursos do FGTS competirá única e exclusivamente ao(s) COMPRADOR(ES), não tendo a VENDEDORA nenhuma responsabilidade nesse sentido.';
+export const TEXTO_QUITACAO_SINAL = 'A quitação da parcela de arras/sinal se dará automaticamente com a compensação financeira e efetiva liberação do crédito bancário em favor da VENDEDORA. Em caso de não quitação no vencimento do valor acordado à título de arras/sinal, estará convalidado o inadimplemento contratual do(s) COMPRADOR(ES), ficando automaticamente rescindido o presente contrato e também rescindida a proposta de compra e venda, podendo a VENDEDORA, a partir de então, dar à unidade autônoma a destinação que melhor lhe aprouver.';
+export const TEXTO_BOLETOS = 'Todas as parcelas deverão ser pagas através de boleto bancário ou outra forma definida exclusivamente pela VENDEDORA, que será enviado ao(s) COMPRADOR(ES), ao endereço de e-mail indicado no item “1.2” supra, sendo de responsabilidade do(s) COMPRADOR(ES) a comunicação à VENDEDORA de qualquer alteração do endereço de e-mail.';
 
-  // 4.2 sinal — cada parcela do sinal vira um subitem
+/** Números, textos e numeração do item 4 (preço e pagamento), a partir das séries da proposta.
+ *  Cada série (mesmo várias mensais) vira um item próprio; tipos ausentes não geram item. */
+export function calcularPagamento(series: SerieContrato[]) {
+  const s = series.filter((x) => x.qtd > 0 && x.valor > 0);
+  const total = s.reduce((t, x) => t + x.qtd * x.valor, 0);
+  const pct = (v: number) => `${fmtNum((v * 100) / (total || 1), 2)}%`;
+  const tabela = s.map((x, i) => ({
+    serie: ROMANOS[i] ?? String(i + 1), periodicidade: ROTULO_PER[x.periodicidade] ?? up(x.periodicidade), qtd: String(x.qtd),
+    valor: real(x.valor), total: real(x.qtd * x.valor), pct: pct(x.qtd * x.valor), vencimento: fmtData(x.vencimento),
+    correcao: x.periodicidade === 'Sinal' ? 'Fixa' : 'Reajustável',
+  }));
   const sinal = s.filter((x) => x.periodicidade === 'Sinal');
   const totSinal = sinal.reduce((t, x) => t + x.qtd * x.valor, 0);
-  e.para(`4.2. ARRAS/SINAL: Neste ato o(s) COMPRADOR(ES) se obriga(m) a pagar a importância total de ${valorExt(totSinal)}, a título de arras/sinal, valor este que representa o percentual de ${fmtNum((totSinal * 100) / (total || 1), 2)}% do valor total do preço previsto no item “4.1” acima, sendo que a primeira parcela será paga pelo(s) COMPRADOR(ES) através de TED/PIX e as demais parcelas deverão ser pagas por meio de boleto bancário, conforme subitens abaixo, tudo conforme disposto nos artigos 418 e 419 do Código Civil, cuja quitação dar-se-á somente após a compensação e efetiva liberação do crédito bancário em favor da VENDEDORA.`);
-  let n = 0;
-  for (const x of sinal) for (let k = 0; k < x.qtd; k++) {
-    n++;
-    e.para(`4.2.${n}) Parcela no valor unitário de ${valorExt(x.valor)}, com vencimento no dia ${fmtData(dataDaParcela(x, k))}.`, { recuo: 6 });
-  }
-  e.para(`4.2.${n + 1}) A quitação da parcela de arras/sinal se dará automaticamente com a compensação financeira e efetiva liberação do crédito bancário em favor da VENDEDORA. Em caso de não quitação no vencimento do valor acordado à título de arras/sinal, estará convalidado o inadimplemento contratual do(s) COMPRADOR(ES), ficando automaticamente rescindido o presente contrato e também rescindida a proposta de compra e venda, podendo a VENDEDORA, a partir de então, dar à unidade autônoma a destinação que melhor lhe aprouver.`, { recuo: 6 });
-
-  // 4.3 em diante — demais séries
-  let item = 3;
+  const parcelasSinal: { item: string; valor: string; valor_extenso: string; valor_completo: string; vencimento: string }[] = [];
+  for (const x of sinal) for (let k = 0; k < x.qtd; k++)
+    parcelasSinal.push({ item: `4.2.${parcelasSinal.length + 1}`, valor: real(x.valor), valor_extenso: extensoReais(x.valor), valor_completo: valorExt(x.valor), vencimento: fmtData(dataDaParcela(x, k)) });
   const PLURAL: Record<string, [string, string]> = { Bimestrais: ['bimestrais', 'bimestres'], Trimestrais: ['trimestrais', 'trimestres'], Semestrais: ['semestrais', 'semestres'], Anuais: ['anuais', 'anos'] };
-  for (const x of s.filter((v) => !['Sinal', 'Financiamento'].includes(v.periodicidade))) {
+  let item = 3;
+  const demais = s.filter((v) => !['Sinal', 'Financiamento'].includes(v.periodicidade)).map((x) => {
     const v = `R$ ${fmtNum(x.valor, 2)} (${extensoReais(x.valor)})`;
     const venc = fmtData(x.vencimento);
     let t: string;
@@ -245,15 +240,43 @@ function blocoPagamento(e: Escritor) {
     else if (PLURAL[x.periodicidade]) t = `PARCELAS INTERMEDIÁRIAS: ${qtdExtenso(x.qtd)} parcelas ${PLURAL[x.periodicidade][0]}, cada qual no valor originário de ${v}, reajustáveis na forma deste contrato, com pagamentos concomitantes ao pagamento das demais parcelas, vencendo a primeira em ${venc} e as demais no mesmo dia dos ${PLURAL[x.periodicidade][1]} subsequentes até final quitação.`;
     else if (x.periodicidade === 'Permuta') t = `PARCELA EM PERMUTA: ${qtdExtenso(x.qtd)} parcela(s) no valor de ${v}, a ser(em) quitada(s) por meio de permuta, com vencimento em ${venc}, conforme instrumento próprio.`;
     else t = `PARCELA ÚNICA: ${qtdExtenso(x.qtd)} parcela única, no valor originário de ${v}, com pagamento concomitante ao pagamento das demais parcelas, reajustável na forma deste contrato, com vencimento em ${venc}.`;
-    e.para(`4.${item}. ${t}`); item++;
-  }
-  const fin = s.find((x) => x.periodicidade === 'Financiamento');
-  e.para(fin
-    ? `4.${item}. PARCELA “DE HABITE-SE”: 01 (uma) parcela “de Habite-se”, no valor originário de ${valorExt(fin.valor * fin.qtd)}, reajustável na forma deste contrato, a ser paga pelo(s) COMPRADOR(ES) em ${fmtData(fin.vencimento)}.`
-    : `4.${item}. PARCELA “DE HABITE-SE”: Sem efeito.`);
-  e.para(`4.${item}.1. A parcela “de Habite-se” poderá ser paga com recursos próprios ou, a critério do(s) COMPRADOR(ES), por meio de financiamento bancário junto a instituição financeira idônea, sendo que o(s) COMPRADOR(ES) declara(m) estar ciente(s) de que a responsabilidade pela obtenção de eventual financiamento bancário competirá única e exclusivamente a ele(s), COMPRADOR(ES), sem qualquer responsabilidade ou participação da VENDEDORA, especialmente no que se refere à obtenção dos documentos que venham a ser exigidos pela instituição financeira. O não pagamento desta parcela “de Habite-se” na data prevista de seu vencimento, independentemente do motivo, colocará o(s) COMPRADOR(ES) em automática mora, sujeitando-o às penalidades previstas nas normas contratuais.`, { recuo: 6 });
-  e.para(`4.${item}.2. O(s) COMPRADOR(ES) declara(m) ter conhecimento que a utilização de recursos do FGTS para pagamento de parte do preço somente será aceita para quitação do saldo devedor e apenas para as parcelas cujo vencimento seja posterior à emissão do habite-se do empreendimento e averbação deste junto ao Cartório de Registro de Imóveis competente, sendo rigorosamente certo que o pagamento só será considerado efetivamente realizado e o valor quitado na data em que a quantia correspondente for liberada para uso imediato pela VENDEDORA. A responsabilidade pela apresentação de todos e quaisquer documentos necessários e exigidos pela instituição financeira para liberação e saque de recursos do FGTS competirá única e exclusivamente ao(s) COMPRADOR(ES), não tendo a VENDEDORA nenhuma responsabilidade nesse sentido.`, { recuo: 6 });
-  e.para(`4.${item + 1}. Todas as parcelas deverão ser pagas através de boleto bancário ou outra forma definida exclusivamente pela VENDEDORA, que será enviado ao(s) COMPRADOR(ES), ao endereço de e-mail indicado no item “1.2” supra, sendo de responsabilidade do(s) COMPRADOR(ES) a comunicação à VENDEDORA de qualquer alteração do endereço de e-mail.`);
+    return { item: `4.${item++}`, texto: t, periodicidade: x.periodicidade };
+  });
+  // habite-se: todas as séries de financiamento num único item (várias datas, se houver)
+  const fins = s.filter((x) => x.periodicidade === 'Financiamento');
+  const partes = fins.flatMap((x) => Array.from({ length: x.qtd }, (_, k) => `01 (uma) parcela “de Habite-se”, no valor originário de ${valorExt(x.valor)}, reajustável na forma deste contrato, a ser paga pelo(s) COMPRADOR(ES) em ${fmtData(dataDaParcela(x, k))}`));
+  const habite = {
+    item: `4.${item}`,
+    texto: partes.length ? `PARCELA${partes.length > 1 ? 'S' : ''} “DE HABITE-SE”: ${partes.join('; e ')}.` : 'PARCELA “DE HABITE-SE”: Sem efeito.',
+    tem: partes.length > 0,
+  };
+  return {
+    total, totalTexto: real(total), totalExtenso: extensoReais(total), totalCompleto: valorExt(total), tabela,
+    sinal: { total: real(totSinal), extenso: extensoReais(totSinal), completo: valorExt(totSinal), pct: pct(totSinal), itemQuitacao: `4.2.${parcelasSinal.length + 1}` },
+    parcelasSinal, demais, habite, itemBoletos: `4.${item + 1}`,
+  };
+}
+
+function blocoPagamento(e: Escritor) {
+  const g = calcularPagamento(e.ctx.series);
+  e.para(`4.1. O preço, certo e ajustado, para aquisição e pagamento da unidade autônoma de apartamento indicada no item “3.1” acima é de ${g.totalCompleto}, que deverá ser integralmente pago ou amortizado pelo(s) COMPRADOR(ES) nas seguintes condições:`);
+  e.autoTabela({
+    head: [['Série', 'Periodicidade', 'Quant.', 'Valor unitário', 'Valor total', '%', '1º vencimento', 'Correção']],
+    body: [
+      ...g.tabela.map((x): RowInput => [x.serie, x.periodicidade, x.qtd, x.valor, x.total, x.pct, x.vencimento, x.correcao]),
+      [{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: g.totalTexto, styles: { fontStyle: 'bold' } }, { content: '100,00%', styles: { fontStyle: 'bold' } }, { content: '', colSpan: 2 }],
+    ],
+    styles: { fontSize: 8, cellPadding: 1.2, halign: 'center', lineColor: [160, 160, 160], lineWidth: 0.1, textColor: 20 },
+    columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 28 }, 2: { cellWidth: 13 }, 3: { cellWidth: 25 }, 4: { cellWidth: 25 }, 5: { cellWidth: 15 }, 6: { cellWidth: 25 }, 7: { cellWidth: 27 } },
+  });
+  e.para(`4.2. ARRAS/SINAL: Neste ato o(s) COMPRADOR(ES) se obriga(m) a pagar a importância total de ${g.sinal.completo}, a título de arras/sinal, valor este que representa o percentual de ${g.sinal.pct} do valor total do preço previsto no item “4.1” acima, sendo que a primeira parcela será paga pelo(s) COMPRADOR(ES) através de TED/PIX e as demais parcelas deverão ser pagas por meio de boleto bancário, conforme subitens abaixo, tudo conforme disposto nos artigos 418 e 419 do Código Civil, cuja quitação dar-se-á somente após a compensação e efetiva liberação do crédito bancário em favor da VENDEDORA.`);
+  for (const p of g.parcelasSinal) e.para(`${p.item}) Parcela no valor unitário de ${p.valor_completo}, com vencimento no dia ${p.vencimento}.`, { recuo: 6 });
+  e.para(`${g.sinal.itemQuitacao}) ${TEXTO_QUITACAO_SINAL}`, { recuo: 6 });
+  for (const d of g.demais) e.para(`${d.item}. ${d.texto}`);
+  e.para(`${g.habite.item}. ${g.habite.texto}`);
+  e.para(`${g.habite.item}.1. ${TEXTO_HABITE_1}`, { recuo: 6 });
+  e.para(`${g.habite.item}.2. ${TEXTO_HABITE_2}`, { recuo: 6 });
+  e.para(`${g.itemBoletos}. ${TEXTO_BOLETOS}`);
 }
 
 function blocoComissao(e: Escritor) {
@@ -327,7 +350,7 @@ export async function gerarDocumento(tipo: TipoDocumento, ctx: ContextoContrato)
     if (it.k === 'p') { if (it.o.secao) w.garantir(14); w.para(it.texto, it.o); }
     else if (it.k === 'tabela') w.autoTabela(it.o);
     else if (it.k === 'assin') w.assinaturas(it.nomes, it.colunas);
-    else w.y += it.mm;
+    else if (it.k === 'espaco') w.y += it.mm;
   }
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) {
@@ -344,7 +367,13 @@ const TW = 56.7; // twips por mm
 
 /** Gera o Word editável (fonte Arial, A4, mesmas margens do PDF). */
 export async function gerarWord(tipo: TipoDocumento, ctx: ContextoContrato): Promise<{ docx: Blob; faltando: string[] }> {
-  const [D, e] = await Promise.all([import('docx'), montar(tipo, ctx)]);
+  const e = await montar(tipo, ctx);
+  return { docx: await renderizarWord(e.itens, rodape(tipo, ctx), `${NOME_DOCUMENTO[tipo]} — Unidade ${ctx.unidade}`), faltando: [...e.faltando] };
+}
+
+/** Desenha uma lista de itens em Word. */
+export async function renderizarWord(itens: Item[], textoRodape: string, titulo: string): Promise<Blob> {
+  const D = await import('docx');
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, Footer, PageNumber, TabStopType, ShadingType } = D;
   const larg = Math.round(LARG * TW);
   const texto = (t: string, o: { b?: boolean; i?: boolean; tam?: number } = {}) =>
@@ -413,7 +442,7 @@ export async function gerarWord(tipo: TipoDocumento, ctx: ContextoContrato): Pro
   };
 
   const filhos: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] = [];
-  for (const it of e.itens) {
+  for (const it of itens) {
     if (it.k === 'p') {
       const o = it.o;
       filhos.push(new Paragraph({
@@ -424,21 +453,35 @@ export async function gerarWord(tipo: TipoDocumento, ctx: ContextoContrato): Pro
       }));
     } else if (it.k === 'tabela') { filhos.push(tabela(it.o)); filhos.push(new Paragraph({ spacing: { after: 80 }, children: [] })); }
     else if (it.k === 'assin') filhos.push(assinaturas(it.nomes, it.colunas));
+    else if (it.k === 'assinLoop') {
+      const w = Math.round(larg / 2);
+      filhos.push(new Table({
+        width: { size: w, type: WidthType.DXA }, columnWidths: [w], alignment: AlignmentType.CENTER,
+        borders: { top: sem, bottom: sem, left: sem, right: sem, insideHorizontal: sem, insideVertical: sem },
+        rows: [new TableRow({ children: [new TableCell({ width: { size: w, type: WidthType.DXA }, children: [
+          new Paragraph({ children: texto(`{#${it.lista}}`) }),
+          new Paragraph({ spacing: { before: 600 }, children: [] }),
+          new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 6, color: '444444', space: 4 } }, children: texto('{nome}', { b: true, tam: 8.3 }) }),
+          new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 240 }, children: texto('{papel}', { tam: 8.3 }) }),
+          new Paragraph({ children: texto(`{/${it.lista}}`) }),
+        ] })] })],
+      }));
+    }
     else filhos.push(new Paragraph({ spacing: { after: Math.round(it.mm * TW) }, children: [] }));
   }
 
   const doc = new Document({
-    creator: 'Gestor Launch Machine', title: `${NOME_DOCUMENTO[tipo]} — Unidade ${ctx.unidade}`,
+    creator: 'Gestor Launch Machine', title: titulo,
     styles: { default: { document: { run: { font: 'Arial', size: 19 } } } },
     sections: [{
       properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: Math.round(TOPO * TW), bottom: Math.round(18 * TW), left: Math.round(M * TW), right: Math.round(M * TW) } } },
       footers: { default: new Footer({ children: [new Paragraph({
         tabStops: [{ type: TabStopType.RIGHT, position: larg }],
-        children: [new TextRun({ text: rodape(tipo, ctx), size: 15, color: '787878', font: 'Arial' }),
+        children: [new TextRun({ text: textoRodape, size: 15, color: '787878', font: 'Arial' }),
           new TextRun({ children: ['\tPágina ', PageNumber.CURRENT, ' de ', PageNumber.TOTAL_PAGES], size: 15, color: '787878', font: 'Arial' })],
       })] }) },
       children: filhos,
     }],
   });
-  return { docx: await Packer.toBlob(doc), faltando: [...e.faltando] };
+  return Packer.toBlob(doc);
 }

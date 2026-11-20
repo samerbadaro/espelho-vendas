@@ -1,11 +1,13 @@
 // Cadastro do empreendimento para contratos (somente administrador):
 // dados da vendedora/registros/textos e importação do quadro de áreas (planilha .xlsx ou .csv).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileSpreadsheet, Download } from 'lucide-react';
+import { FileSpreadsheet, Download, FileUp, Copy, RotateCcw } from 'lucide-react';
 import { unzipSync, strFromU8 } from 'fflate';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
 import { CAMPOS_EMPREENDIMENTO, COLUNAS_AREAS, DADOS_EXEMPLO, type Areas } from './campos';
+import { NOME_DOCUMENTO, type TipoDocumento } from './gerador';
+import { MARCADORES, conferirModelo, contextoExemplo, dadosParaModelo } from './marcadores';
 
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const NUMERICAS = new Set(['area_privativa', 'area_acessoria', 'area_privativa_total', 'area_comum', 'area_total', 'fracao_ideal', 'escaninho_area']);
@@ -140,6 +142,7 @@ export function ConfigContrato() {
 
   return (
     <>
+      <ModelosContrato />
       <div className="cartao">
         <div className="cartao-topo">
           <div>
@@ -194,5 +197,135 @@ export function ConfigContrato() {
         </div>
       </div>
     </>
+  );
+}
+
+interface Modelo { id: string; documento: TipoDocumento; nome: string; caminho: string; enviado_em: string; enviado_por: string | null }
+const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const salvarArquivo = (blob: Blob, nome: string) => {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+
+/** Modelos em Word com marcadores: baixar o atual, enviar o do jurídico, voltar ao padrão, lista de marcadores. */
+function ModelosContrato() {
+  const { avisar, confirmar } = useDialogos();
+  const [ativos, setAtivos] = useState<Partial<Record<TipoDocumento, Modelo>>>({});
+  const [ocupado, setOcupado] = useState('');
+  const [verMarcadores, setVerMarcadores] = useState(false);
+  const [busca, setBusca] = useState('');
+
+  const carregar = async () => {
+    const { data } = await supabase.from('modelos_contrato').select('*').eq('ativo', true);
+    setAtivos(Object.fromEntries(((data as Modelo[]) ?? []).map((m) => [m.documento, m])));
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const exemplos = useMemo(() => {
+    const d = dadosParaModelo(contextoExemplo());
+    const pegar = (t: string) => t.split('.').reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), d);
+    return Object.fromEntries(MARCADORES.map((m) => {
+      const v = pegar(m.tag);
+      return [m.tag, Array.isArray(v) ? `${v.length} item(ns)` : typeof v === 'boolean' ? (v ? 'sim' : 'não') : String(v ?? '')];
+    }));
+  }, []);
+
+  const baixar = async (t: TipoDocumento) => {
+    setOcupado(t);
+    try {
+      const m = ativos[t];
+      if (m) {
+        const { data, error } = await supabase.storage.from('contratos').download(m.caminho);
+        if (error || !data) throw new Error('Não foi possível baixar o modelo.');
+        salvarArquivo(data, `Modelo - ${NOME_DOCUMENTO[t]}.docx`);
+      } else {
+        const { modeloPadrao } = await import('./modeloBase');
+        salvarArquivo(await modeloPadrao(t), `Modelo padrão - ${NOME_DOCUMENTO[t]}.docx`);
+      }
+    } catch (e) { avisar((e as Error).message, 'erro'); }
+    finally { setOcupado(''); }
+  };
+
+  const enviar = async (t: TipoDocumento, f: File) => {
+    if (!/\.docx$/i.test(f.name)) { avisar('O modelo precisa ser um arquivo Word (.docx).', 'erro'); return; }
+    setOcupado(t);
+    try {
+      const buf = await f.arrayBuffer();
+      const c = await conferirModelo(buf);
+      if (c.erros.length) { avisar(`O modelo tem erro de marcação: ${c.erros.slice(0, 3).join(' · ')}`, 'erro'); return; }
+      const texto = c.desconhecidos.length
+        ? `Atenção: ${c.desconhecidos.length} marcador(es) não existem e sairão em branco: ${c.desconhecidos.slice(0, 8).map((x) => `{${x}}`).join(', ')}. Envie mesmo assim?`
+        : `${c.usados} marcador(es) reconhecido(s). O modelo passa a valer nas próximas emissões.`;
+      if (!(await confirmar({ titulo: `Usar este modelo para ${NOME_DOCUMENTO[t]}?`, texto, confirmar: 'Usar modelo' }))) return;
+      const caminho = `modelos/${t}/${crypto.randomUUID()}.docx`;
+      const up = await supabase.storage.from('contratos').upload(caminho, f, { contentType: DOCX });
+      if (up.error) throw new Error('Falha ao guardar o modelo.');
+      const { error } = await supabase.rpc('salvar_modelo_contrato', { p_documento: t, p_nome: f.name, p_caminho: caminho });
+      if (error) throw new Error('Não foi possível ativar o modelo.');
+      avisar('Modelo ativado.'); carregar();
+    } catch (e) { avisar((e as Error).message, 'erro'); }
+    finally { setOcupado(''); }
+  };
+
+  const padrao = async (t: TipoDocumento) => {
+    if (!(await confirmar({ titulo: `Voltar ao modelo padrão em ${NOME_DOCUMENTO[t]}?`, texto: 'O modelo enviado sai de uso, mas fica guardado no histórico.', confirmar: 'Voltar ao padrão' }))) return;
+    const { error } = await supabase.rpc('usar_modelo_padrao', { p_documento: t });
+    if (error) avisar('Não foi possível alterar.', 'erro'); else { avisar('Usando o modelo padrão.'); carregar(); }
+  };
+
+  const filtrados = MARCADORES.filter((m) => !busca.trim() || `${m.tag} ${m.descricao} ${m.grupo}`.toLowerCase().includes(busca.trim().toLowerCase()));
+  const grupos = [...new Set(filtrados.map((m) => m.grupo))];
+
+  return (
+    <div className="cartao">
+      <div className="cartao-topo">
+        <div>
+          <h3>Modelos de contrato (Word)</h3>
+          <p className="sub">Baixe o modelo, edite no Word (texto, formatação, logo) mantendo os marcadores entre chaves, como {'{comprador.nome}'}, e envie de volta.</p>
+        </div>
+      </div>
+      {(Object.keys(NOME_DOCUMENTO) as TipoDocumento[]).map((t) => {
+        const m = ativos[t];
+        return (
+          <div key={t} className="mc-linha">
+            <div>
+              <strong>{NOME_DOCUMENTO[t]}</strong><br />
+              <small className="sub">{m ? <>{m.nome} · enviado por {m.enviado_por ?? '—'} em {formatarDataHora(m.enviado_em)}</> : 'Modelo padrão do sistema'}</small>
+            </div>
+            <div className="mc-acoes">
+              <button type="button" className="botao pequeno" disabled={!!ocupado} onClick={() => baixar(t)}><Download size={14} /> Baixar modelo</button>
+              <label className="botao pequeno"><FileUp size={14} /> {ocupado === t ? 'Conferindo…' : 'Enviar modelo'}
+                <input type="file" hidden accept=".docx" disabled={!!ocupado} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) enviar(t, f); }} />
+              </label>
+              {m && <button type="button" className="botao pequeno" onClick={() => padrao(t)}><RotateCcw size={14} /> Usar o padrão</button>}
+            </div>
+          </div>
+        );
+      })}
+      <div className="acoes">
+        <button type="button" className="botao" onClick={() => setVerMarcadores(!verMarcadores)}>{verMarcadores ? 'Esconder marcadores' : `Ver os ${MARCADORES.length} marcadores disponíveis`}</button>
+      </div>
+      {verMarcadores && (
+        <div className="mc-marcadores">
+          <label className="busca-funil"><input type="search" placeholder="Buscar marcador" value={busca} onChange={(e) => setBusca(e.target.value)} /></label>
+          <p className="sub">Listas e condições usam abertura e fechamento: {'{#series}'} … {'{/series}'}, {'{#tem_conjuge}'} … {'{/tem_conjuge}'}. Para repetir parágrafos, deixe a abertura e o fechamento sozinhos no próprio parágrafo; para repetir linhas de tabela, coloque a abertura na primeira célula e o fechamento na última.</p>
+          {grupos.map((g) => (
+            <div key={g}>
+              <h4 className="ct-sub">{g}</h4>
+              <table className="tabela mc-tabela"><tbody>
+                {filtrados.filter((m) => m.grupo === g).map((m) => (
+                  <tr key={m.tag}>
+                    <td className="mono">{`{${m.lista ? '#' : ''}${m.tag}}`}
+                      <button type="button" className="botao pequeno mc-copiar" title="Copiar" onClick={() => { navigator.clipboard?.writeText(`{${m.lista ? '#' : ''}${m.tag}}`); avisar('Marcador copiado.'); }}><Copy size={12} /></button></td>
+                    <td>{m.descricao}{m.lista && <><br /><small className="sub">Dentro da lista: {m.lista.map((x) => `{${x}}`).join(' ')}</small></>}</td>
+                    <td className="sub">{exemplos[m.tag]}</td>
+                  </tr>
+                ))}
+              </tbody></table>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
