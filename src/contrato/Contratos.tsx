@@ -159,6 +159,9 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     setAreas((ar as Areas) ?? null);
     setEmp((e?.dados as Record<string, string>) ?? {});
     setEmit((c as Emitido[]) ?? []);
+    // Emissão sugere só o que ainda não foi emitido
+    const ativos = new Set(((c as Emitido[]) ?? []).filter((x) => !x.cancelado_em).map((x) => x.documento));
+    if (ativos.size) { setEscolha({ quadro_resumo: !ativos.has('quadro_resumo'), normas: !ativos.has('normas') }); setComCarta(!ativos.has('carta_proposta')); }
     setComissao((rg?.comissao?.length ? rg.comissao : pr.resumo?.comissao
       ? [{ nome: pc?.imobiliarias?.nome ?? '', documento: pc?.imobiliarias?.cnpj ?? '', valor: Number(pr.resumo.comissao), forma: 'TED / PIX' }] : [])
       .map((c) => ({ ...c, valor: paraTxt(c.valor) })));
@@ -227,6 +230,15 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     finally { setOcupado(''); }
   };
 
+  const previaCarta = async () => {
+    setOcupado('Montando a Carta Proposta…');
+    try {
+      const { cartaDaProposta, partesDaLeitura } = await import('./cartaContrato');
+      window.open(URL.createObjectURL(await cartaDaProposta(prop.id, partesDaLeitura(padronizar(reg?.dados ?? {}), temConj, pj), emp)), '_blank');
+    } catch (e) { avisar(`Não foi possível montar a carta. ${(e as Error).message}`, 'erro'); }
+    finally { setOcupado(''); }
+  };
+
   const emitir = async () => {
     const tipos = (Object.keys(escolha) as TipoDocumento[]).filter((t) => escolha[t]);
     const nomes = [...tipos.map((t) => NOME_DOCUMENTO[t]), ...(comCarta ? ['Carta Proposta'] : [])];
@@ -253,8 +265,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       }
       if (comCarta) {
         setOcupado('Gerando a Carta Proposta…');
-        const { cartaDaProposta } = await import('./cartaContrato');
-        const pdf = await cartaDaProposta(prop.id);
+        const { cartaDaProposta, partesDaLeitura } = await import('./cartaContrato');
+        const pdf = await cartaDaProposta(prop.id, partesDaLeitura(padronizar(reg?.dados ?? {}), temConj, pj), emp);
         const caminho = `${pasta.id}/${crypto.randomUUID()}.pdf`;
         const { error: eu } = await supabase.storage.from('contratos').upload(caminho, pdf, { contentType: 'application/pdf' });
         if (eu) throw new Error('Falha ao guardar a carta proposta.');
@@ -400,7 +412,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
           ))}
           <label className="ct-doc">
             <input type="checkbox" checked={comCarta} onChange={(e) => setComCarta(e.target.checked)} />
-            <FileText size={16} /> Carta Proposta <small className="sub">gerada da proposta aprovada (PDF)</small>
+            <FileText size={16} /> Carta Proposta <small className="sub">modelo da proposta, com os dados conferidos (PDF)</small>
+            <button type="button" className="botao pequeno" disabled={!!ocupado} onClick={previaCarta}><Eye size={14} /> Pré-visualizar</button>
           </label>
         </div>
         <div className="acoes">
