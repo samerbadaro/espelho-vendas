@@ -1,14 +1,14 @@
 // Módulo Contratos (administrador e Sec. Vendas): só propostas aprovadas com pasta aprovada.
 // Etapas: 1) partes (leitura com IA)  2) unidade (quadro de áreas)  3) pagamento e comissão
 // 4) emissão do Quadro Resumo e das Normas em PDF, com validação, cancelamento e download.
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Circle, Download, Eye, FileText, FileUp, Plus, Search, Trash2 } from 'lucide-react';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
 import { ir, conjugeNoContrato, formatarCNPJ, soDigitos, type EstadoCivil, type Perfil } from '../util';
 import { fmtData, fmtNum, fmtReal, type Periodicidade } from '../proposta/motor';
 import { DadosContrato } from './DadosContrato';
-import { PainelAssinatura, rotuloAssinatura, type DocAssinatura } from './Assinatura';
+import { EnvelopeAssinatura } from './Envelope';
 import { padronizar, type DadosContrato as Dados } from './leitura';
 import { CAMPOS_EMPREENDIMENTO, COLUNAS_AREAS, type Areas } from './campos';
 import { NOME_DOCUMENTO, type Comissao, type SerieContrato, type TipoDocumento } from './gerador';
@@ -20,7 +20,7 @@ interface Linha {
 }
 interface Registro { pasta_id: string; status: string; dados: Dados; comissao: Comissao[]; pagamento_conferido_em: string | null; pagamento_conferido_por: string | null }
 interface Emitido {
-  id: string; numero: number; documento: TipoDocumento; nome: string; caminho: string | null; caminho_docx: string | null; versao: number; validacao: 'aguardando' | 'validado'; assinatura: string;
+  id: string; numero: number; documento: TipoDocumento | 'carta_proposta'; nome: string; caminho: string | null; caminho_docx: string | null; versao: number; validacao: 'aguardando' | 'validado'; assinatura: string;
   gerado_em: string; gerado_por: string | null; validado_por: string | null; cancelado_em: string | null;
   d4sign_uuid?: string | null; enviado_assinatura_em?: string | null; assinado_em?: string | null; caminho_assinado?: string | null;
 }
@@ -29,6 +29,11 @@ type ComissaoUI = Omit<Comissao, 'valor'> & { valor: string };
 const paraTxt = (v: number) => fmtNum(Number(v) || 0, 2);
 const doTxt = (t: string) => Number(t.replace(/\./g, '').replace(',', '.')) || 0;
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const ROTULO_ASSINATURA: Record<string, [string, string]> = {
+  nao_enviado: ['Não enviado', 'sp-incompleta'], preparado: ['No envelope (prévia)', 'sp-em_analise'], enviado: ['Em assinatura', 'sp-aguardando_analise'],
+  assinado: ['Assinado', 'sp-aprovada'], cancelado: ['Cancelado', 'sp-pendente_correcao'],
+};
+const rotuloAssinatura = (s: string) => ROTULO_ASSINATURA[s] ?? [s, 'sp-incompleta'];
 const nomeCliente = (p: Linha['pastas']) => p?.empresa_razao_social || p?.comprador_nome || '—';
 
 export function ListaContratos() {
@@ -131,7 +136,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const [escolha, setEscolha] = useState<Record<TipoDocumento, boolean>>({ quadro_resumo: true, normas: true });
   const [ocupado, setOcupado] = useState('');
   const [erro, setErro] = useState('');
-  const [aberto, setAberto] = useState<string | null>(null);
+  const [comCarta, setComCarta] = useState(true);
 
   const carregar = useCallback(async () => {
     const { data: p } = await supabase.from('propostas').select('id, codigo, pasta_id, status, series, resumo, unidades(numero)').eq('id', id).maybeSingle();
@@ -175,7 +180,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     pagamento: !!reg?.pagamento_conferido_em,
     empreendimento: camposVazios.length === 0,
   };
-  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && ok.empreendimento && (escolha.quadro_resumo || escolha.normas);
+  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && ok.empreendimento && (escolha.quadro_resumo || escolha.normas || comCarta);
 
   const salvarComissao = async (conferido: boolean) => {
     if (conferido && comissao.some((c) => !c.nome.trim() || !(doTxt(c.valor) > 0))) { avisar('Preencha nome e valor de cada beneficiário da comissão.', 'erro'); return; }
@@ -224,7 +229,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
 
   const emitir = async () => {
     const tipos = (Object.keys(escolha) as TipoDocumento[]).filter((t) => escolha[t]);
-    if (!(await confirmar({ titulo: `Emitir ${tipos.map((t) => NOME_DOCUMENTO[t]).join(' e ')}?`, texto: 'Os documentos ficam registrados na pasta, com número, aguardando validação.', confirmar: 'Emitir' }))) return;
+    const nomes = [...tipos.map((t) => NOME_DOCUMENTO[t]), ...(comCarta ? ['Carta Proposta'] : [])];
+    if (!(await confirmar({ titulo: `Emitir ${nomes.join(', ').replace(/, ([^,]*)$/, ' e $1')}?`, texto: 'Os documentos ficam registrados na pasta, com número, aguardando validação.', confirmar: 'Emitir' }))) return;
     try {
       const { gerarDocumento } = await import('./gerador');
       for (const t of tipos) {
@@ -244,6 +250,19 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
           p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas },
         });
         if (error) throw new Error(error.message.includes('NAO_CONFERIDO') ? 'Confira as partes e o pagamento antes de emitir.' : 'Não foi possível registrar o documento.');
+      }
+      if (comCarta) {
+        setOcupado('Gerando a Carta Proposta…');
+        const { cartaDaProposta } = await import('./cartaContrato');
+        const pdf = await cartaDaProposta(prop.id);
+        const caminho = `${pasta.id}/${crypto.randomUUID()}.pdf`;
+        const { error: eu } = await supabase.storage.from('contratos').upload(caminho, pdf, { contentType: 'application/pdf' });
+        if (eu) throw new Error('Falha ao guardar a carta proposta.');
+        const { error } = await supabase.rpc('registrar_contrato', {
+          p_pasta: pasta.id, p_proposta: prop.id, p_documento: 'carta_proposta', p_nome: `Carta Proposta ${prop.codigo} — Unidade ${prop.unidades?.numero ?? ''}`,
+          p_caminho: caminho, p_caminho_docx: null, p_dados: { proposta: prop.codigo },
+        });
+        if (error) throw new Error('Não foi possível registrar a carta proposta.');
       }
       avisar('Documentos emitidos. Confira e valide.');
     } catch (e) { avisar((e as Error).message, 'erro'); }
@@ -275,7 +294,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       };
       const [cd, cp] = await Promise.all([sobe(docx, 'docx', DOCX), sobe(pdf, 'pdf', 'application/pdf')]);
       const { error } = await supabase.rpc('enviar_versao_contrato', { p_id: c.id, p_caminho_docx: cd, p_caminho_pdf: cp });
-      if (error) throw new Error(error.message.includes('JA_ENVIADO') ? 'Este documento já foi enviado para assinatura.' : 'Não foi possível registrar a versão.');
+      if (error) throw new Error(/JA_ENVIADO|EM_ENVELOPE/.test(error.message) ? 'Este documento está num envelope de assinatura. Descarte o envelope para ajustar.' : 'Não foi possível registrar a versão.');
       avisar(`Versão ${c.versao + 1} registrada. Confira e valide.`);
     } catch (e) { avisar((e as Error).message, 'erro'); }
     finally { setOcupado(''); carregar(); }
@@ -283,7 +302,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const acao = async (c: Emitido, rpc: 'validar_contrato' | 'cancelar_contrato') => {
     if (rpc === 'cancelar_contrato' && !(await confirmar({ titulo: `Cancelar o documento nº ${c.numero}?`, texto: 'Ele continua no histórico, marcado como cancelado.', confirmar: 'Cancelar documento', perigo: true }))) return;
     const { error } = await supabase.rpc(rpc, { p_id: c.id });
-    if (error) avisar('Não foi possível concluir.', 'erro'); else carregar();
+    if (error) avisar(/EM_ENVELOPE|JA_ENVIADO/.test(error.message) ? 'Este documento está num envelope de assinatura.' : 'Não foi possível concluir.', 'erro'); else carregar();
   };
 
   const Etapa = ({ feito, titulo }: { feito: boolean; titulo: string }) => (
@@ -379,6 +398,10 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
               <button type="button" className="botao pequeno" disabled={!!ocupado} onClick={() => previa(t)}><Eye size={14} /> {modelos[t] ? 'Prévia em Word' : 'Pré-visualizar'}</button>
             </label>
           ))}
+          <label className="ct-doc">
+            <input type="checkbox" checked={comCarta} onChange={(e) => setComCarta(e.target.checked)} />
+            <FileText size={16} /> Carta Proposta <small className="sub">gerada da proposta aprovada (PDF)</small>
+          </label>
         </div>
         <div className="acoes">
           {ocupado && <span className="sub">{ocupado}</span>}
@@ -391,8 +414,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
               <thead><tr><th>Número</th><th>Documento</th><th>Versão</th><th>Assinatura</th><th>Validação</th><th /></tr></thead>
               <tbody>
                 {emit.map((c) => (
-                  <Fragment key={c.id}>
-                  <tr className={c.cancelado_em && c.assinatura !== 'cancelado' ? 'cancelado' : ''}>
+                  <tr key={c.id} className={c.cancelado_em && c.assinatura !== 'cancelado' ? 'cancelado' : ''}>
                     <td className="mono">{c.numero}</td>
                     <td><strong>{c.nome}</strong><br /><small className="sub">Gerado em {formatarDataHora(c.gerado_em)} por {c.gerado_por}</small></td>
                     <td>v{c.versao}{c.versao > 1 && <><br /><small className="sub">{c.caminho ? 'ajustada' : 'Word ajustado'}</small></>}</td>
@@ -409,25 +431,20 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
                           <input type="file" hidden multiple accept=".docx,.pdf" disabled={!!ocupado} onChange={(e) => { if (e.target.files?.length) enviarAjuste(c, e.target.files); e.target.value = ''; }} />
                         </label>
                       )}
-                      {c.assinatura !== 'nao_enviado' || (!c.cancelado_em && c.validacao === 'validado')
-                        ? <button type="button" className="botao pequeno principal" onClick={() => setAberto(aberto === c.id ? null : c.id)}>Assinatura</button> : null}
-                      {c.assinatura === 'assinado' && c.caminho_assinado && <button type="button" className="botao pequeno" onClick={async () => { const { data } = await supabase.storage.from('contratos').createSignedUrl(c.caminho_assinado!, 60, { download: `${c.numero} - ${c.nome} (assinado).pdf` }); if (data?.signedUrl) window.location.href = data.signedUrl; }}><Download size={14} /> Assinado</button>}
                       {!c.cancelado_em && c.assinatura === 'nao_enviado' && <button type="button" className="botao pequeno" onClick={() => acao(c, 'cancelar_contrato')}>Cancelar</button>}
                     </td>
                   </tr>
-                  {aberto === c.id && (
-                    <tr className="ass-linha"><td colSpan={6}>
-                      <PainelAssinatura doc={c as DocAssinatura} dados={padronizar(reg?.dados ?? {})} temConjuge={temConj} pj={pj} emp={emp} imobiliariaId={pasta.imobiliaria_id} aoMudar={carregar} />
-                    </td></tr>
-                  )}
-                  </Fragment>
                 ))}
               </tbody>
             </table>
-            <p className="sub">Para ajustar a formatação: baixe o Word, edite e use “Enviar ajuste” (só o Word, ou o Word e o PDF juntos). Depois de validar, abra “Assinatura” para subir a versão mais recente para a D4Sign, conferir a prévia e chamar os assinantes.</p>
+            <p className="sub">Para ajustar a formatação: baixe o Word, edite e use “Enviar ajuste” (só o Word, ou o Word e o PDF juntos). Com todos validados, monte o envelope abaixo: ele junta a versão mais recente de cada documento e os documentos fixos.</p>
           </div>
         )}
       </div>
+
+      {emit.some((c) => !c.cancelado_em) && (
+        <EnvelopeAssinatura pastaId={pasta.id} documentos={emit} dados={padronizar(reg?.dados ?? {})} temConjuge={temConj} pj={pj} emp={emp} imobiliariaId={pasta.imobiliaria_id} aoMudar={carregar} />
+      )}
     </section>
   );
 }

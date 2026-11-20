@@ -1,7 +1,7 @@
 // Cadastro do empreendimento para contratos (somente administrador):
 // dados da vendedora/registros/textos e importação do quadro de áreas (planilha .xlsx ou .csv).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileSpreadsheet, Download, FileUp, Copy, RotateCcw } from 'lucide-react';
+import { FileSpreadsheet, Download, FileUp, Copy, RotateCcw, ArrowUp, ArrowDown } from 'lucide-react';
 import { unzipSync, strFromU8 } from 'fflate';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
@@ -143,6 +143,7 @@ export function ConfigContrato() {
   return (
     <>
       <ModelosContrato />
+      <DocumentosFixos />
       <div className="cartao">
         <div className="cartao-topo">
           <div>
@@ -325,6 +326,96 @@ function ModelosContrato() {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+interface Fixo { id: string; nome: string; caminho: string; arquivo: string | null; ordem: number; ativo: boolean; enviado_em: string; enviado_por: string | null }
+
+/** Documentos fixos do empreendimento (memorial, plantas, convenção…): vão como anexos em todo envelope de assinatura. */
+function DocumentosFixos() {
+  const { avisar, confirmar } = useDialogos();
+  const [lista, setLista] = useState<Fixo[] | null>(null);
+  const [nome, setNome] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const arq = useRef<HTMLInputElement>(null);
+
+  const carregar = async () => {
+    const { data } = await supabase.from('contrato_anexos_fixos').select('*').order('ativo', { ascending: false }).order('ordem').order('enviado_em');
+    setLista((data as Fixo[]) ?? []);
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const enviar = async (f: File) => {
+    if (!/\.(pdf|docx)$/i.test(f.name)) { avisar('Envie em PDF (recomendado) ou Word (.docx).', 'erro'); return; }
+    if (f.size > 25 * 1024 * 1024) { avisar('Arquivo maior que 25 MB.', 'erro'); return; }
+    const titulo = nome.trim() || f.name.replace(/\.[^.]+$/, '');
+    setOcupado(true);
+    try {
+      const ext = /\.docx$/i.test(f.name) ? 'docx' : 'pdf';
+      const caminho = `fixos/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('contratos').upload(caminho, f, { contentType: ext === 'pdf' ? 'application/pdf' : DOCX });
+      if (error) throw new Error('Falha ao guardar o arquivo.');
+      const ordem = Math.max(0, ...(lista ?? []).filter((x) => x.ativo).map((x) => x.ordem)) + 1;
+      const { error: e2 } = await supabase.rpc('salvar_anexo_fixo', { p_nome: titulo, p_caminho: caminho, p_arquivo: f.name, p_ordem: ordem });
+      if (e2) throw new Error(e2.message.includes('SEM_PERMISSAO') ? 'Só o administrador cadastra documentos fixos.' : 'Não foi possível registrar o documento.');
+      setNome(''); avisar(`“${titulo}” incluído nos próximos envelopes.`);
+    } catch (e) { avisar((e as Error).message, 'erro'); }
+    finally { setOcupado(false); carregar(); }
+  };
+
+  const alterar = async (f: Fixo, mud: { nome?: string; ordem?: number; ativo?: boolean }) => {
+    const { error } = await supabase.rpc('alterar_anexo_fixo', { p_id: f.id, p_nome: mud.nome ?? null, p_ordem: mud.ordem ?? null, p_ativo: mud.ativo ?? null });
+    if (error) avisar('Não foi possível salvar.', 'erro'); else carregar();
+  };
+  const trocar = async (i: number, d: -1 | 1) => {
+    const ativos = (lista ?? []).filter((x) => x.ativo);
+    const a = ativos[i], b = ativos[i + d];
+    if (!a || !b) return;
+    await alterar(a, { ordem: b.ordem === a.ordem ? a.ordem + d : b.ordem });
+    await alterar(b, { ordem: a.ordem });
+  };
+  const baixar = async (f: Fixo) => {
+    const { data } = await supabase.storage.from('contratos').createSignedUrl(f.caminho, 60, { download: f.arquivo || `${f.nome}.pdf` });
+    if (data?.signedUrl) window.location.href = data.signedUrl;
+  };
+
+  if (!lista) return null;
+  const ativos = lista.filter((x) => x.ativo), inativos = lista.filter((x) => !x.ativo);
+  return (
+    <div className="cartao">
+      <div className="cartao-topo">
+        <div>
+          <h3>Documentos fixos do contrato</h3>
+          <p className="sub">Iguais para todas as vendas (memorial descritivo, plantas, minuta da convenção, termo de vistoria…). Entram como anexos no envelope de assinatura, depois do Quadro Resumo, das Normas e da Carta Proposta, na ordem abaixo. Prefira PDF.</p>
+        </div>
+      </div>
+      {ativos.length ? (
+        <div className="tabela-rolagem"><table className="tabela">
+          <thead><tr><th>Ordem</th><th>Documento</th><th>Arquivo</th><th /></tr></thead>
+          <tbody>{ativos.map((f, i) => (
+            <tr key={f.id}>
+              <td>{i + 1}</td>
+              <td><input defaultValue={f.nome} onBlur={(e) => { if (e.target.value.trim() && e.target.value.trim() !== f.nome) alterar(f, { nome: e.target.value }); }} /></td>
+              <td><small className="sub">{f.arquivo} · {formatarDataHora(f.enviado_em)}</small></td>
+              <td className="ct-acoes">
+                <button type="button" className="botao pequeno" disabled={i === 0} onClick={() => trocar(i, -1)}><ArrowUp size={12} /></button>
+                <button type="button" className="botao pequeno" disabled={i === ativos.length - 1} onClick={() => trocar(i, 1)}><ArrowDown size={12} /></button>
+                <button type="button" className="botao pequeno" onClick={() => baixar(f)}><Download size={12} /> Baixar</button>
+                <button type="button" className="botao pequeno" onClick={async () => { if (await confirmar({ titulo: `Tirar “${f.nome}” dos envelopes?`, texto: 'Envelopes já montados não mudam. Dá para reativar depois.', confirmar: 'Desativar' })) alterar(f, { ativo: false }); }}>Desativar</button>
+              </td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      ) : <p className="vazio">Nenhum documento fixo ainda.</p>}
+      <div className="acoes">
+        <input placeholder="Nome do documento (ex.: Memorial Descritivo)" value={nome} onChange={(e) => setNome(e.target.value)} />
+        <button type="button" className="botao principal" disabled={ocupado} onClick={() => arq.current?.click()}><FileUp size={16} /> {ocupado ? 'Enviando…' : 'Adicionar documento'}</button>
+        <input ref={arq} type="file" hidden accept=".pdf,.docx" onChange={(e) => { const f = e.target.files?.[0]; if (f) enviar(f); e.target.value = ''; }} />
+      </div>
+      {!!inativos.length && (
+        <p className="sub">Desativados: {inativos.map((f, i) => <span key={f.id}>{i > 0 && ', '}{f.nome} <button type="button" className="link" onClick={() => alterar(f, { ativo: true, ordem: ativos.length + 1 })}>reativar</button></span>)}</p>
       )}
     </div>
   );
