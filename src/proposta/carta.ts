@@ -44,7 +44,8 @@ async function logoPng(url: string): Promise<{ dados: string; w: number; h: numb
   } catch { return null; }
 }
 
-export async function gerarCarta(d: DadosCarta) {
+/** Gera a carta proposta. Por padrão baixa o PDF; com `{ blob: true }` devolve o arquivo (emissão do contrato). */
+export async function gerarCarta(d: DadosCarta, o: { blob?: boolean } = {}): Promise<Blob | void> {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const L = doc.internal.pageSize.getWidth();
@@ -257,5 +258,6 @@ export async function gerarCarta(d: DadosCarta) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(150);
     doc.text(`${d.empreendimento} · ${d.codigo} · unidade ${d.unidade.numero} · página ${i} de ${n}`, L - m, A - 8, { align: 'right' });
   }
+  if (o.blob) return doc.output('blob');
   doc.save(`carta-proposta-${d.codigo}-unidade-${d.unidade.numero}.pdf`);
 }

@@ -107,6 +107,6 @@ reset role;
 do $$ begin
   begin update contratos set assinatura = 'preparado' where false; raise notice 'OK      Situação "preparado" aceita';
   exception when others then raise notice 'FALHOU  situação preparado'; end;
-  begin insert into contrato_assinantes (contrato_id, papel, email, canal) values (gen_random_uuid(), 'x', 'a@b.c', 'sms'); raise notice 'FALHOU  aceitou canal sms';
+  begin insert into envelope_assinantes (envelope_id, papel, email, canal) values (gen_random_uuid(), 'x', 'a@b.c', 'sms'); raise notice 'FALHOU  aceitou canal sms';
   exception when others then raise notice 'OK      Canal só e-mail ou WhatsApp'; end;
 end $$;
