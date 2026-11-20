@@ -142,8 +142,8 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
   progresso(`Lendo ${lidos} documento(s) com IA… (pode levar até 1 minuto)`);
   const corpo = JSON.stringify({
     model: MODELO_IA, max_tokens: 4000, system: instrucoes(hoje),
-    tools: [FERRAMENTA], tool_choice: { type: 'tool', name: FERRAMENTA.name },
-    messages: [{ role: 'user', content: conteudo }],
+    tools: [FERRAMENTA], tool_choice: { type: 'auto' },
+    messages: [{ role: 'user', content: [...conteudo, { type: 'text', text: `Responda chamando a ferramenta ${FERRAMENTA.name}, uma única vez, sem texto antes.` }] }],
   });
   const { data: sessao } = await supabase.auth.getSession();
   const resp = await fetch(`/api/contrato/ler?pasta=${encodeURIComponent(pastaId)}`, {
@@ -154,7 +154,12 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
     const m = r?.erro || r?.error?.message || `erro ${resp.status}`;
     throw new Error(/credit|balance/i.test(m) ? 'Os créditos da IA acabaram. Recarregue em platform.claude.com.' : `A IA não respondeu: ${m}`);
   }
-  const uso = r.content?.find((c: { type: string }) => c.type === 'tool_use')?.input;
+  let uso = r.content?.find((c: { type: string }) => c.type === 'tool_use')?.input;
+  if (!uso) {   // se a IA respondeu em texto, tenta achar o JSON nele
+    const txt = (r.content ?? []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join('\n');
+    const m = txt.match(/\{[\s\S]*\}/);
+    try { uso = m ? JSON.parse(m[0]) : null; } catch { uso = null; }
+  }
   if (!uso) throw new Error('A IA não devolveu os dados. Tente de novo.');
 
   const dados: DadosContrato = { comprador: uso.comprador ?? {}, conjuge: uso.conjuge ?? undefined };
