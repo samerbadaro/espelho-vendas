@@ -6,7 +6,7 @@ import { zipSync } from 'fflate';
 import { DadosContrato } from './contrato/DadosContrato';
 import {
   ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarTelefone, formatarData, formatarTamanho,
-  ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC,
+  ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC, REGIMES, ehSeparacao, conjugeNoContrato, type RegimeBens,
   type EstadoCivil, type StatusPasta, type StatusDocumento, type Perfil,
 } from './util';
 
@@ -176,6 +176,7 @@ interface Pasta {
   id: string; codigo: string; imobiliaria_id: string; unidade_id: string | null; status: StatusPasta;
   comprador_nome: string; comprador_cpf: string; comprador_nascimento: string | null;
   comprador_telefone: string | null; comprador_email: string | null; estado_civil: EstadoCivil;
+  regime_bens: RegimeBens | '' | null; conjuge_participa: boolean;
   conjuge_nome: string | null; conjuge_cpf: string | null; conjuge_nascimento: string | null;
   conjuge_telefone: string | null; conjuge_email: string | null; conjuge_profissao: string | null;
   comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criado_por_id?: string | null; criada_em: string;
@@ -186,7 +187,7 @@ type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por'
 
 const FORM_VAZIO: Form = {
   imobiliaria_id: '', comprador_nome: '', comprador_cpf: '', comprador_nascimento: null, comprador_telefone: '',
-  comprador_email: '', comprador_profissao: '', estado_civil: 'solteiro', conjuge_nome: '', conjuge_cpf: '', conjuge_nascimento: null,
+  comprador_email: '', comprador_profissao: '', estado_civil: 'solteiro', regime_bens: '', conjuge_participa: true, conjuge_nome: '', conjuge_cpf: '', conjuge_nascimento: null,
   conjuge_telefone: '', conjuge_email: '', conjuge_profissao: '', observacoes: '',
 };
 
@@ -216,7 +217,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     setForm({
       imobiliaria_id: p.imobiliaria_id, comprador_nome: p.comprador_nome, comprador_cpf: formatarCPF(p.comprador_cpf),
       comprador_nascimento: p.comprador_nascimento, comprador_telefone: formatarTelefone(p.comprador_telefone),
-      comprador_email: p.comprador_email ?? '', comprador_profissao: p.comprador_profissao ?? '', estado_civil: p.estado_civil, conjuge_nome: p.conjuge_nome ?? '',
+      comprador_email: p.comprador_email ?? '', comprador_profissao: p.comprador_profissao ?? '', estado_civil: p.estado_civil, regime_bens: p.regime_bens ?? '', conjuge_participa: p.conjuge_participa ?? true, conjuge_nome: p.conjuge_nome ?? '',
       conjuge_cpf: formatarCPF(p.conjuge_cpf), conjuge_nascimento: p.conjuge_nascimento,
       conjuge_telefone: formatarTelefone(p.conjuge_telefone), conjuge_email: p.conjuge_email ?? '', conjuge_profissao: p.conjuge_profissao ?? '',
       observacoes: p.observacoes ?? '',
@@ -242,7 +243,8 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     if (soDigitos(form.comprador_telefone || '').length < 10) { setErro('Informe o telefone do comprador com DDD.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((form.comprador_email || '').trim())) { setErro('Informe um e-mail válido para o comprador.'); return; }
     if ((form.comprador_profissao || '').trim().length < 2) { setErro('Informe a profissão do comprador.'); return; }
-    const casal = temConjuge(form.estado_civil);
+    if (temConjuge(form.estado_civil) && !form.regime_bens) { setErro('Informe o regime de bens do casamento.'); return; }
+    const casal = conjugeNoContrato(form.estado_civil, form.regime_bens, form.conjuge_participa);
     if (casal && form.conjuge_cpf && !cpfValido(form.conjuge_cpf)) { setErro('O CPF do cônjuge não é válido. Confira os números.'); return; }
     if (casal && (form.conjuge_profissao || '').trim().length < 2) { setErro('Informe a profissão do cônjuge.'); return; }
     if (nova && equipe && !form.imobiliaria_id) { setErro('Escolha a imobiliária responsável pela pasta.'); return; }
@@ -252,6 +254,8 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       comprador_nome: form.comprador_nome.trim(), comprador_cpf: soDigitos(form.comprador_cpf),
       comprador_nascimento: form.comprador_nascimento || null, comprador_telefone: vazioNulo(soDigitos(form.comprador_telefone || '')),
       comprador_email: vazioNulo(form.comprador_email), comprador_profissao: vazioNulo(form.comprador_profissao), estado_civil: form.estado_civil,
+      regime_bens: temConjuge(form.estado_civil) ? form.regime_bens || null : null,
+      conjuge_participa: ehSeparacao(form.regime_bens) ? form.conjuge_participa : true,
       conjuge_nome: casal ? vazioNulo(form.conjuge_nome) : null,
       conjuge_cpf: casal ? vazioNulo(soDigitos(form.conjuge_cpf || '')) : null,
       conjuge_nascimento: casal ? form.conjuge_nascimento || null : null,
@@ -278,7 +282,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
 
   if (!nova && !pasta) return <section className="secao">{erro ? <p className="erro">{erro}</p> : <p className="vazio">Carregando…</p>}</section>;
 
-  const casal = temConjuge(form.estado_civil);
+  const casal = conjugeNoContrato(form.estado_civil, form.regime_bens, form.conjuge_participa);
   return (
     <section className="secao pasta">
       <button className="voltar" onClick={() => ir('/painel/pastas')}>‹ Pastas</button>
@@ -337,6 +341,22 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
               {ESTADOS_CIVIS.map((e) => <option key={e.valor} value={e.valor}>{e.rotulo}</option>)}
             </select>
           </label>
+          {temConjuge(form.estado_civil) && (
+            <label>Regime de bens
+              <select {...campo('regime_bens')} required>
+                <option value="">Selecione…</option>
+                {REGIMES.map((r) => <option key={r.valor} value={r.valor}>{r.rotulo}</option>)}
+              </select>
+            </label>
+          )}
+          {temConjuge(form.estado_civil) && ehSeparacao(form.regime_bens) && (
+            <label>O cônjuge participa do contrato?
+              <select value={form.conjuge_participa ? 'sim' : 'nao'} onChange={(e) => setForm((f) => ({ ...f, conjuge_participa: e.target.value === 'sim' }))}>
+                <option value="sim">Sim, o cônjuge também assina</option>
+                <option value="nao">Não, só o comprador</option>
+              </select>
+            </label>
+          )}
         </fieldset>
 
         {casal && (
@@ -373,8 +393,8 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       </form>
 
       {!nova && <Submissao pasta={pasta!} equipe={equipe} aoSubmeter={() => setRecarga((n) => n + 1)} />}
-      {!nova && <Documentos pasta={pasta!} estadoCivil={pasta!.estado_civil} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
-      {!nova && equipe && <DadosContrato pastaId={id} temConjuge={temConjuge(pasta!.estado_civil)} aoMudar={() => setRecarga((n) => n + 1)} />}
+      {!nova && <Documentos pasta={pasta!} estadoCivil={pasta!.estado_civil} conjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa)} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
+      {!nova && equipe && <DadosContrato pastaId={id} temConjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa)} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && <HistoricoPasta pastaId={id} recarga={recarga} />}
     </section>
   );
@@ -413,7 +433,7 @@ const PESSOAS: { valor: Tipo['pessoa']; titulo: string }[] = [
   { valor: 'geral', titulo: 'Documentos complementares' },
 ];
 
-function Documentos({ pasta, estadoCivil, equipe, aoMudar }: { pasta: Pasta; estadoCivil: EstadoCivil; equipe: boolean; aoMudar: () => void }) {
+function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar }: { pasta: Pasta; estadoCivil: EstadoCivil; conjuge: boolean; equipe: boolean; aoMudar: () => void }) {
   const [tipos, setTipos] = useState<Tipo[]>([]);
   const [docs, setDocs] = useState<Documento[]>([]);
   const [recarga, setRecarga] = useState(0);
@@ -457,7 +477,7 @@ function Documentos({ pasta, estadoCivil, equipe, aoMudar }: { pasta: Pasta; est
     avisar(`${r.arquivos.length} documentos baixados.`);
     setRecarga((n) => n + 1);
   };
-  const visiveis = tipos.filter((t) => (t.pessoa !== 'conjuge' || temConjuge(estadoCivil))
+  const visiveis = tipos.filter((t) => (t.pessoa !== 'conjuge' || conjuge)
     && (t.exibir_para.length === 0 || t.exibir_para.includes(estadoCivil)));
 
   return (
@@ -710,6 +730,7 @@ function Submissao({ pasta, equipe, aoSubmeter }: { pasta: Pasta; equipe: boolea
     setEnviando(false);
     if (error) {
       setErro(error.message.includes('DOCUMENTOS_FALTANDO') ? 'Ainda falta anexar documento obrigatório.'
+        : error.message.includes('REGIME_NAO_INFORMADO') ? 'Informe o regime de bens do casamento (Editar dados) antes de submeter.'
         : error.message.includes('DADOS_CONJUGE_INCOMPLETOS') ? 'Preencha nome, CPF e profissão do cônjuge antes de submeter.'
         : error.message.includes('DADOS_INCOMPLETOS') ? 'Preencha telefone, e-mail e profissão do comprador antes de submeter.'
         : 'Não foi possível submeter a pasta. Tente novamente.');

@@ -60,6 +60,19 @@ export const ESTADOS_CIVIS: { valor: EstadoCivil; rotulo: string }[] = [
 ];
 export const temConjuge = (e: EstadoCivil) => e === 'casado' || e === 'uniao_estavel';
 
+export type RegimeBens = 'comunhao_parcial' | 'comunhao_universal' | 'separacao_total' | 'separacao_obrigatoria' | 'participacao_aquestos';
+export const REGIMES: { valor: RegimeBens; rotulo: string }[] = [
+  { valor: 'comunhao_parcial', rotulo: 'Comunhão parcial de bens' },
+  { valor: 'comunhao_universal', rotulo: 'Comunhão universal de bens' },
+  { valor: 'separacao_total', rotulo: 'Separação total de bens' },
+  { valor: 'separacao_obrigatoria', rotulo: 'Separação obrigatória de bens' },
+  { valor: 'participacao_aquestos', rotulo: 'Participação final nos aquestos' },
+];
+export const ehSeparacao = (r: string | null | undefined) => r === 'separacao_total' || r === 'separacao_obrigatoria';
+/** O cônjuge entra no contrato (dados e documentos exigidos)? Mesma regra do banco (conjuge_no_contrato). */
+export const conjugeNoContrato = (e: EstadoCivil, regime: string | null | undefined, participa: boolean | null | undefined) =>
+  temConjuge(e) && (!ehSeparacao(regime) || participa !== false);
+
 export type StatusPasta = 'incompleta' | 'pronta' | 'aguardando_analise' | 'em_analise' | 'pendente_correcao' | 'aprovada';
 export const STATUS_PASTA: { valor: StatusPasta; rotulo: string }[] = [
   { valor: 'incompleta', rotulo: 'Incompleta' },

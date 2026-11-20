@@ -67,6 +67,7 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 36. `supabase/migrations/036_propostas_permissao.sql` (libera salvar a chave Propostas em Empreendimento)
 37. `supabase/migrations/037_rodadas_convite.sql` (convite da rodada: o administrador anexa; baixa quem tem cliente confirmado)
 38. `supabase/migrations/038_dados_contrato.sql` (dados para contrato com leitura dos documentos por IA; requer o secret ANTHROPIC_API_KEY no Cloudflare)
+39. `supabase/migrations/039_regime_bens.sql` (regime de bens; em separação total/obrigatória o cônjuge pode ficar fora do contrato)
 
 ### Criar usuário da equipe
 

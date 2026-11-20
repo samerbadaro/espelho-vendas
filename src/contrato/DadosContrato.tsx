@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Info, Sparkles } from 'lucide-react';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
-import { CAMPOS_ENDERECO, CAMPOS_PESSOA, lerDocumentosComIA, MODELO_IA, type Alerta, type DadosContrato as Dados, type Pessoa } from './leitura';
+import { CAMPOS_ENDERECO, CAMPOS_PESSOA, lerDocumentosComIA, MODELO_IA, padronizar, type Alerta, type DadosContrato as Dados, type Pessoa } from './leitura';
 
 interface Registro {
   dados: Dados; fontes: Record<string, string>; alertas: Alerta[]; status: 'rascunho' | 'conferido';
@@ -25,7 +25,7 @@ export function DadosContrato({ pastaId, temConjuge, aoMudar }: { pastaId: strin
     if (!ok) return;
     const { data } = await supabase.from('dados_contrato').select('*').eq('pasta_id', pastaId).maybeSingle();
     setReg((data as Registro) ?? null);
-    setDados((data as Registro)?.dados ?? {});
+    setDados(padronizar((data as Registro)?.dados ?? {}));
     setAlterado(false);
   }, [pastaId]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -51,7 +51,7 @@ export function DadosContrato({ pastaId, temConjuge, aoMudar }: { pastaId: strin
 
   const salvar = async (conferido: boolean) => {
     setSalvando(true);
-    const { error } = await supabase.rpc('salvar_dados_contrato', { p_pasta: pastaId, p_dados: dados, p_conferido: conferido });
+    const { error } = await supabase.rpc('salvar_dados_contrato', { p_pasta: pastaId, p_dados: padronizar(dados), p_conferido: conferido });
     setSalvando(false);
     if (error) { avisar('Não foi possível salvar.', 'erro'); return; }
     avisar(conferido ? 'Dados conferidos. Prontos para o contrato.' : 'Alterações salvas.');
@@ -69,7 +69,7 @@ export function DadosContrato({ pastaId, temConjuge, aoMudar }: { pastaId: strin
   };
 
   const alertas = reg?.alertas ?? [];
-  const pessoas: ('comprador' | 'conjuge')[] = temConjuge || dados.conjuge?.nome ? ['comprador', 'conjuge'] : ['comprador'];
+  const pessoas: ('comprador' | 'conjuge')[] = temConjuge ? ['comprador', 'conjuge'] : ['comprador'];
 
   return (
     <div className="cartao dados-contrato">

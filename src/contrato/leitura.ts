@@ -2,7 +2,7 @@
 // O navegador da equipe baixa os documentos, reduz as fotos e monta o pedido; o servidor
 // (/api/contrato/ler) confere o login e repassa à IA com a chave secreta.
 import { supabase } from '../dados';
-import { cpfValido, soDigitos, chamarApi } from '../util';
+import { cpfValido, soDigitos, chamarApi, REGIMES } from '../util';
 
 export const MODELO_IA = 'claude-sonnet-5-5';
 
@@ -23,7 +23,7 @@ export interface Alerta { nivel: 'atencao' | 'info'; texto: string }
 
 interface DocInfo { id: string; caminho: string; arquivo: string; mime: string | null; tipo: string; pessoa: string }
 interface Contexto {
-  pasta: { codigo: string; estado_civil: string; comprador: Record<string, string | null>; conjuge: Record<string, string | null> };
+  pasta: { codigo: string; estado_civil: string; regime_bens: string | null; conjuge_no_contrato: boolean; comprador: Record<string, string | null>; conjuge: Record<string, string | null> };
   documentos: DocInfo[];
 }
 
@@ -82,7 +82,8 @@ Regras:
 - Datas no formato AAAA-MM-DD. CPF e CEP só com números. UF com 2 letras maiúsculas.
 - Naturalidade = cidade/UF de nascimento (ex.: "Rio Verde/GO"), normalmente no RG ou na certidão.
 - Nacionalidade: escreva por extenso (ex.: "brasileira"). Só preencha se o documento permitir concluir.
-- Estado civil e regime de bens: da certidão de casamento, quando houver.
+- Estado civil e regime de bens: da certidão de casamento, quando houver. Se o regime da certidão for diferente do informado na pasta, gere um alerta.
+- Se a pasta disser que o cônjuge NÃO participa do contrato, não preencha "conjuge".
 - Endereço: do comprovante de endereço.
 - Em "fontes", indique de qual documento (D1, D2...) veio cada campo preenchido.
 - Em "alertas" (nivel "atencao"), aponte em português simples:
@@ -95,6 +96,34 @@ Regras:
 Responda chamando a ferramenta registrar_dados.`;
 }
 
+// ---------- Padronização: primeira letra de cada palavra maiúscula ----------
+const LIGACOES = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'na', 'no', 'nas', 'nos', 'a', 'o', 'à', 'ao', 'aos']);
+export function capitalizar(t: string): string {
+  return t.trim().replace(/\s+/g, ' ').replace(/[\p{L}\p{N}]+/gu, (w, pos: number) => {
+    if (/^\p{Lu}{1,2}$/u.test(w) || /\d/.test(w)) return w;            // siglas curtas (GO, SN) e números ficam como estão
+    const m = w.toLocaleLowerCase('pt-BR');
+    if (pos > 0 && LIGACOES.has(m)) return m;
+    return m.charAt(0).toLocaleUpperCase('pt-BR') + m.slice(1);
+  });
+}
+const CAPITALIZAR = ['nome', 'nacionalidade', 'naturalidade', 'profissao', 'estado_civil', 'regime_bens'] as const;
+const CAPITALIZAR_END = ['logradouro', 'complemento', 'bairro', 'cidade'] as const;
+const MAIUSCULAS = ['rg_orgao', 'rg_uf'] as const;
+export function padronizar(d: DadosContrato): DadosContrato {
+  const um = (p?: Pessoa): Pessoa | undefined => {
+    if (!p) return p;
+    const n: Pessoa = { ...p, endereco: p.endereco ? { ...p.endereco } : undefined };
+    for (const k of CAPITALIZAR) if (n[k]) n[k] = capitalizar(n[k]!);
+    for (const k of MAIUSCULAS) if (n[k]) n[k] = n[k]!.trim().toUpperCase();
+    if (n.endereco) {
+      for (const k of CAPITALIZAR_END) if (n.endereco[k]) n.endereco[k] = capitalizar(n.endereco[k]!);
+      if (n.endereco.uf) n.endereco.uf = n.endereco.uf.trim().toUpperCase();
+    }
+    return n;
+  };
+  return { ...d, comprador: um(d.comprador), conjuge: um(d.conjuge) };
+}
+
 export interface ResultadoLeitura { dados: DadosContrato; fontes: Record<string, string>; alertas: Alerta[]; lidos: number; ignorados: string[]; tokensEntrada: number; tokensSaida: number }
 
 /** Baixa, prepara e envia os documentos à IA. `progresso` recebe mensagens para a tela. */
@@ -105,9 +134,11 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
   if (!ctx.documentos.length) throw new Error('Esta pasta não tem documentos para ler.');
 
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const rotuloRegime = REGIMES.find((x) => x.valor === ctx.pasta.regime_bens)?.rotulo ?? '';
+  const temConj = ctx.pasta.conjuge_no_contrato !== false && ['casado', 'uniao_estavel'].includes(ctx.pasta.estado_civil);
   const conteudo: unknown[] = [{
     type: 'text',
-    text: `Pasta ${ctx.pasta.codigo}. Estado civil informado: ${ctx.pasta.estado_civil}.\nDados digitados na pasta (para comparar):\n${JSON.stringify({ comprador: ctx.pasta.comprador, conjuge: ctx.pasta.conjuge })}\n\nDocumentos a seguir:`,
+    text: `Pasta ${ctx.pasta.codigo}. Estado civil informado: ${ctx.pasta.estado_civil}.${ctx.pasta.regime_bens ? ` Regime de bens informado: ${rotuloRegime}.` : ''}${temConj ? '' : ' O cônjuge NÃO participa do contrato.'}\nDados digitados na pasta (para comparar):\n${JSON.stringify({ comprador: ctx.pasta.comprador, conjuge: ctx.pasta.conjuge })}\n\nDocumentos a seguir:`,
   }];
   const ignorados: string[] = [];
   const nomes: Record<string, string> = {};
@@ -162,12 +193,13 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
   }
   if (!uso) throw new Error('A IA não devolveu os dados. Tente de novo.');
 
-  const dados: DadosContrato = { comprador: uso.comprador ?? {}, conjuge: uso.conjuge ?? undefined };
+  const dados: DadosContrato = { comprador: uso.comprador ?? {}, conjuge: temConj ? uso.conjuge ?? undefined : undefined };
+  if (rotuloRegime) for (const q of ['comprador', 'conjuge'] as const) { const p = dados[q]; if (p && !p.regime_bens) p.regime_bens = rotuloRegime; }
   const alertas: Alerta[] = Array.isArray(uso.alertas) ? uso.alertas : [];
   // completa com o que já está na pasta (e-mail, telefone, profissão) quando a IA não achou
   for (const quem of ['comprador', 'conjuge'] as const) {
     const base = ctx.pasta[quem];
-    if (!base?.nome && quem === 'conjuge') continue;
+    if (quem === 'conjuge' && (!temConj || !base?.nome)) continue;
     const p: Pessoa = (dados[quem] ??= {});
     for (const k of ['email', 'telefone', 'profissao'] as const) if (!p[k] && base?.[k]) p[k] = String(base[k]);
     // conferências que não dependem da IA
@@ -179,5 +211,5 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
   // troca D1, D2… pelo nome do documento, para a equipe saber de onde veio
   const fontes: Record<string, string> = {};
   for (const [campo, cod] of Object.entries((uso.fontes ?? {}) as Record<string, string>)) fontes[campo] = nomes[cod] ?? cod;
-  return { dados, fontes, alertas, lidos, ignorados, tokensEntrada: r.usage?.input_tokens ?? 0, tokensSaida: r.usage?.output_tokens ?? 0 };
+  return { dados: padronizar(dados), fontes, alertas, lidos, ignorados, tokensEntrada: r.usage?.input_tokens ?? 0, tokensSaida: r.usage?.output_tokens ?? 0 };
 }
