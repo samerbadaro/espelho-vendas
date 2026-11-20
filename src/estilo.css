@@ -901,3 +901,19 @@ small.bloco { display: block; color: var(--tinta-2); }
 
 /* Faixa do ambiente de homologação (não aparece na produção) */
 .faixa-ambiente { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 100000; background: #B0730F; color: #fff; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 14px; border-radius: 0 0 6px 6px; pointer-events: none; }
+
+/* Dados para contrato (leitura com IA) */
+.dados-contrato .dc-acoes { margin: 4px 0 12px; }
+.dc-alertas { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dc-alertas li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 8px; font-size: 0.9rem; }
+.dc-alertas li svg { flex-shrink: 0; margin-top: 2px; }
+.dc-alertas li.atencao { background: #FDF1E7; color: #8A3B0C; }
+.dc-alertas li.info { background: var(--superficie-2); color: var(--tinta-2); }
+.dc-pessoa { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 16px 16px; margin: 0 0 14px; }
+.dc-pessoa legend { font-weight: 700; padding: 0 6px; }
+.dc-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
+.dc-grade .dc-largo { grid-column: span 2; }
+.dc-grade label > span { display: flex; align-items: center; gap: 6px; }
+.dc-fonte { font-size: 0.6875rem; color: var(--tinta-2); background: var(--superficie-2); border-radius: 4px; padding: 0 5px; font-weight: 500; }
+.dc-dica { flex: 1; margin: 0; }
+@media (max-width: 640px) { .dc-grade .dc-largo { grid-column: auto; } }

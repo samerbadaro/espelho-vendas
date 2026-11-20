@@ -3,6 +3,7 @@ import { supabase, formatarDataHora } from './dados';
 import { useDialogos } from './ui';
 import { FileSpreadsheet, BarChart3, FileArchive } from 'lucide-react';
 import { zipSync } from 'fflate';
+import { DadosContrato } from './contrato/DadosContrato';
 import {
   ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarTelefone, formatarData, formatarTamanho,
   ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC,
@@ -373,6 +374,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
 
       {!nova && <Submissao pasta={pasta!} equipe={equipe} aoSubmeter={() => setRecarga((n) => n + 1)} />}
       {!nova && <Documentos pasta={pasta!} estadoCivil={pasta!.estado_civil} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
+      {!nova && equipe && <DadosContrato pastaId={id} temConjuge={temConjuge(pasta!.estado_civil)} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && <HistoricoPasta pastaId={id} recarga={recarga} />}
     </section>
   );
