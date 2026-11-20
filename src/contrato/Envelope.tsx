@@ -29,6 +29,7 @@ const SITUACAO: Record<string, [string, string]> = {
   assinado: ['Assinado por todos', 'sp-aprovada'], cancelado: ['Cancelado', 'sp-pendente_correcao'],
 };
 const ORDEM_DOC: Record<string, number> = { quadro_resumo: 0, normas: 1, carta_proposta: 2 };
+const NOME_ESPERADO: Record<string, string> = { quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais', carta_proposta: 'Carta Proposta' };
 
 export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj, emp, imobiliariaId, aoMudar }: {
   pastaId: string; documentos: DocEmitido[]; dados: Dados; temConjuge: boolean; pj: boolean; emp: Record<string, string>; imobiliariaId: string | null; aoMudar: () => void;
@@ -102,6 +103,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
   if (env === undefined) return null;
   const ativo = env && (env.status === 'preparado' || env.status === 'enviado' || env.status === 'assinado') ? env : null;
   const incluidos = atuais.filter((d) => usarDoc[d.id] ?? true);
+  const faltam = Object.keys(NOME_ESPERADO).filter((t) => !atuais.some((d) => d.documento === t));
   const temPrincipal = incluidos.some((d) => d.documento === 'quadro_resumo');
   const pendentes = incluidos.filter((d) => d.validacao !== 'validado');
   const podeMontar = !!sit?.configurado && temPrincipal && !pendentes.length && !ocupado;
@@ -155,6 +157,12 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
                 <label><input type="checkbox" disabled={d.documento === 'quadro_resumo'} checked={usarDoc[d.id] ?? true} onChange={(e) => setUsarDoc({ ...usarDoc, [d.id]: e.target.checked })} />
                   <strong>{d.nome}</strong> <span className="sub">nº {d.numero} · v{d.versao}{d.documento === 'quadro_resumo' && ' · principal'}</span></label>
                 {d.validacao === 'validado' ? <span className="selo sp-aprovada">Validado</span> : <span className="selo sp-pendente_correcao">Falta validar</span>}
+              </li>
+            ))}
+            {faltam.map((t) => (
+              <li key={t}>
+                <span><strong>{NOME_ESPERADO[t]}</strong> <span className="sub">ainda não emitido — marque em Emissão e emita para incluir no envelope</span></span>
+                <span className="selo sp-pendente_correcao">Falta emitir</span>
               </li>
             ))}
             {fixos.map((f) => (

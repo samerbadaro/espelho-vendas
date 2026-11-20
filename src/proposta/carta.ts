@@ -17,6 +17,16 @@ export interface DadosCarta {
   unidade: { numero: string; area: number; andar: number | null }; pasta: DadosPasta | null;
   imobiliaria: string; corretor: string; series: Serie[]; resultado: Resultado; observacoes: string | null;
   logoUrl?: string | null; corDestaque?: string;
+  /** Dados conferidos (leitura com IA) — quando informados, substituem os da pasta e preenchem tudo (RG, endereço, regime…). */
+  partes?: PartesCarta | null;
+}
+export interface ProponenteCarta {
+  nome?: string; cpf?: string; rg?: string; nascimento?: string; nacionalidade?: string; estado_civil?: string; regime_bens?: string;
+  profissao?: string; telefone?: string; email?: string; endereco?: string; cep?: string;
+}
+export interface PartesCarta {
+  empresa?: { razao_social?: string; cnpj?: string; telefone?: string; email?: string; endereco?: string; cep?: string } | null;
+  proponentes: ProponenteCarta[];
 }
 
 const ESTADO_CIVIL: Record<string, string> = {
@@ -165,9 +175,33 @@ export async function gerarCarta(d: DadosCarta, o: { blob?: boolean } = {}): Pro
       [{ r: 'E-mail', v: email || branco }, { r: 'Endereço', v: `${'_'.repeat(38)} · CEP ${'_'.repeat(9)}`, span: 2 }],
     ]);
   };
-  proponente(1, p?.comprador_nome ?? null, p?.comprador_cpf ?? null, p?.comprador_nascimento ?? null, p?.comprador_profissao ?? null, p?.comprador_telefone ?? null, p?.comprador_email ?? null);
-  if (p?.conjuge_nome)
-    proponente(2, p.conjuge_nome, p.conjuge_cpf, p.conjuge_nascimento, p.conjuge_profissao, p.conjuge_telefone, p.conjuge_email);
+  const pt = d.partes;
+  const nascTxt = (v?: string) => (!v ? branco : /^\d{4}-\d{2}-\d{2}/.test(v) ? fmtData(v.slice(0, 10)) : v);
+  const cnpj = (s?: string) => { const x = (s ?? '').replace(/\D/g, ''); return x.length === 14 ? x.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : s ?? ''; };
+  const completo = (titulo: string, x: ProponenteCarta) => {
+    secao(titulo);
+    campos([
+      [{ r: 'Nome', v: x.nome || branco, span: 2 }, { r: 'CPF', v: cpf((x.cpf ?? '').replace(/\D/g, '')) || branco }],
+      [{ r: 'RG / órgão emissor', v: x.rg || branco }, { r: 'Nascimento', v: nascTxt(x.nascimento) }, { r: 'Nacionalidade', v: x.nacionalidade || branco }],
+      [{ r: 'Estado civil', v: x.estado_civil ? `${x.estado_civil}${x.regime_bens ? ` · ${x.regime_bens}` : ''}` : branco }, { r: 'Profissão', v: x.profissao || branco }, { r: 'Celular', v: tel((x.telefone ?? '').replace(/\D/g, '')) || x.telefone || branco }],
+      [{ r: 'E-mail', v: x.email || branco }, { r: 'Endereço', v: x.endereco ? `${x.endereco}${x.cep ? ` · CEP ${x.cep}` : ''}` : `${'_'.repeat(38)} · CEP ${'_'.repeat(9)}`, span: 2 }],
+    ]);
+  };
+  if (pt) {
+    if (pt.empresa) {
+      const e = pt.empresa;
+      secao('Proponente (pessoa jurídica)');
+      campos([
+        [{ r: 'Razão social', v: e.razao_social || branco, span: 2 }, { r: 'CNPJ', v: cnpj(e.cnpj) || branco }],
+        [{ r: 'E-mail', v: e.email || branco }, { r: 'Endereço', v: e.endereco ? `${e.endereco}${e.cep ? ` · CEP ${e.cep}` : ''}` : branco, span: 2 }],
+      ]);
+      pt.proponentes.forEach((x, i) => completo(pt.proponentes.length > 1 ? `Representante legal ${i + 1}` : 'Representante legal', x));
+    } else pt.proponentes.forEach((x, i) => completo(`Proponente ${i + 1}`, x));
+  } else {
+    proponente(1, p?.comprador_nome ?? null, p?.comprador_cpf ?? null, p?.comprador_nascimento ?? null, p?.comprador_profissao ?? null, p?.comprador_telefone ?? null, p?.comprador_email ?? null);
+    if (p?.conjuge_nome)
+      proponente(2, p.conjuge_nome, p.conjuge_cpf, p.conjuge_nascimento, p.conjuge_profissao, p.conjuge_telefone, p.conjuge_email);
+  }
 
   // ---------- Preço e forma de pagamento ----------
   secao('Preço e forma de pagamento', 50);
@@ -239,8 +273,15 @@ export async function gerarCarta(d: DadosCarta, o: { blob?: boolean } = {}): Pro
   };
   const metade = (util - 12) / 2;
   garantir(30); y += 14;
-  assinatura(m, metade, p?.comprador_nome || 'Proponente', `Proponente${p?.comprador_cpf ? ` · CPF ${cpf(p.comprador_cpf)}` : ''}`);
-  if (p?.conjuge_nome) assinatura(m + metade + 12, metade, p.conjuge_nome, `Proponente${p.conjuge_cpf ? ` · CPF ${cpf(p.conjuge_cpf)}` : ''}`);
+  if (pt) {
+    const quem = pt.empresa
+      ? [{ nome: pt.empresa.razao_social || 'Proponente', sub: `p.p. ${pt.proponentes[0]?.nome ?? ''}${pt.empresa.cnpj ? ` · CNPJ ${cnpj(pt.empresa.cnpj)}` : ''}` }]
+      : pt.proponentes.map((x) => ({ nome: x.nome || 'Proponente', sub: `Proponente${x.cpf ? ` · CPF ${cpf(x.cpf.replace(/\D/g, ''))}` : ''}` }));
+    quem.slice(0, 2).forEach((q, i) => assinatura(m + i * (metade + 12), metade, q.nome, q.sub));
+  } else {
+    assinatura(m, metade, p?.comprador_nome || 'Proponente', `Proponente${p?.comprador_cpf ? ` · CPF ${cpf(p.comprador_cpf)}` : ''}`);
+    if (p?.conjuge_nome) assinatura(m + metade + 12, metade, p.conjuge_nome, `Proponente${p.conjuge_cpf ? ` · CPF ${cpf(p.conjuge_cpf)}` : ''}`);
+  }
   y += 12;
   garantir(26); y += 12;
   assinatura(m, metade, d.corretor || 'Corretor', `Corretor${d.imobiliaria ? ` · ${d.imobiliaria}` : ''}`);

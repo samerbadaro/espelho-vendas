@@ -2,9 +2,26 @@
 import { supabase } from '../dados';
 import { calcular, type Serie } from '../proposta/motor';
 import { carregarContexto, doBanco } from '../proposta/dadosProposta';
-import { gerarCarta, type DadosPasta } from '../proposta/carta';
+import { gerarCarta, type DadosPasta, type PartesCarta, type ProponenteCarta } from '../proposta/carta';
+import { enderecoTexto } from './gerador';
+import type { DadosContrato, Pessoa } from './leitura';
 
-export async function cartaDaProposta(propostaId: string): Promise<Blob> {
+/** Converte os dados conferidos (leitura com IA) no formato da carta. */
+export function partesDaLeitura(d: DadosContrato, comConjuge: boolean, pj: boolean): PartesCarta {
+  const pessoa = (x?: Pessoa): ProponenteCarta => ({
+    nome: x?.nome, cpf: x?.cpf, nascimento: x?.nascimento, nacionalidade: x?.nacionalidade,
+    rg: x?.rg ? [x.rg, [x.rg_orgao, x.rg_uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') : undefined,
+    estado_civil: x?.estado_civil, regime_bens: x?.regime_bens, profissao: x?.profissao, telefone: x?.telefone, email: x?.email,
+    endereco: enderecoTexto(x?.endereco as Parameters<typeof enderecoTexto>[0]) || undefined,
+  });
+  const e = d.empresa;
+  return {
+    empresa: pj && e ? { razao_social: e.razao_social, cnpj: e.cnpj, telefone: e.telefone, email: e.email, endereco: enderecoTexto(e.endereco as Parameters<typeof enderecoTexto>[0]) || undefined } : null,
+    proponentes: [pessoa(d.comprador), ...(comConjuge && !pj && d.conjuge?.nome ? [pessoa(d.conjuge)] : [])],
+  };
+}
+
+export async function cartaDaProposta(propostaId: string, partes?: PartesCarta | null, emp: Record<string, string> = {}): Promise<Blob> {
   const { data: p } = await supabase.from('propostas')
     .select('codigo, data_proposta, unidade_id, pasta_id, imobiliaria_id, criado_por, series, observacoes, comissao_pct, parte_sinal')
     .eq('id', propostaId).maybeSingle();
@@ -29,10 +46,11 @@ export async function cartaDaProposta(propostaId: string): Promise<Blob> {
     diasVencimento: ctx.comercial.dias_vencimento, observacoes: pr.observacoes,
   });
   const blob = await gerarCarta({
-    codigo: pr.codigo, dataProposta: pr.data_proposta, empreendimento: ctx.nome, comercial: ctx.comercial,
+    codigo: pr.codigo, dataProposta: pr.data_proposta, empreendimento: ctx.nome,
+    comercial: { ...ctx.comercial, vendedora: ctx.comercial.vendedora || emp['vendedora.razao_social'] || null, vendedora_cnpj: ctx.comercial.vendedora_cnpj || emp['vendedora.cnpj'] || null },
     unidade: { numero: unidade.numero, area: unidade.area, andar: unidade.andar }, pasta: (pasta as DadosPasta | null) ?? null,
     imobiliaria: (im as { nome: string } | null)?.nome ?? '', corretor: pr.criado_por ?? '',
-    series, resultado, observacoes: pr.observacoes, logoUrl: ctx.logoUrl, corDestaque: ctx.corDestaque,
+    series, resultado, observacoes: pr.observacoes, logoUrl: ctx.logoUrl, corDestaque: ctx.corDestaque, partes,
   }, { blob: true });
   if (!blob) throw new Error('Não foi possível gerar a carta proposta.');
   return blob;
