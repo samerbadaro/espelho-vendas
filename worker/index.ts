@@ -10,12 +10,17 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+import { apiD4Sign, webhookD4Sign } from './d4sign';
 interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_SECRET_KEY?: string;
   ANTHROPIC_API_KEY?: string;
+  D4SIGN_TOKEN?: string;
+  D4SIGN_CRYPTKEY?: string;
+  D4SIGN_AMBIENTE?: string;
+  D4SIGN_HMAC?: string;
 }
 
 const json = (dados: unknown, status = 200) =>
@@ -287,6 +292,13 @@ export default {
     if (url.pathname.replace(/\/+$/, '') === '/api/contrato/ler') {
       try { return await lerDocumentos(req, env, url); }
       catch { return erro('Não foi possível falar com a IA agora. Tente de novo em instantes.', 502); }
+    }
+    const rota = url.pathname.replace(/\/+$/, '');
+    if (rota === '/api/d4sign/webhook') {
+      try { return await webhookD4Sign(req, env); } catch { return new Response('ok'); }
+    }
+    if (rota === '/api/d4sign') {
+      try { return await apiD4Sign(req, env); } catch { return erro('Erro inesperado ao falar com a D4Sign.', 500); }
     }
     if (url.pathname.startsWith('/api/')) {
       try { return await api(req, env, url.pathname.replace(/\/+$/, '')); }

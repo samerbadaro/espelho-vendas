@@ -1,13 +1,14 @@
 // Módulo Contratos (administrador e Sec. Vendas): só propostas aprovadas com pasta aprovada.
 // Etapas: 1) partes (leitura com IA)  2) unidade (quadro de áreas)  3) pagamento e comissão
 // 4) emissão do Quadro Resumo e das Normas em PDF, com validação, cancelamento e download.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Circle, Download, Eye, FileText, FileUp, Plus, Search, Trash2 } from 'lucide-react';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
 import { ir, conjugeNoContrato, formatarCNPJ, soDigitos, type EstadoCivil, type Perfil } from '../util';
 import { fmtData, fmtNum, fmtReal, type Periodicidade } from '../proposta/motor';
 import { DadosContrato } from './DadosContrato';
+import { PainelAssinatura, rotuloAssinatura, type DocAssinatura } from './Assinatura';
 import { padronizar, type DadosContrato as Dados } from './leitura';
 import { CAMPOS_EMPREENDIMENTO, COLUNAS_AREAS, type Areas } from './campos';
 import { NOME_DOCUMENTO, type Comissao, type SerieContrato, type TipoDocumento } from './gerador';
@@ -21,6 +22,7 @@ interface Registro { pasta_id: string; status: string; dados: Dados; comissao: C
 interface Emitido {
   id: string; numero: number; documento: TipoDocumento; nome: string; caminho: string | null; caminho_docx: string | null; versao: number; validacao: 'aguardando' | 'validado'; assinatura: string;
   gerado_em: string; gerado_por: string | null; validado_por: string | null; cancelado_em: string | null;
+  d4sign_uuid?: string | null; enviado_assinatura_em?: string | null; assinado_em?: string | null; caminho_assinado?: string | null;
 }
 
 type ComissaoUI = Omit<Comissao, 'valor'> & { valor: string };
@@ -113,7 +115,7 @@ interface Proposta {
 }
 interface PastaC {
   id: string; codigo: string; status: string; tipo_pessoa: 'pf' | 'pj'; estado_civil: EstadoCivil; regime_bens: string | null; conjuge_participa: boolean;
-  comprador_nome: string; empresa_razao_social: string | null; imobiliarias: { nome: string; cnpj: string | null } | null;
+  comprador_nome: string; empresa_razao_social: string | null; imobiliaria_id: string | null; imobiliarias: { nome: string; cnpj: string | null } | null;
 }
 
 export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
@@ -129,6 +131,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const [escolha, setEscolha] = useState<Record<TipoDocumento, boolean>>({ quadro_resumo: true, normas: true });
   const [ocupado, setOcupado] = useState('');
   const [erro, setErro] = useState('');
+  const [aberto, setAberto] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     const { data: p } = await supabase.from('propostas').select('id, codigo, pasta_id, status, series, resumo, unidades(numero)').eq('id', id).maybeSingle();
@@ -136,7 +139,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     const pr = p as unknown as Proposta;
     setProp(pr);
     const [{ data: pa }, { data: r }, { data: ar }, { data: e }, { data: c }] = await Promise.all([
-      supabase.from('pastas').select('id, codigo, status, tipo_pessoa, estado_civil, regime_bens, conjuge_participa, comprador_nome, empresa_razao_social, imobiliarias(nome, cnpj)').eq('id', pr.pasta_id).maybeSingle(),
+      supabase.from('pastas').select('id, codigo, status, tipo_pessoa, estado_civil, regime_bens, conjuge_participa, comprador_nome, empresa_razao_social, imobiliaria_id, imobiliarias(nome, cnpj)').eq('id', pr.pasta_id).maybeSingle(),
       supabase.from('dados_contrato').select('pasta_id, status, dados, comissao, pagamento_conferido_em, pagamento_conferido_por').eq('pasta_id', pr.pasta_id).maybeSingle(),
       supabase.from('unidade_areas').select('*').eq('numero', pr.unidades?.numero ?? '').maybeSingle(),
       supabase.from('empreendimento_contrato').select('dados').maybeSingle(),
@@ -165,7 +168,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const series = (prop.series ?? []).map((s) => ({ ...s, qtd: Number(s.qtd), valor: Number(s.valor) })).filter((s) => s.qtd > 0 && s.valor > 0);
   const total = series.reduce((t, s) => t + s.qtd * s.valor, 0);
   const difTotal = Math.abs(total - Number(prop.resumo?.total ?? total));
-  const camposVazios = CAMPOS_EMPREENDIMENTO.filter((c) => !emp[c.chave]?.trim());
+  const camposVazios = CAMPOS_EMPREENDIMENTO.filter((c) => !c.soAssinatura && !emp[c.chave]?.trim());
   const ok = {
     partes: reg?.status === 'conferido',
     unidade: !!areas,
@@ -388,11 +391,12 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
               <thead><tr><th>Número</th><th>Documento</th><th>Versão</th><th>Assinatura</th><th>Validação</th><th /></tr></thead>
               <tbody>
                 {emit.map((c) => (
-                  <tr key={c.id} className={c.cancelado_em ? 'cancelado' : ''}>
+                  <Fragment key={c.id}>
+                  <tr className={c.cancelado_em && c.assinatura !== 'cancelado' ? 'cancelado' : ''}>
                     <td className="mono">{c.numero}</td>
                     <td><strong>{c.nome}</strong><br /><small className="sub">Gerado em {formatarDataHora(c.gerado_em)} por {c.gerado_por}</small></td>
                     <td>v{c.versao}{c.versao > 1 && <><br /><small className="sub">{c.caminho ? 'ajustada' : 'Word ajustado'}</small></>}</td>
-                    <td>{c.cancelado_em ? <span className="selo sp-pendente_correcao">Cancelado</span> : <span className="selo sp-incompleta" title="Envio pela D4Sign na próxima etapa">Não enviado</span>}</td>
+                    <td>{c.cancelado_em && c.assinatura === 'nao_enviado' ? <span className="selo sp-pendente_correcao">Cancelado</span> : <span className={`selo ${rotuloAssinatura(c.assinatura)[1]}`}>{rotuloAssinatura(c.assinatura)[0]}</span>}</td>
                     <td>{c.cancelado_em ? '—' : c.validacao === 'validado'
                       ? <span className="selo sp-aprovada" title={`por ${c.validado_por}`}>Validado</span>
                       : <button type="button" className="botao" onClick={() => acao(c, 'validar_contrato')}>Validar</button>}</td>
@@ -405,13 +409,22 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
                           <input type="file" hidden multiple accept=".docx,.pdf" disabled={!!ocupado} onChange={(e) => { if (e.target.files?.length) enviarAjuste(c, e.target.files); e.target.value = ''; }} />
                         </label>
                       )}
-                      {!c.cancelado_em && <button type="button" className="botao pequeno" onClick={() => acao(c, 'cancelar_contrato')}>Cancelar</button>}
+                      {c.assinatura !== 'nao_enviado' || (!c.cancelado_em && c.validacao === 'validado')
+                        ? <button type="button" className="botao pequeno principal" onClick={() => setAberto(aberto === c.id ? null : c.id)}>Assinatura</button> : null}
+                      {c.assinatura === 'assinado' && c.caminho_assinado && <button type="button" className="botao pequeno" onClick={async () => { const { data } = await supabase.storage.from('contratos').createSignedUrl(c.caminho_assinado!, 60, { download: `${c.numero} - ${c.nome} (assinado).pdf` }); if (data?.signedUrl) window.location.href = data.signedUrl; }}><Download size={14} /> Assinado</button>}
+                      {!c.cancelado_em && c.assinatura === 'nao_enviado' && <button type="button" className="botao pequeno" onClick={() => acao(c, 'cancelar_contrato')}>Cancelar</button>}
                     </td>
                   </tr>
+                  {aberto === c.id && (
+                    <tr className="ass-linha"><td colSpan={6}>
+                      <PainelAssinatura doc={c as DocAssinatura} dados={padronizar(reg?.dados ?? {})} temConjuge={temConj} pj={pj} emp={emp} imobiliariaId={pasta.imobiliaria_id} aoMudar={carregar} />
+                    </td></tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
-            <p className="sub">Para ajustar a formatação: baixe o Word, edite, e use “Enviar ajuste” (pode mandar só o Word, ou o Word e o PDF juntos). A versão mais recente é a que segue para a D4Sign, que entra na próxima etapa.</p>
+            <p className="sub">Para ajustar a formatação: baixe o Word, edite e use “Enviar ajuste” (só o Word, ou o Word e o PDF juntos). Depois de validar, abra “Assinatura” para subir a versão mais recente para a D4Sign, conferir a prévia e chamar os assinantes.</p>
           </div>
         )}
       </div>

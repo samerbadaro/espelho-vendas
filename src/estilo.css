@@ -952,3 +952,18 @@ small.bloco { display: block; color: var(--tinta-2); }
 .mc-tabela td:first-child { white-space: nowrap; }
 .mc-tabela td:last-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-copiar { margin-left: 6px; padding: 2px 5px; }
+.ass-linha > td { background: var(--superficie-2); }
+.ass-painel { padding: 6px 4px; }
+.ass-painel h4 { margin: 0; }
+.ass-tabela input, .ass-tabela select { width: 100%; min-width: 90px; }
+.ass-canal { display: flex; gap: 4px; }
+.ass-canal select { width: auto; min-width: 0; }
+.ass-mover { white-space: nowrap; }
+.ass-mover .botao { padding: 3px 6px; }
+.ass-ordem { width: 54px !important; min-width: 0 !important; }
+.ass-check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9rem; }
+.ass-msg { display: block; margin: 8px 0; }
+.ass-msg textarea { width: 100%; }
+.ass-dica { flex: 1; }
+.ass-reenviar { margin-left: 6px; }
+.ass-nota { margin-top: 6px; }

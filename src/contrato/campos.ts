@@ -1,6 +1,6 @@
 // Campos do cadastro "Dados para contrato" do empreendimento (vendedora, registros, textos fixos).
 // Os valores-exemplo são FICTÍCIOS: servem para testar a emissão até chegar o modelo oficial.
-export interface CampoEmp { chave: string; rotulo: string; grupo: string; longo?: boolean; exemplo: string }
+export interface CampoEmp { chave: string; rotulo: string; grupo: string; longo?: boolean; exemplo: string; soAssinatura?: boolean }
 
 export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
   { grupo: 'Vendedora', chave: 'vendedora.razao_social', rotulo: 'Razão social', exemplo: 'INCORPORADORA EXEMPLO SPE LTDA' },
@@ -41,10 +41,15 @@ export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
   { grupo: 'Textos do contrato', chave: 'empreendimento.indice_pos_obra', rotulo: 'Índice de correção após o Habite-se', exemplo: 'IGP-M (Índice Geral de Preços – Mercado), calculado e divulgado pela FGV' },
 
   { grupo: 'Assinaturas', chave: 'assinatura.plataforma', rotulo: 'Plataforma de assinatura eletrônica', exemplo: 'D4Sign' },
+  { grupo: 'Assinaturas', chave: 'assinatura.cofre', rotulo: 'Cofre na D4Sign (nome)', exemplo: 'Duo Haus – Contratos', soAssinatura: true },
+  { grupo: 'Assinaturas', chave: 'vendedora.signatario_nome', rotulo: 'Quem assina pela incorporadora — nome', exemplo: 'REPRESENTANTE EXEMPLO', soAssinatura: true },
+  { grupo: 'Assinaturas', chave: 'vendedora.signatario_email', rotulo: 'Quem assina pela incorporadora — e-mail', exemplo: 'incorporadora@exemplo.com', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'testemunha1.nome', rotulo: 'Testemunha 1 — nome', exemplo: 'TESTEMUNHA EXEMPLO UM' },
   { grupo: 'Assinaturas', chave: 'testemunha1.cpf', rotulo: 'Testemunha 1 — CPF', exemplo: '000.000.001-91' },
+  { grupo: 'Assinaturas', chave: 'testemunha1.email', rotulo: 'Testemunha 1 — e-mail', exemplo: 'testemunha1@exemplo.com', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'testemunha2.nome', rotulo: 'Testemunha 2 — nome', exemplo: 'TESTEMUNHA EXEMPLO DOIS' },
   { grupo: 'Assinaturas', chave: 'testemunha2.cpf', rotulo: 'Testemunha 2 — CPF', exemplo: '000.000.002-72' },
+  { grupo: 'Assinaturas', chave: 'testemunha2.email', rotulo: 'Testemunha 2 — e-mail', exemplo: 'testemunha2@exemplo.com', soAssinatura: true },
 ];
 
 export const DADOS_EXEMPLO: Record<string, string> = Object.fromEntries(CAMPOS_EMPREENDIMENTO.map((c) => [c.chave, c.exemplo]));

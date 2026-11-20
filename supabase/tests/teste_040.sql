@@ -102,3 +102,11 @@ do $$ declare m modelos_contrato; begin
   raise notice '%  Voltar ao padrão desativa o enviado', case when not exists (select 1 from modelos_contrato where ativo) then 'OK    ' else 'FALHOU' end;
 end $$;
 reset role;
+
+-- 044: situações da assinatura
+do $$ begin
+  begin update contratos set assinatura = 'preparado' where false; raise notice 'OK      Situação "preparado" aceita';
+  exception when others then raise notice 'FALHOU  situação preparado'; end;
+  begin insert into contrato_assinantes (contrato_id, papel, email, canal) values (gen_random_uuid(), 'x', 'a@b.c', 'sms'); raise notice 'FALHOU  aceitou canal sms';
+  exception when others then raise notice 'OK      Canal só e-mail ou WhatsApp'; end;
+end $$;
