@@ -1084,3 +1084,5 @@ small.bloco { display: block; color: var(--tinta-2); }
 .ct-data > span { font-weight: 600; }
 .ct-data label { display: inline-flex; align-items: center; gap: 6px; }
 .ct-data input[type="date"], .cartao .ct-data input[type="date"], section .ct-data input[type="date"] { width: auto; max-width: 190px; flex: 0 0 auto; }
+.acoes-esquerda { display: flex; gap: 8px; margin: 4px 0 12px; }
+.titulo-linha { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

@@ -201,6 +201,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     const d = padronizar(reg?.dados ?? {});
     return {
       campos: emp, tipoPessoa: pasta.tipo_pessoa, empresa: d.empresa ?? null, comprador: d.comprador ?? {}, conjuge: temConj ? d.conjuge ?? null : null,
+      representante2: pasta.tipo_pessoa === 'pj' ? d.representante2 ?? null : null,
       unidade: prop.unidades?.numero ?? '', areas: areas ?? null, series, comissao: reg?.comissao ?? [],
       data: dataContrato, referencia: `${pasta.codigo} · ${prop.codigo}`,
     };
@@ -264,7 +265,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         if (u1.error || u2.error) throw new Error('Falha ao guardar os arquivos.');
         const { error } = await supabase.rpc('registrar_contrato', {
           p_pasta: pasta.id, p_proposta: prop.id, p_documento: t, p_nome: `${NOME_DOCUMENTO[t]} — Unidade ${ctx.unidade}`, p_caminho: caminho, p_caminho_docx: caminhoDocx,
-          p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas, data_contrato: ctx.data },
+          p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, representante2: ctx.representante2, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas, data_contrato: ctx.data },
         });
         if (error) throw new Error(error.message.includes('NAO_CONFERIDO') ? 'Confira as partes e o pagamento antes de emitir.' : 'Não foi possível registrar o documento.');
       }

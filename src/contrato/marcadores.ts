@@ -48,7 +48,8 @@ export function dadosParaModelo(ctx: ContextoContrato): Dados {
   const base = aninhar(ctx.campos);
   return {
     ...base,
-    eh_pf: !pj, eh_pj: pj, tem_conjuge: temConj,
+    eh_pf: !pj, eh_pj: pj, tem_conjuge: temConj, tem_representante2: pj && !!ctx.representante2?.nome,
+    representante2: pj && ctx.representante2?.nome ? pessoa(ctx.representante2) : pessoa(null),
     comprador: pessoa(ctx.comprador),
     conjuge: temConj ? pessoa(ctx.conjuge) : pessoa(null),
     empresa: {
@@ -93,6 +94,8 @@ export const MARCADORES: Marcador[] = [
   { tag: 'eh_pj', descricao: 'Condição: comprador pessoa jurídica. Use {#eh_pj} … {/eh_pj}', grupo: 'Condições' },
   { tag: 'tem_conjuge', descricao: 'Condição: cônjuge participa do contrato. Use {#tem_conjuge} … {/tem_conjuge}', grupo: 'Condições' },
   ...P('comprador', 'Comprador (ou representante legal, se PJ)', 'do comprador'),
+  { tag: 'tem_representante2', descricao: 'Condição: PJ com 2º representante legal. Use {#tem_representante2} … {/tem_representante2}', grupo: 'Condições' },
+  ...P('representante2', '2º representante legal (PJ)', 'do 2º representante'),
   ...P('conjuge', 'Cônjuge', 'do cônjuge'),
   ...[['razao_social', 'Razão social'], ['cnpj', 'CNPJ'], ['atividade', 'Atividade econômica'], ['registro_junta', 'Registro na junta'], ['data_abertura', 'Data de abertura'], ['telefone', 'Telefone'], ['email', 'E-mail'], ['endereco', 'Endereço']]
     .map(([k, d]) => ({ tag: `empresa.${k}`, descricao: `${d} da empresa compradora`, grupo: 'Empresa compradora (PJ)' })),

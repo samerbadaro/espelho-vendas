@@ -68,7 +68,7 @@ export function DadosContrato({ pastaId, temConjuge, pj = false, aoMudar }: { pa
     });
   };
 
-  const mudar = (quem: 'comprador' | 'conjuge', campo: string, valor: string, endereco = false) => {
+  const mudar = (quem: 'comprador' | 'conjuge' | 'representante2', campo: string, valor: string, endereco = false) => {
     setAlterado(true);
     setDados((d) => {
       const p: Pessoa = { ...(d[quem] ?? {}) };
@@ -79,7 +79,7 @@ export function DadosContrato({ pastaId, temConjuge, pj = false, aoMudar }: { pa
   };
 
   const alertas = reg?.alertas ?? [];
-  const pessoas: ('comprador' | 'conjuge')[] = temConjuge && !pj ? ['comprador', 'conjuge'] : ['comprador'];
+  const pessoas: ('comprador' | 'conjuge' | 'representante2')[] = temConjuge && !pj ? ['comprador', 'conjuge'] : pj && dados.representante2 ? ['comprador', 'representante2'] : ['comprador'];
 
   return (
     <div className="cartao dados-contrato">
@@ -132,7 +132,7 @@ export function DadosContrato({ pastaId, temConjuge, pj = false, aoMudar }: { pa
         const fonte = (c: string) => reg?.fontes?.[`${quem}.${c}`];
         return (
           <fieldset key={quem} className="dc-pessoa">
-            <legend>{quem === 'conjuge' ? 'Cônjuge' : pj ? 'Representante legal' : 'Comprador'}</legend>
+            <legend>{quem === 'conjuge' ? 'Cônjuge' : quem === 'representante2' ? '2º representante legal' : pj ? 'Representante legal' : 'Comprador'}</legend>
             <div className="dc-grade">
               {CAMPOS_PESSOA.map(([k, rot]) => (
                 <label key={k} className={k === 'nome' ? 'dc-largo' : ''}>

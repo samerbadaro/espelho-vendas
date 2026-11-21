@@ -81,6 +81,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
     const tel = (t?: string) => (t ? formatarTelefone(t) : '');
     setLista([
       { ordem: 1, papel: pj ? `Comprador (representante de ${dados.empresa?.razao_social ?? 'empresa'})` : 'Comprador', nome: c.nome ?? '', email: c.email ?? '', whatsapp: tel(c.telefone), canal: 'email' },
+      ...(pj && dados.representante2?.nome ? [{ ordem: 2, papel: `2º representante de ${dados.empresa?.razao_social ?? 'empresa'}`, nome: dados.representante2.nome ?? '', email: dados.representante2.email ?? '', whatsapp: tel(dados.representante2.telefone), canal: 'email' as const }] : []),
       ...(temConjuge && !pj ? [{ ordem: 2, papel: 'Cônjuge', nome: j.nome ?? '', email: j.email ?? '', whatsapp: tel(j.telefone), canal: 'email' as const }] : []),
       { ordem: 3, papel: 'Imobiliária', nome: gestor?.nome ?? '', email: gestor?.email ?? '', whatsapp: '', canal: 'email' },
       { ordem: 4, papel: 'Incorporadora', nome: emp['vendedora.signatario_nome'] ?? '', email: emp['vendedora.signatario_email'] ?? '', whatsapp: '', canal: 'email' },
