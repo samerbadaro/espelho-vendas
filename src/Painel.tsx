@@ -423,7 +423,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (atual === '/painel/imobiliarias' && admin) pagina = <Imobiliarias perfil={perfil} />;
   else if (atual === '/painel/empreendimento' && admin) pagina = <Empreendimento />;
   else if (atual === '/painel/corretores' && gestor) pagina = <Corretores perfil={perfil} />;
-  else if (atual === '/painel/espelho' && (equipe || espelhoParceiros)) pagina = equipe ? <EspelhoEquipe perfil={perfil} /> : <EspelhoSomenteLeitura />;
+  else if (atual === '/painel/espelho' && (equipe || espelhoParceiros)) pagina = equipe ? <EspelhoEquipe perfil={perfil} comPropostas={propostasVisiveis} /> : <EspelhoSomenteLeitura />;
   else if (atual === '/painel' && equipe) pagina = <Inicio perfil={perfil} />;
   else if (equipe) pagina = <Inicio perfil={perfil} />;
   else if (pastasAtivas) pagina = <ListaPastas perfil={perfil} />;
@@ -512,7 +512,7 @@ function EspelhoSomenteLeitura() {
   );
 }
 
-function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
+function EspelhoEquipe({ perfil, comPropostas = false }: { perfil: Perfil; comPropostas?: boolean }) {
   const esp = useEspelho();
   const { confirmar, avisar } = useDialogos();
   const [selecionada, setSelecionada] = useState<Unidade | null>(null);
@@ -566,6 +566,7 @@ function EspelhoEquipe({ perfil }: { perfil: Perfil }) {
           aoFechar={() => setSelecionada(null)}
           aoSalvar={(u) => { esp.atualizarLocal(u); setSelecionada(null); carregarHistorico(); avisar(`Unidade ${u.numero}: ${rotuloStatus(u.status).toLowerCase()}.`); }}
           aoConflito={() => esp.recarregar()}
+          comPropostas={comPropostas}
         />
       )}
     </section>
@@ -603,8 +604,8 @@ const ERROS: Record<string, string> = {
 const formatarPV = (v: number | null | undefined) =>
   v == null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 
-function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
-  unidade: Unidade; aoFechar: () => void; aoSalvar: (u: Unidade) => void; aoConflito: () => void;
+function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito, comPropostas = false }: {
+  unidade: Unidade; aoFechar: () => void; aoSalvar: (u: Unidade) => void; aoConflito: () => void; comPropostas?: boolean;
 }) {
   const [novo, setNovo] = useState<Status | null>(null);
   const [motivo, setMotivo] = useState('');
@@ -657,7 +658,9 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
   const pedeProposta = novo === 'proposta';
   const pastaEscolhida = pastasLivres?.find((p) => p.id === pastaId);
 
-  const salvar = async () => {
+  // "Reservar e simular proposta": reserva e abre a proposta já com a unidade e a pasta da reserva
+  const podeSimular = comPropostas && novo === 'reservada';
+  const salvar = async (simular = false) => {
     if (!novo) return;
     const valorNum = lerNumero(valor);
     const pvNum = lerNumero(pv);
@@ -683,6 +686,10 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
       return;
     }
     aoSalvar(data as Unidade);
+    if (simular) {
+      const pasta = pedePasta ? pastaId : neg?.pasta_id;
+      ir(`/painel/propostas/nova?unidade=${encodeURIComponent(unidade.id)}${pasta ? `&pasta=${encodeURIComponent(pasta)}` : ''}`);
+    }
   };
 
   return (
@@ -775,7 +782,12 @@ function DialogoUnidade({ unidade, aoFechar, aoSalvar, aoConflito }: {
 
         <div className="dialogo-acoes">
           <button className="botao" onClick={aoFechar}>Cancelar</button>
-          <button className="botao principal" disabled={!novo || salvando || mudouPorOutro} onClick={salvar}>
+          {podeSimular && (
+            <button className="botao" disabled={salvando || mudouPorOutro} onClick={() => salvar(true)} title="Reserva a unidade e abre uma proposta já com esta unidade e a pasta escolhida">
+              Reservar e simular proposta
+            </button>
+          )}
+          <button className="botao principal" disabled={!novo || salvando || mudouPorOutro} onClick={() => salvar()}>
             {salvando ? 'Salvando…' : novo ? `Marcar como ${rotuloStatus(novo).toLowerCase()}` : 'Escolha o novo status'}
           </button>
         </div>

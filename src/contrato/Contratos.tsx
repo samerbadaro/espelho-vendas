@@ -6,7 +6,7 @@ import { CheckCircle2, Circle, Download, Eye, FileText, FileUp, Plus, Search, Tr
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
 import { ir, conjugeNoContrato, formatarCNPJ, soDigitos, type EstadoCivil, type Perfil } from '../util';
-import { fmtData, fmtNum, fmtReal, type Periodicidade } from '../proposta/motor';
+import { fmtData, fmtNum, fmtReal, hojeISO, type Periodicidade } from '../proposta/motor';
 import { DadosContrato } from './DadosContrato';
 import { EnvelopeAssinatura } from './Envelope';
 import { padronizar, type DadosContrato as Dados } from './leitura';
@@ -137,6 +137,10 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const [ocupado, setOcupado] = useState('');
   const [erro, setErro] = useState('');
   const [comCarta, setComCarta] = useState(true);
+  // data do contrato: vale para todos os documentos emitidos (Quadro Resumo, Normas e Carta Proposta)
+  const [dataHoje, setDataHoje] = useState(true);
+  const [outraData, setOutraData] = useState('');
+  const dataContrato = dataHoje || !outraData ? hojeISO() : outraData;
 
   const carregar = useCallback(async () => {
     const { data: p } = await supabase.from('propostas').select('id, codigo, pasta_id, status, series, resumo, unidades(numero)').eq('id', id).maybeSingle();
@@ -198,7 +202,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     return {
       campos: emp, tipoPessoa: pasta.tipo_pessoa, empresa: d.empresa ?? null, comprador: d.comprador ?? {}, conjuge: temConj ? d.conjuge ?? null : null,
       unidade: prop.unidades?.numero ?? '', areas: areas ?? null, series, comissao: reg?.comissao ?? [],
-      data: new Date().toISOString().slice(0, 10), referencia: `${pasta.codigo} · ${prop.codigo}`,
+      data: dataContrato, referencia: `${pasta.codigo} · ${prop.codigo}`,
     };
   };
 
@@ -234,7 +238,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     setOcupado('Montando a Carta Proposta…');
     try {
       const { cartaDaProposta, partesDaLeitura } = await import('./cartaContrato');
-      window.open(URL.createObjectURL(await cartaDaProposta(prop.id, partesDaLeitura(padronizar(reg?.dados ?? {}), temConj, pj), emp)), '_blank');
+      window.open(URL.createObjectURL(await cartaDaProposta(prop.id, partesDaLeitura(padronizar(reg?.dados ?? {}), temConj, pj), emp, { data: dataContrato })), '_blank');
     } catch (e) { avisar(`Não foi possível montar a carta. ${(e as Error).message}`, 'erro'); }
     finally { setOcupado(''); }
   };
@@ -242,7 +246,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const emitir = async () => {
     const tipos = (Object.keys(escolha) as TipoDocumento[]).filter((t) => escolha[t]);
     const nomes = [...tipos.map((t) => NOME_DOCUMENTO[t]), ...(comCarta ? ['Carta Proposta'] : [])];
-    if (!(await confirmar({ titulo: `Emitir ${nomes.join(', ').replace(/, ([^,]*)$/, ' e $1')}?`, texto: 'Os documentos ficam registrados na pasta, com número, aguardando validação.', confirmar: 'Emitir' }))) return;
+    if (!dataHoje && !outraData) { avisar('Informe a data do contrato ou escolha "Hoje".', 'erro'); return; }
+    if (!(await confirmar({ titulo: `Emitir ${nomes.join(', ').replace(/, ([^,]*)$/, ' e $1')}?`, texto: `Data do contrato: ${fmtData(dataContrato)}${dataHoje ? ' (hoje)' : ''}, em todos os documentos. Eles ficam registrados na pasta, com número, aguardando validação.`, confirmar: 'Emitir' }))) return;
     try {
       const { gerarDocumento } = await import('./gerador');
       for (const t of tipos) {
@@ -259,20 +264,28 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         if (u1.error || u2.error) throw new Error('Falha ao guardar os arquivos.');
         const { error } = await supabase.rpc('registrar_contrato', {
           p_pasta: pasta.id, p_proposta: prop.id, p_documento: t, p_nome: `${NOME_DOCUMENTO[t]} — Unidade ${ctx.unidade}`, p_caminho: caminho, p_caminho_docx: caminhoDocx,
-          p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas },
+          p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas, data_contrato: ctx.data },
         });
         if (error) throw new Error(error.message.includes('NAO_CONFERIDO') ? 'Confira as partes e o pagamento antes de emitir.' : 'Não foi possível registrar o documento.');
       }
       if (comCarta) {
         setOcupado('Gerando a Carta Proposta…');
         const { cartaDaProposta, partesDaLeitura } = await import('./cartaContrato');
-        const pdf = await cartaDaProposta(prop.id, partesDaLeitura(padronizar(reg?.dados ?? {}), temConj, pj), emp);
-        const caminho = `${pasta.id}/${crypto.randomUUID()}.pdf`;
-        const { error: eu } = await supabase.storage.from('contratos').upload(caminho, pdf, { contentType: 'application/pdf' });
-        if (eu) throw new Error('Falha ao guardar a carta proposta.');
+        const partes = partesDaLeitura(padronizar(reg?.dados ?? {}), temConj, pj);
+        const [pdf, docx] = await Promise.all([
+          cartaDaProposta(prop.id, partes, emp, { data: dataContrato }),
+          cartaDaProposta(prop.id, partes, emp, { data: dataContrato, formato: 'docx' }),
+        ]);
+        const base = `${pasta.id}/${crypto.randomUUID()}`;
+        const caminho = `${base}.pdf`, caminhoDocx = `${base}.docx`;
+        const [e1, e2] = await Promise.all([
+          supabase.storage.from('contratos').upload(caminho, pdf, { contentType: 'application/pdf' }),
+          supabase.storage.from('contratos').upload(caminhoDocx, docx, { contentType: DOCX }),
+        ]);
+        if (e1.error || e2.error) throw new Error('Falha ao guardar a carta proposta.');
         const { error } = await supabase.rpc('registrar_contrato', {
           p_pasta: pasta.id, p_proposta: prop.id, p_documento: 'carta_proposta', p_nome: `Carta Proposta ${prop.codigo} — Unidade ${prop.unidades?.numero ?? ''}`,
-          p_caminho: caminho, p_caminho_docx: null, p_dados: { proposta: prop.codigo },
+          p_caminho: caminho, p_caminho_docx: caminhoDocx, p_dados: { proposta: prop.codigo, data_contrato: dataContrato },
         });
         if (error) throw new Error('Não foi possível registrar a carta proposta.');
       }
@@ -412,9 +425,16 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
           ))}
           <label className="ct-doc">
             <input type="checkbox" checked={comCarta} onChange={(e) => setComCarta(e.target.checked)} />
-            <FileText size={16} /> Carta Proposta <small className="sub">modelo da proposta, com os dados conferidos (PDF)</small>
+            <FileText size={16} /> Carta Proposta <small className="sub">modelo da proposta, com os dados conferidos (PDF e Word)</small>
             <button type="button" className="botao pequeno" disabled={!!ocupado} onClick={previaCarta}><Eye size={14} /> Pré-visualizar</button>
           </label>
+        </div>
+        <div className="ct-data">
+          <span>Data do contrato</span>
+          <label><input type="radio" name="data-contrato" checked={dataHoje} onChange={() => setDataHoje(true)} /> Hoje ({fmtData(hojeISO())})</label>
+          <label><input type="radio" name="data-contrato" checked={!dataHoje} onChange={() => setDataHoje(false)} /> Outra data</label>
+          {!dataHoje && <input type="date" value={outraData} onChange={(e) => setOutraData(e.target.value)} aria-label="Data do contrato" />}
+          <small className="sub">Sai no local e data de todos os documentos.</small>
         </div>
         <div className="acoes">
           {ocupado && <span className="sub">{ocupado}</span>}

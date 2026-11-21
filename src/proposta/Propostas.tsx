@@ -8,7 +8,7 @@ import {
   alcadaPrevista, carregarContexto, doBanco, paraBanco, resumoDe, rotuloProposta, traduzirErro, ROTULO_ALCADA, STATUS_PROPOSTA,
   type Contexto, type PropostaSalva, type StatusProposta,
 } from './dadosProposta';
-import { gerarCarta, type DadosPasta } from './carta';
+import { gerarCarta, gerarCartaWord, type DadosCarta, type DadosPasta } from './carta';
 import { aplicarModelo, fmtData, fmtReal, hojeISO, precoUnidade } from './motor';
 
 const CLASSE: Record<StatusProposta, string> = {
@@ -25,17 +25,24 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
   const equipe = perfil.papel === 'admin' || perfil.papel === 'vendas';
   const [lista, setLista] = useState<(PropostaSalva & { unidades: { numero: string } | null; pastas: { comprador_nome: string } | null; imobiliarias: { nome: string } | null })[] | null>(null);
   const [filtro, setFiltro] = useState<StatusProposta | ''>(equipe ? 'enviada' : '');
+  const [busca, setBusca] = useState('');
+  const [verParametros, setVerParametros] = useState(false);
   const [erro, setErro] = useState('');
 
   useEffect(() => {
     let q = supabase.from('propostas')
-      .select('id, codigo, status, alcada, analisada_por, data_proposta, resumo, criado_por, atualizada_em, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
+      .select('id, codigo, status, alcada, analisada_por, data_proposta, resumo, criado_por, criado_por_nome, atualizada_em, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
       .order('atualizada_em', { ascending: false }).limit(300);
     if (filtro) q = q.eq('status', filtro);
     q.then(({ data, error }) => {
       if (error) setErro(traduzirErro(error.message)); else setLista((data ?? []) as never);
     });
   }, [filtro]);
+
+  // busca sem acento e sem diferenciar maiúsculas, em unidade, cliente, imobiliária, corretor e código
+  const sem = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const termo = sem(busca.trim());
+  const visiveis = (lista ?? []).filter((p) => !termo || sem([p.codigo, p.unidades?.numero, p.pastas?.comprador_nome, p.imobiliarias?.nome, p.criado_por, p.criado_por_nome].filter(Boolean).join(' ')).includes(termo));
 
   return (
     <section className="secao">
@@ -44,23 +51,28 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
           <h2>Propostas</h2>
           <p className="sub">{equipe ? 'Analise as propostas enviadas pelas imobiliárias.' : 'Monte a proposta, confira o PV e envie para análise.'}</p>
         </div>
-        <button className="botao principal" onClick={() => ir('/painel/propostas/nova')}><Plus size={16} /> Nova proposta</button>
+        <div className="botoes">
+          {perfil.papel === 'admin' && <button className="botao" onClick={() => setVerParametros((v) => !v)}>Parâmetros da proposta</button>}
+          <button className="botao principal" onClick={() => ir('/painel/propostas/nova')}><Plus size={16} /> Nova proposta</button>
+        </div>
       </div>
+      {verParametros && perfil.papel === 'admin' && <ParametrosProposta aoFechar={() => setVerParametros(false)} />}
       <div className="filtros">
+        <input type="search" placeholder="Buscar por unidade, cliente, imobiliária, corretor ou código" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar propostas" />
         <select value={filtro} onChange={(e) => setFiltro(e.target.value as StatusProposta | '')}>
           <option value="">Todas</option>
           {STATUS_PROPOSTA.map((s) => <option key={s.valor} value={s.valor}>{s.rotulo}</option>)}
         </select>
       </div>
       {erro && <p className="erro">{erro}</p>}
-      {lista == null ? <p className="vazio">Carregando…</p> : lista.length === 0 ? (
-        <div className="cartao vazio-grande"><p>Nenhuma proposta {filtro ? `com status "${rotuloProposta(filtro)}"` : 'ainda'}.</p></div>
+      {lista == null ? <p className="vazio">Carregando…</p> : visiveis.length === 0 ? (
+        <div className="cartao vazio-grande"><p>{busca.trim() ? `Nenhuma proposta encontrada para “${busca.trim()}”${filtro ? ` com status "${rotuloProposta(filtro)}"` : ''}.` : `Nenhuma proposta ${filtro ? `com status "${rotuloProposta(filtro)}"` : 'ainda'}.`}</p></div>
       ) : (
         <div className="tabela-rolagem">
           <table className="tabela">
             <thead><tr><th>Código</th><th>Unidade</th><th>Comprador</th>{equipe && <th>Imobiliária</th>}<th>Corretor</th><th className="dir">Valor</th><th className="dir">PV</th><th>Status</th><th>Atualizada</th></tr></thead>
             <tbody>
-              {lista.map((p) => (
+              {visiveis.map((p) => (
                 <tr key={p.id} tabIndex={0} onClick={() => ir(`/painel/propostas/${p.id}`)} onKeyDown={(e) => e.key === 'Enter' && ir(`/painel/propostas/${p.id}`)}>
                   <td className="mono">{p.codigo}</td>
                   <td className="mono">{p.unidades?.numero}</td>
@@ -193,7 +205,8 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     carregar();
   };
 
-  const carta = async () => {
+  /** Resumo da proposta (carta simples, sem campos em branco nem assinaturas), em PDF ou Word. */
+  const carta = async (formato: 'pdf' | 'docx' = 'pdf') => {
     if (!estado) return;
     let dadosPasta: DadosPasta | null = null;
     if (pastaId) {
@@ -203,13 +216,14 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     const imobId = proposta?.imobiliaria_id ?? pasta?.imobiliaria_id;
     const { data: im } = imobId ? await supabase.from('imobiliarias').select('nome').eq('id', imobId).maybeSingle() : { data: null };
     try {
-      await gerarCarta({
+      const dados: DadosCarta = {
         codigo: proposta?.codigo ?? 'SIMULAÇÃO', dataProposta: proposta?.data_proposta ?? hoje, empreendimento: ctx.nome, comercial: ctx.comercial,
         unidade: { numero: unidade.numero, area: unidade.area, andar: unidade.andar }, pasta: dadosPasta,
         logoUrl: ctx.logoUrl, corDestaque: ctx.corDestaque,
         imobiliaria: (im as { nome: string } | null)?.nome ?? '', corretor: proposta ? proposta.criado_por_nome ?? proposta.criado_por ?? '' : perfil.nome || perfil.email,
         series: estado.series, resultado: estado.resultado, observacoes: obs,
-      });
+      };
+      await (formato === 'docx' ? gerarCartaWord : gerarCarta)(dados, { simples: true });
     } catch { avisar('Não foi possível gerar a carta proposta.', 'erro'); }
   };
 
@@ -230,7 +244,8 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
         <div className="botoes-linha">
           {editavel && estado && <span className={`chip-alcada a-${alcada}`} title="Quem aprova esta proposta, pelo PV e pela comissão">Aprovação: {ROTULO_ALCADA[alcada]}</span>}
           {!editavel && proposta?.alcada && proposta.status === 'enviada' && <span className={`chip-alcada a-${proposta.alcada}`}>Aguardando: {ROTULO_ALCADA[proposta.alcada]}</span>}
-          <button className="botao" onClick={carta} disabled={!estado}><FileDown size={16} /> Carta proposta</button>
+          <button className="botao" onClick={() => carta('pdf')} disabled={!estado} title="Resumo da proposta em PDF, sem campos em branco e sem assinaturas"><FileDown size={16} /> Resumo da proposta</button>
+          <button className="botao" onClick={() => carta('docx')} disabled={!estado} title="O mesmo resumo em Word"><FileDown size={16} /> Word</button>
           {editavel && <button className="botao" onClick={aoSalvar} disabled={salvando || !estado}>Salvar rascunho</button>}
           {editavel && <button className="botao principal" onClick={enviar} disabled={salvando || !estado}><Send size={16} /> Enviar para análise</button>}
         </div>
@@ -323,5 +338,67 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
         </div>
       )}
     </section>
+  );
+}
+
+// =====================================================================
+// Parâmetros da proposta (só o administrador): dias de vencimento e alçadas
+// =====================================================================
+function ParametrosProposta({ aoFechar }: { aoFechar: () => void }) {
+  const [dias, setDias] = useState<number[] | null>(null);
+  const [auto, setAuto] = useState(true);
+  const [autoPv, setAutoPv] = useState('100');
+  const [vendasPv, setVendasPv] = useState('98');
+  const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    supabase.from('comercial').select('dias_vencimento, alcada_automatica, alcada_auto_pv, alcada_vendas_pv').eq('id', 1).maybeSingle().then(({ data, error }) => {
+      if (error || !data) { setMsg({ ok: false, t: error?.message ?? 'Parâmetros comerciais não encontrados.' }); return; }
+      setDias([...(data.dias_vencimento as number[])].sort((a, b) => a - b));
+      setAuto(data.alcada_automatica !== false);
+      setAutoPv(String(data.alcada_auto_pv ?? 100).replace('.', ','));
+      setVendasPv(String(data.alcada_vendas_pv ?? 98).replace('.', ','));
+    });
+  }, []);
+
+  const alternar = (d: number) => setDias((l) => (l ?? []).includes(d) ? (l ?? []).filter((x) => x !== d) : [...(l ?? []), d].sort((a, b) => a - b));
+  const num = (t: string) => Number(t.replace(',', '.'));
+
+  const salvar = async () => {
+    setMsg(null);
+    if (!dias?.length) { setMsg({ ok: false, t: 'Escolha pelo menos um dia de vencimento.' }); return; }
+    const a = num(autoPv), v = num(vendasPv);
+    if (!(a > 0 && a <= 200) || !(v > 0 && v <= 200)) { setMsg({ ok: false, t: 'Informe os percentuais de PV entre 0 e 200.' }); return; }
+    if (v > a) { setMsg({ ok: false, t: 'O PV da Secretaria de Vendas não pode ser maior que o da aprovação automática.' }); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('comercial').update({ dias_vencimento: dias, alcada_automatica: auto, alcada_auto_pv: a, alcada_vendas_pv: v }).eq('id', 1);
+    setSalvando(false);
+    setMsg(error ? { ok: false, t: error.message } : { ok: true, t: 'Parâmetros salvos. Valem para as próximas propostas abertas.' });
+  };
+
+  return (
+    <div className="cartao parametros-proposta">
+      <div className="titulo-linha"><h3>Parâmetros da proposta</h3><button className="mini" onClick={aoFechar} aria-label="Fechar">✕</button></div>
+      {dias == null ? <p className="vazio">{msg?.t ?? 'Carregando…'}</p> : (
+        <>
+          <p className="dica">Dias de vencimento permitidos nas parcelas. O ato (sinal na data da proposta) fica de fora da regra.</p>
+          <div className="dias-vencimento">
+            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+              <button key={d} type="button" className={dias.includes(d) ? 'ativo' : ''} aria-pressed={dias.includes(d)} onClick={() => alternar(d)}>{String(d).padStart(2, '0')}</button>
+            ))}
+          </div>
+          <p className="dica">Alçadas de aprovação, pelo PV da proposta em % do VPL da tabela:</p>
+          <label className="param-check"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Aprovar sozinha quando o PV atingir o mínimo e o sinal cobrir a comissão</label>
+          <div className="grade-campos">
+            <label>Aprovação automática a partir de (%)<input inputMode="decimal" value={autoPv} disabled={!auto} onChange={(e) => setAutoPv(e.target.value)} /></label>
+            <label>Secretaria de Vendas aprova a partir de (%)<input inputMode="decimal" value={vendasPv} onChange={(e) => setVendasPv(e.target.value)} /></label>
+          </div>
+          <p className="dica">Abaixo do percentual da Secretaria de Vendas, só o administrador aprova.</p>
+          <div className="botoes"><button className="botao principal" disabled={salvando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar parâmetros'}</button></div>
+          {msg && <p className={msg.ok ? 'ok' : 'erro'}>{msg.t}</p>}
+        </>
+      )}
+    </div>
   );
 }

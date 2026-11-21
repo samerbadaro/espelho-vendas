@@ -48,6 +48,23 @@ export const REVISAO_MANUAL = '21/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '21/11/2026', titulo: 'Propostas: busca, ajuste nominal e resumo',
+    itens: [
+      'Busca na lista de propostas por unidade, cliente, imobiliária, corretor ou código.',
+      '“Ajustar para”: zerar o PV ou zerar o valor nominal da tabela.',
+      'Comparativo com diferença em R$, desconto nominal e em valor presente, e captação até as chaves (tabela × proposta).',
+      'Resumo da proposta em PDF ou Word, sem campos em branco e sem assinaturas.',
+    ],
+  },
+  {
+    data: '21/11/2026', titulo: 'Reserva, parâmetros e data do contrato', papeis: ['admin', 'vendas'],
+    itens: [
+      'Espelho: “Reservar e simular proposta” reserva e abre a proposta com a unidade e a pasta.',
+      'Administrador: “Parâmetros da proposta” para dias de vencimento e alçadas de aprovação.',
+      'Contratos: data do contrato (hoje ou outra) aplicada a todos os documentos; Carta Proposta também em Word.',
+    ],
+  },
+  {
     data: '21/11/2026', titulo: 'Manual do sistema',
     itens: ['Manual dentro do sistema, com o conteúdo de cada módulo para o seu perfil e espaço para vídeos explicativos.'],
   },
@@ -165,6 +182,7 @@ export const CAPITULOS: Capitulo[] = [
           'Escolha o novo status.',
           'Para reservar, proposta, contrato ou vendida, escolha a pasta do cliente. Só aparecem pastas com documentação aprovada.',
           'Para “Proposta recebida”, informe o valor da venda e o PV aprovado.',
+          'Ao reservar, você pode clicar em “Reservar e simular proposta”: a unidade fica reservada e a proposta abre já com a unidade e a pasta escolhida (aparece quando o módulo de Propostas está liberado).',
           'Para desfazer uma negociação (voltar a disponível, bloquear ou permutar), o motivo é obrigatório.',
           'Confirme. A mudança aparece na hora para todos e fica no histórico da unidade.',
         ],
@@ -342,12 +360,12 @@ export const CAPITULOS: Capitulo[] = [
   // =========================================================================
   {
     id: 'propostas', modulo: 'propostas', titulo: 'Propostas', papeis: TODOS,
-    resumo: 'A proposta montada sobre a tabela de vendas, com PV, comissão, aprovação por alçada e carta proposta em PDF.',
+    resumo: 'A proposta montada sobre a tabela de vendas, com PV, comissão, aprovação por alçada e resumo da proposta em PDF ou Word.',
     responsabilidades: {
       corretor: ['Montar a proposta com o fluxo combinado com o cliente, vincular a pasta e enviar para análise.', 'Ajustar e reenviar as propostas devolvidas.'],
       imobiliaria: ['Acompanhar as propostas dos seus corretores e montar propostas quando necessário.'],
       vendas: ['Analisar as propostas na sua alçada: aprovar, devolver para ajuste ou recusar, sempre com o motivo.'],
-      admin: ['Analisar as propostas abaixo da alçada da Sec. Vendas e acompanhar os descontos concedidos.'],
+      admin: ['Analisar as propostas abaixo da alçada da Sec. Vendas e acompanhar os descontos concedidos.', 'Manter os parâmetros da proposta: dias de vencimento e alçadas de aprovação.'],
     },
     blocos: [
       {
@@ -355,8 +373,9 @@ export const CAPITULOS: Capitulo[] = [
         passos: [
           'Em Propostas, clique em “Nova proposta” e escolha a unidade.',
           'O fluxo da tabela já vem montado. Use “Modelo da tabela”, “Mensais até a entrega”, “Semestrais”, “Anuais” ou “Até as chaves” para trocar o modelo, ou edite as séries (quantidade, periodicidade, 1º vencimento e valor).',
-          'Use “⟲ ajustar” em uma série para ela absorver a diferença e voltar o PV ao alvo.',
-          'Acompanhe o comparativo tabela × proposta: valor total, preço do m², PV (valor presente) e captação acumulada.',
+          'Em “Ajustar para”, escolha “Zerar PV” (o valor presente fica igual ao da tabela) ou “Zerar nominal” (o valor total fica igual ao da tabela; o PV pode ficar abaixo). Depois clique em “⟲ ajustar” na série que vai absorver a diferença.',
+          'Acompanhe o comparativo tabela × proposta: valor total, PV (valor presente), preço do m² e captação até as chaves, cada um com a variação em % e a diferença em R$. Logo abaixo aparecem o desconto nominal e o desconto em valor presente, em R$.',
+          'A tabela “Captação acumulada” mostra o % recebido em cada marco (3, 6, 12... meses e até a entrega).',
           'Confira a comissão e a parte do sinal que vai para a imobiliária. Se o sinal não cobre a comissão, use “Aumentar o ato para cobrir a comissão”.',
           'Vincule a pasta do comprador (só pastas da sua imobiliária) e escreva as observações (saem na carta).',
           'Clique em “Salvar rascunho” ou “Enviar para análise”.',
@@ -370,6 +389,21 @@ export const CAPITULOS: Capitulo[] = [
           'Sec. Vendas: PV um pouco abaixo da tabela (dentro do limite definido pela incorporadora).',
           'Administrador: descontos maiores.',
           'A tela mostra antes do envio quem vai aprovar a proposta.',
+          'A proposta pode ser enviada mesmo com PV abaixo da tabela: ela não é aprovada sozinha e fica “Enviada, aguardando” a Sec. Vendas ou o Administrador, conforme o desconto. Vale para propostas feitas por corretor, imobiliária ou gerente.',
+          'O que bloqueia o envio são só os erros da grade (vencimento, parcelas, valor) e a permuta sem descrição.',
+        ],
+      },
+      {
+        titulo: 'Buscar propostas', papeis: TODOS,
+        texto: 'Na lista de Propostas, use o campo de busca para encontrar por unidade, nome do cliente, imobiliária, corretor ou código. A busca não diferencia acentos nem maiúsculas e funciona junto com o filtro de status.',
+      },
+      {
+        titulo: 'Parâmetros da proposta', papeis: ['admin'],
+        passos: [
+          'Em Propostas, clique em “Parâmetros da proposta”.',
+          'Dias de vencimento: marque os dias do mês permitidos nas parcelas (o ato, na data da proposta, fica de fora). Esses dias aparecem como opção em “Vencimento” no editor.',
+          'Alçadas: ligue ou desligue a aprovação automática e defina o PV mínimo (em % do VPL da tabela) para aprovação automática e para a Sec. Vendas. Abaixo do percentual da Sec. Vendas, só o administrador aprova.',
+          'Clique em “Salvar parâmetros”. Vale para as próximas propostas abertas.',
         ],
       },
       {
@@ -377,8 +411,8 @@ export const CAPITULOS: Capitulo[] = [
         texto: 'A proposta devolvida volta a ser editável e mostra o motivo no topo: ajuste e envie de novo. Proposta recusada ou cancelada fica só para consulta.',
       },
       {
-        titulo: 'Carta proposta', papeis: TODOS,
-        texto: 'O botão “Carta proposta” gera o PDF com os dados do imóvel, dos proponentes, o fluxo de pagamento, a intermediação e as condições gerais, pronto para o cliente assinar.',
+        titulo: 'Resumo da proposta', papeis: TODOS,
+        texto: 'O botão “Resumo da proposta” gera um PDF (e o botão “Word”, o mesmo em .docx) com o imóvel, os proponentes, o fluxo de pagamento, a intermediação e as condições gerais. É um resumo para o cliente conferir: sai só com os campos preenchidos e sem assinaturas. A carta para assinatura, com os dados conferidos pela IA, é emitida em Contratos.',
       },
       {
         titulo: 'Analisar propostas', papeis: EQUIPE,
@@ -388,7 +422,7 @@ export const CAPITULOS: Capitulo[] = [
           'Devolver para ajuste: escreva o que o corretor deve mudar.',
           'Recusar ou cancelar: o motivo é obrigatório.',
         ],
-        dica: 'Com o módulo desligado, só o administrador vê Propostas (para testar). Os parâmetros comerciais (tabela, taxa, comissão e alçadas) são configurados pela Launch.',
+        dica: 'Com o módulo desligado, só o administrador vê Propostas (para testar). Tabela, taxa e comissão são configuradas pela Launch; dias de vencimento e alçadas, pelo administrador em “Parâmetros da proposta”.',
       },
     ],
   },
@@ -433,7 +467,8 @@ export const CAPITULOS: Capitulo[] = [
         passos: [
           'Marque o que emitir: Quadro Resumo, Normas e Carta Proposta. O sistema sugere só o que ainda não foi emitido.',
           'Use “Pré-visualizar” para conferir antes.',
-          'Clique em “Emitir documentos”. Cada um ganha um número e fica aguardando validação.',
+          'Em “Data do contrato”, escolha “Hoje” ou “Outra data” e informe a data. Ela sai no local e data de todos os documentos (Quadro Resumo, Normas e Carta Proposta).',
+          'Clique em “Emitir documentos” e confira a data na confirmação. Cada documento ganha um número e fica aguardando validação. A Carta Proposta sai em PDF e em Word.',
           'Precisa ajustar a formatação? Baixe o Word, edite e use “Enviar ajuste”. A versão sobe e a validação volta para pendente.',
           'Confira e clique em “Validar” em cada documento.',
         ],
