@@ -1022,3 +1022,52 @@ small.bloco { display: block; color: var(--tinta-2); }
 .ld-passos { padding-left: 20px; font-size: 0.9rem; line-height: 1.6; }
 .ld-script { background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 8px; padding: 12px; font-size: 0.75rem; max-height: 320px; overflow: auto; white-space: pre; }
 @media (max-width: 700px) { .ld-motivos li { grid-template-columns: 1fr 32px; } .ld-motivos i { grid-column: 1 / -1; } .ld-historico li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* ===== Manual ===== */
+.manual-como { display: inline-flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 600; color: var(--tinta-2); }
+.manual-como select { width: auto; }
+.manual-grade { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
+.manual-indice { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 32px); overflow: auto; }
+.manual-busca { display: flex; align-items: center; gap: 6px; border: 1px solid var(--borda); border-radius: 8px; padding: 0 10px; background: var(--superficie); margin-bottom: 8px; }
+.manual .manual-busca input { border: 0; box-shadow: none; padding: 9px 0; background: transparent; width: 100%; min-height: 0; }
+.manual .manual-busca input:focus { outline: none; box-shadow: none; }
+.manual-busca:focus-within { outline: 2px solid var(--destaque); outline-offset: 1px; }
+.manual-item { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; font-size: 0.9rem; color: var(--tinta-2); cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.manual-item:hover { background: var(--superficie-2); color: var(--tinta); }
+.manual-item.ativo { background: var(--superficie); color: var(--tinta); font-weight: 650; box-shadow: inset 3px 0 0 var(--destaque); }
+.manual-item.novidades { margin-bottom: 6px; }
+.manual-tem-video { margin-left: auto; color: var(--tinta-2); flex: none; }
+.manual-conteudo { background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; padding: 24px 28px; max-width: 820px; line-height: 1.6; }
+.manual-conteudo h3 { margin: 0 0 4px; font-size: 1.375rem; }
+.manual-conteudo h4 { margin: 22px 0 6px; font-size: 1rem; }
+.manual-conteudo p, .manual-conteudo li { font-size: 0.9375rem; }
+.manual-conteudo ol, .manual-conteudo ul { padding-left: 22px; margin: 6px 0; }
+.manual-conteudo li { margin: 4px 0; }
+.manual-resumo { color: var(--tinta-2); margin: 0 0 14px; }
+.manual-papel { border-left: 3px solid var(--destaque); background: var(--superficie-2); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0 4px; }
+.manual-papel ul { margin-bottom: 0; }
+.manual-atencao { background: #F8E2DF; color: #6E211B; padding: 8px 12px; border-radius: 8px; }
+.manual-dica { background: #E3ECF7; color: #1D416F; padding: 8px 12px; border-radius: 8px; }
+.manual-video { margin: 10px 0 6px; }
+.manual-player { position: relative; padding-top: 56.25%; border-radius: 10px; overflow: hidden; background: #000; }
+.manual-player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.vazio-video { display: flex; align-items: center; gap: 8px; border: 1px dashed var(--borda-forte); border-radius: 10px; padding: 18px; color: var(--tinta-2); font-size: 0.875rem; }
+.manual-video-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.manual-video-form input { flex: 1; min-width: 220px; }
+.manual-video-acao { margin: 4px 0 10px; font-size: 0.8125rem; }
+.manual-novidade { border-top: 1px solid var(--borda); padding: 12px 0; display: grid; gap: 2px; }
+.manual-impressao { display: none; }
+@media (max-width: 860px) {
+  .manual-grade { grid-template-columns: 1fr; }
+  .manual-indice { position: static; max-height: none; flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .manual-busca { flex-basis: 100%; }
+  .manual-item { border: 1px solid var(--borda); background: var(--superficie); font-size: 0.8125rem; padding: 6px 10px; }
+  .manual-conteudo { padding: 18px; }
+}
+@media print {
+  .manual > .secao-topo, .manual-grade { display: none !important; }
+  .manual-impressao { display: block; font-size: 11pt; line-height: 1.5; }
+  .manual-impressao section { break-inside: auto; margin-bottom: 18px; }
+  .manual-impressao h3 { break-after: avoid; margin-top: 22px; }
+  .manual-impressao h4 { break-after: avoid; }
+}
