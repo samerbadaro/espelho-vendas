@@ -1,8 +1,11 @@
+import { Leads, DetalheLead } from './Leads';
+import { Manual } from './manual/Manual';
+import type { ModuloManual, PapelManual } from './manual/conteudo';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   Home, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap,
-  FileSignature, BarChart3, ListOrdered, Table2, ArrowLeft,
+  FileSignature, BarChart3, ListOrdered, Table2, ArrowLeft, ScrollText, Megaphone, BookOpen,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -25,6 +28,7 @@ import { MeetingCorretor, MeetingPainel } from './Meeting';
 import { Treinamentos } from './Treinamentos';
 import { Portal } from './Portal';
 import { ListaPropostas, PaginaProposta } from './proposta/Propostas';
+import { ListaContratos, PaginaContrato } from './contrato/Contratos';
 import { useRota, ir, CAMPOS_PERFIL, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, ERROS_CADASTRO, type Perfil } from './util';
 import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
 
@@ -313,10 +317,17 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const funilAtivo = pastasAtivas && marca.modulo_funil !== false;
   const portalAtivo = marca.modulo_portal !== false;
   const rodadasAtivas = marca.modulo_rodadas !== false;
+  // Propostas: coluna só existe depois do 035; desligado, só o administrador vê (para testar)
+  const propostasExiste = 'modulo_propostas' in marca;
+  const propostasLigadas = propostasExiste && marca.modulo_propostas === true && pastasAtivas;
+  const propostasVisiveis = equipe ? (propostasLigadas || (admin && propostasExiste)) : propostasLigadas;
   const treinosAtivos = (marca as { modulo_treinamentos?: boolean }).modulo_treinamentos !== false;
   const meetingAtivo = marca.modulo_meeting !== false;
   const espelhoParceiros = marca.modulo_espelho_parceiros !== false;
   const tvAtiva = marca.modulo_tv !== false;
+  // Leads: desligado, só o administrador vê (para configurar e testar)
+  const leadsLigados = (marca as { modulo_leads?: boolean }).modulo_leads === true;
+  const leadsVisiveis = leadsLigados || admin;
 
   useEffect(() => {
     if (!equipe && !recepcao) supabase.from('imobiliarias').select('nome').maybeSingle()
@@ -342,6 +353,29 @@ function Casca({ perfil }: { perfil: Perfil }) {
     window.addEventListener('focus', sincronizar);
     return () => window.removeEventListener('focus', sincronizar);
   }, [idEmpAba]);
+  // Módulos visíveis por perfil (o manual usa a mesma regra do menu)
+  const modulosDe = useCallback((p: PapelManual): Set<ModuloManual> => {
+    const m = new Set<ModuloManual>();
+    const add = (cond: boolean, ...k: ModuloManual[]) => { if (cond) k.forEach((x) => m.add(x)); };
+    if (p === 'recepcao') { add(meetingAtivo, 'meeting'); return m; }
+    if (p === 'admin' || p === 'vendas') {
+      add(true, 'inicio', 'espelho');
+      add(tvAtiva, 'tv');
+      add(pastasAtivas, 'pastas');
+      add(funilAtivo, 'funil');
+      add(leadsLigados || p === 'admin', 'leads');
+      add(propostasLigadas || (p === 'admin' && propostasExiste), 'propostas', 'contratos');
+      add(portalAtivo, 'portal'); add(rodadasAtivas, 'rodadas'); add(treinosAtivos, 'treinamentos'); add(meetingAtivo, 'meeting');
+      add(p === 'admin', 'imobiliarias', 'empreendimento');
+      add(true, 'tabela'); add(pastasAtivas, 'escolha');
+      return m;
+    }
+    add(leadsLigados, 'leads'); add(pastasAtivas, 'pastas'); add(funilAtivo, 'funil'); add(propostasLigadas, 'propostas');
+    add(portalAtivo, 'portal'); add(rodadasAtivas, 'rodadas'); add(treinosAtivos, 'treinamentos'); add(espelhoParceiros, 'espelho');
+    add(p === 'imobiliaria', 'corretores'); add(true, 'tabela'); add(meetingAtivo, 'meeting');
+    return m;
+  }, [meetingAtivo, tvAtiva, pastasAtivas, funilAtivo, leadsLigados, propostasLigadas, propostasExiste, portalAtivo, rodadasAtivas, treinosAtivos, espelhoParceiros]);
+
   type Item = { c: string; r: string; i: ReactNode };
   const menu: Item[] = recepcao
     ? (meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : [])
@@ -350,8 +384,10 @@ function Casca({ perfil }: { perfil: Perfil }) {
       { c: '/painel', r: 'Painéis', i: <BarChart3 size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(leadsVisiveis ? [{ c: '/painel/leads', r: 'Leads', i: <Megaphone size={18} /> }] : []),
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
-      { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
+      ...(propostasVisiveis ? [{ c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> }] : []),
+      ...(propostasVisiveis ? [{ c: '/painel/contratos', r: 'Contratos', i: <ScrollText size={18} /> }] : []),
       { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
@@ -364,19 +400,21 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ] : []),
     ]
     : [
+      ...(leadsLigados ? [{ c: '/painel/leads', r: 'Leads', i: <Megaphone size={18} /> }] : []),
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(fila?.ativa ? [{ c: '/painel/escolha', r: 'Escolha de unidades', i: <ListOrdered size={18} /> }] : []),
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
-      { c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> },
-      { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
+      ...(propostasVisiveis ? [{ c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(treinosAtivos ? [{ c: '/painel/treinamentos', r: 'Treinamentos', i: <GraduationCap size={18} /> }] : []),
+      { c: '/painel/tabela', r: 'Tabela de vendas', i: <Table2 size={18} /> },
       ...(meetingAtivo ? [{ c: '/painel/meeting', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : []),
-      ...(gestor && pastasAtivas ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
+      ...(gestor ? [{ c: '/painel/corretores', r: 'Corretores', i: <Users size={18} /> }] : []),
       ...(espelhoParceiros ? [{ c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> }] : []),
     ];
   if (!menu.length) menu.push({ c: '/painel/sem-modulos', r: 'Início', i: <Home size={18} /> });
+  menu.push({ c: '/painel/manual', r: 'Manual', i: <BookOpen size={18} /> });
   const inicial = menu[0].c;
   const atual = rota === '/painel' ? inicial : rota;
   const ativo = (c: string) => (c === '/painel' ? atual === '/painel' : atual.startsWith(c));
@@ -385,12 +423,19 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
   const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
   const idProposta = atual.match(/^\/painel\/propostas\/([^/]+)$/)?.[1];
+  const idLead = atual.match(/^\/painel\/leads\/([^/]+)$/)?.[1];
+  const idContrato = atual.match(/^\/painel\/contratos\/([^/]+)$/)?.[1];
   const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
-  if (recepcao) pagina = meetingAtivo ? <MeetingPainel perfil={perfil} /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
+  if (atual === '/painel/manual') pagina = <Manual papel={perfil.papel as PapelManual} modulosDe={modulosDe} />;
+  else if (recepcao) pagina = meetingAtivo ? <MeetingPainel perfil={perfil} /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
+  else if (idLead && (leadsLigados || (admin && leadsVisiveis))) pagina = <DetalheLead key={idLead} id={idLead} perfil={perfil} />;
+  else if (atual === '/painel/leads' && leadsVisiveis) pagina = <Leads perfil={perfil} />;
   else if (atual === '/painel/escolha') pagina = <EscolhaUnidades perfil={perfil} />;
-  else if (idProposta) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
-  else if (atual === '/painel/propostas') pagina = <ListaPropostas perfil={perfil} />;
   else if (atual === '/painel/tabela') pagina = <TabelaVendas perfil={perfil} />;
+  else if (idProposta && propostasVisiveis) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
+  else if (atual === '/painel/propostas' && propostasVisiveis) pagina = <ListaPropostas perfil={perfil} />;
+  else if (idContrato && equipe && propostasVisiveis) pagina = <PaginaContrato key={idContrato} id={idContrato} perfil={perfil} />;
+  else if (atual === '/painel/contratos' && equipe && propostasVisiveis) pagina = <ListaContratos />;
   else if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;
   else if ((atual === '/painel/meeting' || atual === '/painel/recepcao') && equipe && meetingAtivo) pagina = <MeetingPainel perfil={perfil} />;
   else if (atual === '/painel/meeting' && meetingAtivo) pagina = <MeetingCorretor perfil={perfil} />;

@@ -5,14 +5,24 @@
  *   a imobiliária gerencia somente os corretores dela.
  *   Usa a chave secreta do Supabase, guardada como "secret" no Cloudflare
  *   (SUPABASE_SECRET_KEY) — ela nunca vai para o navegador.
+ * - /api/contrato/ler: leitura dos documentos da pasta com IA (Claude). Só a equipe, só com
+ *   proposta aprovada. A chave da IA (ANTHROPIC_API_KEY) também é "secret" no Cloudflare.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+import { entradaLeads, rotinaLeads } from './leads';
+import { apiD4Sign, webhookD4Sign } from './d4sign';
 interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_SECRET_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  D4SIGN_TOKEN?: string;
+  D4SIGN_CRYPTKEY?: string;
+  D4SIGN_AMBIENTE?: string;
+  D4SIGN_HMAC?: string;
+  BREVO_API_KEY?: string;
 }
 
 const json = (dados: unknown, status = 200) =>
@@ -249,13 +259,60 @@ async function api(req: Request, env: Env, caminho: string): Promise<Response> {
   return erro('Endereço não encontrado.', 404);
 }
 
+const LIMITE_LEITURA = 30 * 1024 * 1024; // 30 MB (a IA aceita até 32 MB por pedido)
+
+/**
+ * Leitura com IA. O navegador da equipe já monta o pedido (documentos reduzidos);
+ * aqui só conferimos quem pede e repassamos à IA com a chave secreta, sem abrir o conteúdo
+ * (abrir arquivos grandes estouraria o tempo de processamento do servidor).
+ */
+async function lerDocumentos(req: Request, env: Env, url: URL): Promise<Response> {
+  if (req.method !== 'POST') return erro('Método não permitido.', 405);
+  if (!env.ANTHROPIC_API_KEY) return erro('A leitura com IA ainda não foi configurada (chave da IA ausente).', 500);
+  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!token) return erro('Faça login novamente.', 401);
+  const tamanho = Number(req.headers.get('content-length') || 0);
+  if (!tamanho || tamanho > LIMITE_LEITURA) return erro('Os documentos passam do limite de 30 MB por leitura.', 413);
+  const comoUsuario = createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  // o banco confere: login da equipe + proposta aprovada nesta pasta
+  const { error } = await comoUsuario.rpc('documentos_para_leitura', { p_pasta: url.searchParams.get('pasta') || '' });
+  if (error) return erro(error.message === 'PROPOSTA_NAO_APROVADA' ? 'A leitura só fica disponível depois da proposta aprovada.' : 'Somente a equipe de vendas pode usar a leitura com IA.', 403);
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: await req.arrayBuffer(),   // só copia os bytes, sem interpretar
+  });
+  return new Response(resp.body, { status: resp.status, headers: { 'content-type': resp.headers.get('content-type') || 'application/json' } });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname.replace(/\/+$/, '') === '/api/contrato/ler') {
+      try { return await lerDocumentos(req, env, url); }
+      catch { return erro('Não foi possível falar com a IA agora. Tente de novo em instantes.', 502); }
+    }
+    const rota = url.pathname.replace(/\/+$/, '');
+    if (rota === '/api/d4sign/webhook') {
+      try { return await webhookD4Sign(req, env); } catch { return new Response('ok'); }
+    }
+    if (rota === '/api/leads/entrada') {
+      try { return await entradaLeads(req, env); } catch { return erro('Erro inesperado ao registrar os leads.', 500); }
+    }
+    if (rota === '/api/d4sign') {
+      try { return await apiD4Sign(req, env); } catch { return erro('Erro inesperado ao falar com a D4Sign.', 500); }
+    }
     if (url.pathname.startsWith('/api/')) {
       try { return await api(req, env, url.pathname.replace(/\/+$/, '')); }
       catch { return erro('Erro inesperado no servidor.', 500); }
     }
     return env.ASSETS.fetch(req);
+  },
+  // A cada minuto: prazos dos leads e e-mails pendentes
+  async scheduled(_evento: unknown, env: Env, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
+    ctx.waitUntil(rotinaLeads(env).catch(() => null));
   },
 };

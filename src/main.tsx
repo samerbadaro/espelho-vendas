@@ -7,6 +7,17 @@ import { CadastroImobiliaria } from './Cadastro';
 import './estilo.css';
 import { baseAba, semBase } from './rotaEmp';
 
+// Depois de uma nova publicação, a aba aberta ainda aponta para arquivos antigos (que deixam de existir).
+// Quando um desses arquivos falha ao carregar, recarrega a página uma vez para pegar a versão nova.
+window.addEventListener('vite:preloadError', (e) => {
+  const chave = 'recarregado-versao';
+  if (sessionStorage.getItem(chave) === location.pathname) return;
+  e.preventDefault();
+  try { sessionStorage.setItem(chave, location.pathname); } catch { /* sem armazenamento */ }
+  location.reload();
+});
+window.addEventListener('load', () => setTimeout(() => { try { sessionStorage.removeItem('recarregado-versao'); } catch { /* */ } }, 10000));
+
 // Rotas: "/tv" salão de vendas, "/cadastro" pedido de acesso, "/meeting/<endereço>" inscrição no meeting,
 // "/painel" equipe, imobiliárias e corretores; "/e/<empreendimento>/painel/...": painel já dentro de um empreendimento.
 // O antigo link público ("/") foi desativado: qualquer outro endereço leva ao painel.

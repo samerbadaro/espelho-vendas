@@ -62,6 +62,18 @@ Rode no **SQL Editor** do Supabase, nesta ordem:
 31. `supabase/migrations/031_treinamentos_ajuste.sql` (18/11 a partir das 14h, 19/11 a partir das 9h, turmas de 20)
 32. `supabase/migrations/032_recepcionista.sql` (perfil Recepcionista: acesso só ao Meeting)
 33. `supabase/migrations/033_treinamentos_horarios.sql` (administrador adiciona e exclui horários de treinamento)
+34. `supabase/migrations/034_portal_premiacao.sql` (Portal do Corretor: categoria Regras da premiação)
+35. `supabase/manutencao/035_backup_antes.sql` e depois `supabase/migrations/035_propostas.sql` (Propostas, trazidas da v2; módulo começa desligado). Para voltar atrás: `supabase/manutencao/035_reverter.sql`.
+36. `supabase/migrations/036_propostas_permissao.sql` (libera salvar a chave Propostas em Empreendimento)
+37. `supabase/migrations/037_rodadas_convite.sql` (convite da rodada: o administrador anexa; baixa quem tem cliente confirmado)
+38. `supabase/migrations/038_dados_contrato.sql` (dados para contrato com leitura dos documentos por IA; requer o secret ANTHROPIC_API_KEY no Cloudflare)
+39. `supabase/migrations/039_regime_bens.sql` (regime de bens; em separação total/obrigatória o cônjuge pode ficar fora do contrato)
+40. `supabase/migrations/040_pessoa_juridica.sql` (comprador pessoa jurídica: razão social, CNPJ, representante legal e documentos da empresa)
+41. `supabase/migrations/041_contratos.sql` (módulo Contratos: dados da incorporação, quadro de áreas, conferência do pagamento e documentos emitidos)
+42. `supabase/migrations/042_contratos_versoes.sql` (contratos: Word editável e versões ajustadas antes da assinatura)
+43. `supabase/migrations/043_modelos_contrato.sql` (modelos de contrato em Word com marcadores, um ativo por documento)
+44. `supabase/migrations/044_d4sign.sql` (assinatura eletrônica D4Sign: assinantes, situações, PDF assinado; requer D4SIGN_TOKEN e D4SIGN_CRYPTKEY no Cloudflare)
+45. `supabase/migrations/045_pix_sinal.sql` (Pix do sinal: comprovante anexado ou Pix gerado pelo sistema, configurável; provedor simulado para testes)
 
 ### Criar usuário da equipe
 
@@ -166,3 +178,15 @@ Decisões de 14/11/2026: **um banco por incorporadora** (o subdomínio escolhe o
 - Etapas B a E (`112_empreendimento_atual.sql`, testes `testes_multi.sql`): cada login trabalha num empreendimento atual (troca no topo do menu); o banco filtra espelho, pastas, propostas, tabela, Meeting, Portal e fila por ele. Configuração, dados comerciais e fila por empreendimento; códigos das pastas com sigla (DH-P-001, DH-PA-001); painel consolidado; cadastro de empreendimentos com acesso por imobiliária. Empreendimento hipotético para testes: `supabase/v2/seed_residencial_teste.sql` (RT, 25 × 5 unidades).
 - Vitrine (`113_vitrine_empreendimentos.sql`): com mais de um empreendimento, o painel abre na vitrine (cards com fachada, "a partir de", entrega, espelho, VSO e avisos; consolidado da incorporadora para a equipe). Ao entrar, o endereço passa a ser `/e/<empreendimento>/painel/...` e cada pedido ao banco leva o cabeçalho `x-empreendimento`: abas diferentes podem ficar em empreendimentos diferentes. Empreendimento ganha fase, cidade e foto da fachada.
 - Meeting: número de presença e sorteio (`115_meeting_numero_sorteio.sql`): cada confirmação recebe um número sequencial do meeting (ordem de chegada, mantido se a confirmação for desfeita); botão "Sorteio" abre tela cheia para o telão, com prêmio opcional, animação e histórico; o banco sorteia entre os presentes ainda não sorteados; ganhador ausente é registrado e o sorteio repete. Recepcionista opera o Meeting inteiro.
+
+## Homologação (teste antes da produção)
+
+| | Homologação | Produção |
+|---|---|---|
+| Endereço | homolog.gestorlm.com.br | casa7.gestorlm.com.br |
+| Branch | `homologacao` | `main` |
+| Supabase | duo-haus-homolog (`iujmvrnxfwsyqpzktfjr`) | `mtlzwuiqznsyqasmdkew` |
+| Cloudflare | `espelho-vendas-homolog` (`wrangler.homolog.jsonc`, `npm run build:homolog`) | `espelho-vendas` |
+
+Fluxo: tudo entra primeiro na `homologacao` (e o SQL no banco de homologação); depois de aprovado, vai para a `main` e o mesmo SQL é rodado na produção.
+Banco novo de homologação: `sh supabase/homolog/montar.sh` gera `estrutura_completa.sql` (todas as migrações) e depois roda-se `supabase/homolog/semente.sql` (dados fictícios; tem trava contra produção).

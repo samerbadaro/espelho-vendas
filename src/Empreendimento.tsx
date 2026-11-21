@@ -3,15 +3,19 @@ import { DadosComerciais, GestaoEmpreendimentos } from './Empreendimentos';
 import { ImageUp, Trash2 } from 'lucide-react';
 import { supabase } from './dados';
 import { useMarca, useDialogos, aplicarMarca, textoSobre, FONTES, type Marca } from './ui';
+import { ConfigContrato } from './contrato/ConfigContrato';
+import { ConfigPixSinal } from './PixSinal';
 
 type Campos = Pick<Marca, 'nome_empreendimento' | 'cidade' | 'cor_primaria' | 'cor_destaque' | 'cor_apoio' | 'fonte' | 'logo_url' | 'logo_escuro_url' | 'imagem_login_url' | ChaveModulo>;
-type ChaveModulo = 'modulo_treinamentos' | 'modulo_pastas' | 'modulo_funil' | 'modulo_portal' | 'modulo_rodadas' | 'modulo_meeting' | 'modulo_tv' | 'modulo_cadastro' | 'modulo_espelho_parceiros';
+type ChaveModulo = 'modulo_leads' | 'modulo_propostas' | 'modulo_treinamentos' | 'modulo_pastas' | 'modulo_funil' | 'modulo_portal' | 'modulo_rodadas' | 'modulo_meeting' | 'modulo_tv' | 'modulo_cadastro' | 'modulo_espelho_parceiros';
 
 const MODULOS: { k: ChaveModulo; titulo: string; texto: string; depende?: ChaveModulo }[] = [
   { k: 'modulo_pastas', titulo: 'Pastas de compradores', texto: 'Desligado, o sistema fica só com o espelho e o status das unidades. Pastas já criadas continuam guardadas.' },
+  { k: 'modulo_propostas', titulo: 'Propostas', texto: 'Corretores e imobiliárias montam a proposta pela tabela, com PV, comissão e carta em PDF. Desligado, só o administrador vê (para testar). Depende das Pastas.', depende: 'modulo_pastas' },
   { k: 'modulo_funil', titulo: 'Funil de vendas', texto: 'Quadro com as reservas e vendas por etapa. Depende das Pastas.', depende: 'modulo_pastas' },
   { k: 'modulo_portal', titulo: 'Portal do Corretor', texto: 'Materiais de venda para imobiliárias e corretores baixarem.' },
   { k: 'modulo_rodadas', titulo: 'Rodadas de negócios', texto: 'Inscrição de clientes pelos corretores nas rodadas.' },
+  { k: 'modulo_leads', titulo: 'Leads das campanhas', texto: 'Leads do Meta (pela planilha) com rodízio por imobiliária e corretor, prazo para assumir e funil até a pasta. Desligado, só o administrador vê (para configurar e testar).' },
   { k: 'modulo_treinamentos', titulo: 'Treinamentos', texto: 'Agenda de horários para corretores se inscreverem, com presença e relatórios.' },
   { k: 'modulo_meeting', titulo: 'Meeting', texto: 'Lista de convidados e confirmação de presença na entrada do evento.' },
   { k: 'modulo_espelho_parceiros', titulo: 'Espelho para imobiliárias e corretores', texto: 'Desligado, só a equipe vê o espelho dentro do painel.' },
@@ -19,6 +23,8 @@ const MODULOS: { k: ChaveModulo; titulo: string; texto: string; depende?: ChaveM
   { k: 'modulo_cadastro', titulo: 'Cadastro de imobiliárias pelo link', texto: 'Página /cadastro, onde a imobiliária pede o acesso. Desligado, só você cria os logins.' },
 ];
 const HEX = /^#[0-9A-Fa-f]{6}$/;
+// Propostas só aparecem depois que o 035 foi rodado no banco (a coluna existe)
+const modulosDo = (marca: Marca) => MODULOS.filter((m) => (m.k !== 'modulo_propostas' || 'modulo_propostas' in marca) && (m.k !== 'modulo_leads' || 'modulo_leads' in marca));
 
 /** Configuração do empreendimento (somente administrador): nome, marca e módulos. */
 export function Empreendimento() {
@@ -32,7 +38,7 @@ export function Empreendimento() {
       nome_empreendimento: marca.nome_empreendimento, cidade: marca.cidade ?? '', cor_primaria: marca.cor_primaria,
       cor_destaque: marca.cor_destaque, cor_apoio: marca.cor_apoio, fonte: marca.fonte, logo_url: marca.logo_url, logo_escuro_url: marca.logo_escuro_url,
       imagem_login_url: marca.imagem_login_url,
-      ...Object.fromEntries(MODULOS.map((m) => [m.k, marca[m.k] ?? true])) as Pick<Marca, ChaveModulo>,
+      ...Object.fromEntries(modulosDo(marca).map((m) => [m.k, marca[m.k] ?? (m.k !== 'modulo_propostas' && m.k !== 'modulo_leads')])) as Pick<Marca, ChaveModulo>,
     });
   }, [marca, f]);
 
@@ -54,7 +60,7 @@ export function Empreendimento() {
       nome_empreendimento: f.nome_empreendimento.trim(), cidade: f.cidade?.trim() || null,
       cor_primaria: f.cor_primaria, cor_destaque: f.cor_destaque, cor_apoio: f.cor_apoio, fonte: f.fonte, logo_url: f.logo_url,
       logo_escuro_url: f.logo_escuro_url, imagem_login_url: f.imagem_login_url,
-      ...Object.fromEntries(MODULOS.map((m) => [m.k, f[m.k]])), atualizado_em: new Date().toISOString(),
+      ...Object.fromEntries(modulosDo(marca).map((m) => [m.k, f[m.k]])), atualizado_em: new Date().toISOString(),
     }).eq('empreendimento_id', marca.empreendimento_id ?? '');
     setSalvando(false);
     if (error) { avisar('Não foi possível salvar. Tente novamente.', 'erro'); return; }
@@ -100,7 +106,7 @@ export function Empreendimento() {
           <h3>Módulos</h3>
           <p className="sub">Desligar um módulo só tira ele do menu. Nenhum dado é apagado, e ao religar tudo volta como estava.</p>
           <div className="lista-modulos">
-            {MODULOS.map((m) => {
+            {modulosDo(marca).map((m) => {
               const bloqueado = m.depende && !f[m.depende];
               return (
                 <label key={m.k} className={`interruptor${bloqueado ? ' desativado' : ''}`}>
@@ -116,6 +122,8 @@ export function Empreendimento() {
         <div className="acoes"><button className="botao principal" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar alterações'}</button></div>
       </form>
       <DadosComerciais />
+      <ConfigPixSinal />
+      {'modulo_propostas' in marca && <ConfigContrato />}
     </section>
   );
 }

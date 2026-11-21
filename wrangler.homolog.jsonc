@@ -1,0 +1,23 @@
+// Publicação da HOMOLOGAÇÃO no Cloudflare — separada da produção.
+// Branch "homologacao" do GitHub. Banco: projeto duo-haus-homolog no Supabase.
+// Build: npm run build:homolog · Deploy: npx wrangler deploy --config wrangler.homolog.jsonc
+{
+  "name": "espelho-vendas-homolog",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  "workers_dev": true,
+  "routes": [{ "pattern": "homolog.gestorlm.com.br", "custom_domain": true }],
+  "build": { "command": "npm run build:homolog" },
+  "triggers": { "crons": ["* * * * *"] },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "SUPABASE_URL": "https://iujmvrnxfwsyqpzktfjr.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_m9fTsM89k0N9lMEqjaqqfw_NqIJ45Qx"
+  }
+  // SUPABASE_SECRET_KEY do projeto duo-haus-homolog: cadastrar como "Secret" no painel do Cloudflare
+}

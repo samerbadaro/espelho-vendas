@@ -4,6 +4,7 @@
   "main": "worker/index.ts",
   "compatibility_date": "2025-09-01",
   "build": { "command": "npm run build" },
+  "triggers": { "crons": ["* * * * *"] },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -12,7 +13,8 @@
   },
   "vars": {
     "SUPABASE_URL": "https://mtlzwuiqznsyqasmdkew.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_UEbdwY_CmKxEJ_0yaGFqCA_6g52r8yb"
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_UEbdwY_CmKxEJ_0yaGFqCA_6g52r8yb",
+    "D4SIGN_AMBIENTE": "producao"
   }
   // SUPABASE_SECRET_KEY: cadastrar como "Secret" no painel do Cloudflare
 }

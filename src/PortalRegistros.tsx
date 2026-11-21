@@ -10,11 +10,11 @@ interface Simulacao {
   fluxo: { serie: string; parcelas: number; valor: number; total: number; pct: number }[];
 }
 
-const PAPEL: Record<string, string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor' };
+const PAPEL: Record<string, string> = { admin: 'Administrador', vendas: 'Sec. Vendas', imobiliaria: 'Imobiliária', corretor: 'Corretor', recepcao: 'Recepcionista' };
 const MODO: Record<string, string> = { arquivo: 'Baixou', link: 'Abriu link', visualizar: 'Visualizou', zip: 'Baixou tudo (.zip)' };
 const CATEGORIA: Record<string, string> = {
   book: 'Book e apresentações', ficha_tecnica: 'Ficha técnica', fotos_decorado: 'Fotos do decorado', imagens: 'Imagens do empreendimento',
-  materiais_apoio: 'Materiais de apoio', redes_sociais: 'Material para redes sociais', plantas: 'Plantas', simulador: 'Simulador',
+  materiais_apoio: 'Materiais de apoio', redes_sociais: 'Material para redes sociais', plantas: 'Plantas', premiacao: 'Regras da premiação', simulador: 'Simulador',
   tour_virtual: 'Tour virtual', videos: 'Vídeos',
 };
 const dataHora = (s: string) => new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });

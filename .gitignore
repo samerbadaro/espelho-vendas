@@ -3,3 +3,4 @@ dist
 .env
 .env.local
 .preview
+supabase/homolog/estrutura_completa.sql

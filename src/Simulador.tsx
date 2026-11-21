@@ -3,6 +3,9 @@ import { Copy, Download, FileDown, RotateCcw, Minus, Plus, Settings2, Trash2 } f
 import { supabase } from './dados';
 import { useMarca, useDialogos, type Marca } from './ui';
 import type { Perfil } from './util';
+import {
+  ajustarPct, brl, brl2, calcular, normalizar, ORDEM, type Linha, pctFmt, PASSO, r2, ROTULO, soma, UNICA_MAX, type K, type Periodo,
+} from './simuladorCalc';
 
 // ---------------------------------------------------------------------
 // Regras (valores nominais, sem valor presente).
@@ -10,8 +13,6 @@ import type { Perfil } from './util';
 // mínima e fluxo padrão vêm de config.simulador.cenarios (editáveis pelo
 // administrador); o cenário abaixo é só a reserva.
 // ---------------------------------------------------------------------
-type K = 'ato' | 'sinal' | 'mensais' | 'periodicas' | 'unica';
-type Periodo = 'semestral' | 'anual';
 export interface PrecoRef { rotulo: string; valor: number }
 export interface Cenario { id: string; nome: string; descricao: string; precos: PrecoRef[]; captacao: number; pct: Record<K, number> }
 export type ConfSimulador = Cenario[];
@@ -20,19 +21,8 @@ const PCT_PADRAO: Record<K, number> = { ato: 4, sinal: 4, mensais: 6, periodicas
 const RESERVA: ConfSimulador = [
   { id: 'padrao', nome: 'Unidade padrão', descricao: '', precos: [{ rotulo: 'A partir de', valor: 405576.26 }, { rotulo: 'Preço médio', valor: 427575.76 }], captacao: 30, pct: { ...PCT_PADRAO } },
 ];
-const ORDEM: K[] = ['ato', 'sinal', 'mensais', 'periodicas', 'unica'];
-const ROTULO: Record<K, string> = { ato: 'Sinal (ato)', sinal: 'Sinal (30/60/90)', mensais: 'Mensais', periodicas: 'Semestrais', unica: 'Única' };
 const QTD_RESERVA: Record<K, number> = { ato: 1, sinal: 3, mensais: 43, periodicas: 7, unica: 1 };
-const PAR: Partial<Record<K, K>> = { mensais: 'periodicas', periodicas: 'mensais' };
-const PASSO = 0.5;
-/** A única nunca passa de 5% do preço. */
-export const UNICA_MAX = 5;
 
-const r2 = (v: number) => Math.round(v * 100) / 100;
-const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-const brl2 = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const pctFmt = (v: number) => `${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
-const soma = (p: Record<K, number>) => r2(ORDEM.reduce((a, k) => a + p[k], 0));
 const novoId = () => Math.random().toString(36).slice(2, 10);
 
 /**
@@ -71,69 +61,6 @@ export function lerConf(m: Marca): ConfSimulador {
   return RESERVA;
 }
 
-interface Linha { k: K | 'financiamento'; rotulo: string; qtd: number; pct: number; parcela: number; total: number }
-
-/**
- * Parcelas em reais inteiros. A sobra do arredondamento de cada série vai para as mensais;
- * a sobra final (centavos) fica no financiamento, ou no ato quando não há financiamento.
- * Assim o total sempre fecha no preço e o financiamento nunca fica negativo.
- */
-export function calcular(preco: number, pct: Record<K, number>, qtd: Record<K, number>, periodo: Periodo) {
-  const fin = Math.max(0, r2(100 - soma(pct)));
-  const alvo = (k: K) => (preco * pct[k]) / 100;
-  const tot = {} as Record<K, { parcela: number; total: number }>;
-  let sobra = 0;
-  for (const k of ['ato', 'sinal', 'periodicas', 'unica'] as K[]) {
-    const parcela = pct[k] > 0 ? Math.floor(alvo(k) / qtd[k]) : 0;
-    tot[k] = { parcela, total: parcela * qtd[k] };
-    sobra += alvo(k) - tot[k].total;
-  }
-  const alvoMensais = alvo('mensais') + (pct.mensais > 0 ? sobra : 0);
-  const pm = alvoMensais > 0 ? Math.floor(alvoMensais / qtd.mensais) : 0;
-  tot.mensais = { parcela: pm, total: pm * qtd.mensais };
-  let financiamento = r2(preco - ORDEM.reduce((a, k) => a + tot[k].total, 0));
-  if (fin === 0) { tot.ato = { parcela: r2(tot.ato.parcela + financiamento), total: r2(tot.ato.total + financiamento) }; financiamento = 0; }
-  const linhas: Linha[] = ORDEM.filter((k) => tot[k].total > 0).map((k) => ({
-    k, rotulo: k === 'periodicas' ? (periodo === 'anual' ? 'Anuais' : 'Semestrais') : ROTULO[k],
-    qtd: qtd[k], pct: pct[k], parcela: tot[k].parcela, total: tot[k].total,
-  }));
-  linhas.push({ k: 'financiamento', rotulo: 'Financiamento', qtd: financiamento > 0 ? 1 : 0, pct: fin, parcela: financiamento, total: financiamento });
-  return { linhas, captacao: r2(100 - fin), fin };
-}
-
-/**
- * Mensais e periódicas se compensam. Ao subir uma, o percentual sai, nesta ordem:
- * da outra série, da única e, só depois, do financiamento.
- * Ao descer, devolve na ordem inversa: outra série e única até o padrão; o resto vai para o financiamento.
- * A única fica limitada a UNICA_MAX.
- */
-export function ajustarPct(p: Record<K, number>, k: K, valor: number, padrao: Record<K, number>) {
-  const teto = k === 'unica' ? UNICA_MAX : 100;
-  const novo = Math.max(0, Math.min(teto, r2(valor)));
-  let delta = r2(novo - p[k]);
-  if (delta === 0) return p;
-  const n = { ...p };
-  const par = PAR[k];
-  const fontes: K[] = par ? [par, 'unica'] : [];
-  if (delta > 0) {
-    for (const f of fontes) {
-      const tira = Math.min(delta, n[f]);
-      n[f] = r2(n[f] - tira); n[k] = r2(n[k] + tira); delta = r2(delta - tira);
-    }
-    const livre = Math.max(0, r2(100 - soma(n)));
-    n[k] = r2(n[k] + Math.min(delta, livre));
-  } else {
-    delta = -delta;
-    n[k] = r2(n[k] - delta);
-    for (const f of fontes) {
-      const alvo = f === 'unica' ? Math.min(padrao.unica, UNICA_MAX) : padrao[f];
-      const devolve = Math.min(delta, Math.max(0, r2(alvo - n[f])));
-      n[f] = r2(n[f] + devolve); delta = r2(delta - devolve);
-    }
-  }
-  return n;
-}
-
 export function Simulador({ perfil }: { perfil: Perfil }) {
   const { marca } = useMarca();
   const conf = useMemo(() => lerConf(marca), [marca]);
@@ -154,9 +81,10 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
   }, []);
 
   const cenario = escolha ? conf.find((c) => c.id === escolha.id) ?? null : null;
-  const padrao = cenario ? cenario.pct : PCT_PADRAO;
+  // financiamento fixo em (100 − captação): o fluxo padrão soma exatamente a captação do cenário
+  const padrao = cenario ? normalizar(cenario.pct, cenario.captacao) : PCT_PADRAO;
   const iniciar = (c: Cenario, ref: number) => {
-    setEscolha({ id: c.id, ref }); setPct({ ...c.pct }); setQtd({ ...maximas.base }); setPeriodo('semestral');
+    setEscolha({ id: c.id, ref }); setPct(normalizar(c.pct, c.captacao)); setQtd({ ...maximas.base }); setPeriodo('semestral');
   };
 
   const precoRef = cenario ? cenario.precos[Math.min(escolha!.ref, cenario.precos.length - 1)] : null;
@@ -191,7 +119,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
         p_posicao: cenario.nome, p_referencia: precoRef.rotulo, p_preco: preco,
         p_captacao: captacao, p_financiamento: fin, p_formato: formato,
         p_fluxo: linhas.map((l) => ({ serie: l.rotulo, parcelas: l.qtd, valor: l.parcela, total: l.total, pct: l.pct })),
-      });
+      }).then(({ error }) => { if (error) console.warn('Registro da simulação falhou:', error.message); }); // o .then dispara a chamada
     } finally { setGerando(''); }
   };
 
@@ -261,7 +189,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
           <span style={{ width: `${Math.min(100, captacao)}%` }} />
           <i style={{ left: `${minimo}%` }} />
         </div>
-        <p><strong>Captação {pctFmt(captacao)}</strong> · mínimo {pctFmt(minimo)} · financiamento {pctFmt(fin)}</p>
+        <p><strong>Captação {pctFmt(captacao)}</strong> · financiamento fixo em {pctFmt(fin)}</p>
       </div>
 
       <div className="sim-rolagem">
@@ -306,7 +234,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
               );
             })}
             <tr className="sim-fin">
-              <td>Financiamento</td><td><span className="sim-fixo">{finLinha.total > 0 ? 1 : 0}</span></td><td>{pctFmt(fin)} <small>(calculado)</small></td>
+              <td>Financiamento</td><td><span className="sim-fixo">{finLinha.total > 0 ? 1 : 0}</span></td><td>{pctFmt(fin)} <small>(fixo)</small></td>
               <td className="num">{brl2(finLinha.total)}</td><td className="num">{brl2(finLinha.total)}</td>
             </tr>
           </tbody>
@@ -316,7 +244,7 @@ export function Simulador({ perfil }: { perfil: Perfil }) {
 
       {problema && <p className="erro" role="alert">{problema}</p>}
       <div className="sim-rodape">
-        <p className="dica">Ao subir mensais ou {periodo === 'anual' ? 'anuais' : 'semestrais'}, o valor sai primeiro da outra série, depois da única e só então do financiamento. Única limitada a {UNICA_MAX}%. Quantidade máxima de parcelas pela data de entrega{entrega ? ` (${entrega.slice(5, 7)}/${entrega.slice(0, 4)})` : ''}. Valores nominais, sem correção.</p>
+        <p className="dica">Ao subir mensais ou {periodo === 'anual' ? 'anuais' : 'semestrais'}, o valor sai da outra série e depois da única; o financiamento fica fixo na captação do cenário. Única limitada a {UNICA_MAX}%. Quantidade máxima de parcelas pela data de entrega{entrega ? ` (${entrega.slice(5, 7)}/${entrega.slice(0, 4)})` : ''}. Valores nominais, sem correção.</p>
         <div className="acoes-linha">
           {configurar}
           <button className="botao" disabled={!!problema || !!gerando} onClick={() => baixar('pdf')}><FileDown size={16} /> {gerando === 'pdf' ? 'Gerando…' : 'Baixar PDF'}</button>
