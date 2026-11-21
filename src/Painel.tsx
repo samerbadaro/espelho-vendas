@@ -1,7 +1,8 @@
+import { Leads, DetalheLead } from './Leads';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, FileSignature, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap, ScrollText,
+  Home, FileSignature, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap, ScrollText, Megaphone,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -316,6 +317,9 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const meetingAtivo = marca.modulo_meeting !== false;
   const espelhoParceiros = marca.modulo_espelho_parceiros !== false;
   const tvAtiva = marca.modulo_tv !== false;
+  // Leads: desligado, só o administrador vê (para configurar e testar)
+  const leadsLigados = (marca as { modulo_leads?: boolean }).modulo_leads === true;
+  const leadsVisiveis = leadsLigados || admin;
 
   useEffect(() => {
     if (!equipe && !recepcao) supabase.from('imobiliarias').select('nome').maybeSingle()
@@ -338,6 +342,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       { c: '/painel', r: 'Início', i: <Home size={18} /> },
       { c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> },
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
+      ...(leadsVisiveis ? [{ c: '/painel/leads', r: 'Leads', i: <Megaphone size={18} /> }] : []),
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       ...(propostasVisiveis ? [{ c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> }] : []),
       ...(propostasVisiveis ? [{ c: '/painel/contratos', r: 'Contratos', i: <ScrollText size={18} /> }] : []),
@@ -351,6 +356,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ] : []),
     ]
     : [
+      ...(leadsLigados ? [{ c: '/painel/leads', r: 'Leads', i: <Megaphone size={18} /> }] : []),
       ...(pastasAtivas ? [{ c: '/painel/pastas', r: 'Pastas', i: <FolderOpen size={18} /> }] : []),
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       ...(propostasVisiveis ? [{ c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> }] : []),
@@ -369,9 +375,12 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const idPasta = atual.match(/^\/painel\/pastas\/([^/]+)$/)?.[1];
   const idRodada = atual.match(/^\/painel\/rodadas\/([^/]+)$/)?.[1];
   const idProposta = atual.match(/^\/painel\/propostas\/([^/]+)$/)?.[1];
+  const idLead = atual.match(/^\/painel\/leads\/([^/]+)$/)?.[1];
   const idContrato = atual.match(/^\/painel\/contratos\/([^/]+)$/)?.[1];
   const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
   if (recepcao) pagina = meetingAtivo ? <Recepcao /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
+  else if (idLead && (leadsLigados || (admin && leadsVisiveis))) pagina = <DetalheLead key={idLead} id={idLead} perfil={perfil} />;
+  else if (atual === '/painel/leads' && leadsVisiveis) pagina = <Leads perfil={perfil} />;
   else if (idProposta && propostasVisiveis) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
   else if (atual === '/painel/propostas' && propostasVisiveis) pagina = <ListaPropostas perfil={perfil} />;
   else if (idContrato && equipe && propostasVisiveis) pagina = <PaginaContrato key={idContrato} id={idContrato} perfil={perfil} />;

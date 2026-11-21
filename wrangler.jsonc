@@ -4,6 +4,7 @@
   "main": "worker/index.ts",
   "compatibility_date": "2025-09-01",
   "build": { "command": "npm run build" },
+  "triggers": { "crons": ["* * * * *"] },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

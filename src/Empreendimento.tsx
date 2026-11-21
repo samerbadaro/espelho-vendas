@@ -6,7 +6,7 @@ import { ConfigContrato } from './contrato/ConfigContrato';
 import { ConfigPixSinal } from './PixSinal';
 
 type Campos = Pick<Marca, 'nome_empreendimento' | 'cidade' | 'cor_primaria' | 'cor_destaque' | 'cor_apoio' | 'fonte' | 'logo_url' | 'logo_escuro_url' | 'imagem_login_url' | ChaveModulo>;
-type ChaveModulo = 'modulo_propostas' | 'modulo_treinamentos' | 'modulo_pastas' | 'modulo_funil' | 'modulo_portal' | 'modulo_rodadas' | 'modulo_meeting' | 'modulo_tv' | 'modulo_cadastro' | 'modulo_espelho_parceiros';
+type ChaveModulo = 'modulo_leads' | 'modulo_propostas' | 'modulo_treinamentos' | 'modulo_pastas' | 'modulo_funil' | 'modulo_portal' | 'modulo_rodadas' | 'modulo_meeting' | 'modulo_tv' | 'modulo_cadastro' | 'modulo_espelho_parceiros';
 
 const MODULOS: { k: ChaveModulo; titulo: string; texto: string; depende?: ChaveModulo }[] = [
   { k: 'modulo_pastas', titulo: 'Pastas de compradores', texto: 'Desligado, o sistema fica só com o espelho e o status das unidades. Pastas já criadas continuam guardadas.' },
@@ -14,6 +14,7 @@ const MODULOS: { k: ChaveModulo; titulo: string; texto: string; depende?: ChaveM
   { k: 'modulo_funil', titulo: 'Funil de vendas', texto: 'Quadro com as reservas e vendas por etapa. Depende das Pastas.', depende: 'modulo_pastas' },
   { k: 'modulo_portal', titulo: 'Portal do Corretor', texto: 'Materiais de venda para imobiliárias e corretores baixarem.' },
   { k: 'modulo_rodadas', titulo: 'Rodadas de negócios', texto: 'Inscrição de clientes pelos corretores nas rodadas.' },
+  { k: 'modulo_leads', titulo: 'Leads das campanhas', texto: 'Leads do Meta (pela planilha) com rodízio por imobiliária e corretor, prazo para assumir e funil até a pasta. Desligado, só o administrador vê (para configurar e testar).' },
   { k: 'modulo_treinamentos', titulo: 'Treinamentos', texto: 'Agenda de horários para corretores se inscreverem, com presença e relatórios.' },
   { k: 'modulo_meeting', titulo: 'Meeting', texto: 'Lista de convidados e confirmação de presença na entrada do evento.' },
   { k: 'modulo_espelho_parceiros', titulo: 'Espelho para imobiliárias e corretores', texto: 'Desligado, só a equipe vê o espelho dentro do painel.' },
@@ -22,7 +23,7 @@ const MODULOS: { k: ChaveModulo; titulo: string; texto: string; depende?: ChaveM
 ];
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 // Propostas só aparecem depois que o 035 foi rodado no banco (a coluna existe)
-const modulosDo = (marca: Marca) => MODULOS.filter((m) => m.k !== 'modulo_propostas' || 'modulo_propostas' in marca);
+const modulosDo = (marca: Marca) => MODULOS.filter((m) => (m.k !== 'modulo_propostas' || 'modulo_propostas' in marca) && (m.k !== 'modulo_leads' || 'modulo_leads' in marca));
 
 /** Configuração do empreendimento (somente administrador): nome, marca e módulos. */
 export function Empreendimento() {
@@ -36,7 +37,7 @@ export function Empreendimento() {
       nome_empreendimento: marca.nome_empreendimento, cidade: marca.cidade ?? '', cor_primaria: marca.cor_primaria,
       cor_destaque: marca.cor_destaque, cor_apoio: marca.cor_apoio, fonte: marca.fonte, logo_url: marca.logo_url, logo_escuro_url: marca.logo_escuro_url,
       imagem_login_url: marca.imagem_login_url,
-      ...Object.fromEntries(modulosDo(marca).map((m) => [m.k, marca[m.k] ?? m.k !== 'modulo_propostas'])) as Pick<Marca, ChaveModulo>,
+      ...Object.fromEntries(modulosDo(marca).map((m) => [m.k, marca[m.k] ?? (m.k !== 'modulo_propostas' && m.k !== 'modulo_leads')])) as Pick<Marca, ChaveModulo>,
     });
   }, [marca, f]);
 
