@@ -17,7 +17,7 @@ export function partesDaLeitura(d: DadosContrato, comConjuge: boolean, pj: boole
   const e = d.empresa;
   return {
     empresa: pj && e ? { razao_social: e.razao_social, cnpj: e.cnpj, telefone: e.telefone, email: e.email, endereco: enderecoTexto(e.endereco as Parameters<typeof enderecoTexto>[0]) || undefined } : null,
-    proponentes: [pessoa(d.comprador), ...(comConjuge && !pj && d.conjuge?.nome ? [pessoa(d.conjuge)] : [])],
+    proponentes: [pessoa(d.comprador), ...(comConjuge && !pj && d.conjuge?.nome ? [pessoa(d.conjuge)] : []), ...(pj && d.representante2?.nome ? [pessoa(d.representante2)] : [])],
   };
 }
 

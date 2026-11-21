@@ -183,8 +183,12 @@ interface Pasta {
   comprador_profissao: string | null; observacoes: string | null; criado_por: string | null; criado_por_id?: string | null; criada_em: string;
   codigo_aprovacao: string | null; submetida_em: string | null; submetida_por: string | null;
   imobiliarias?: { nome: string } | null; unidades_numeros?: string | null;
+  representante2?: Representante2 | null;
 }
-type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criado_por_id' | 'criada_em' | 'imobiliarias' | 'unidades_numeros' | 'codigo_aprovacao' | 'submetida_em' | 'submetida_por'>;
+/** 2º representante legal (só pessoa jurídica). */
+interface Representante2 { nome: string; cpf: string; nascimento: string | null; telefone: string; email: string; profissao: string; estado_civil: EstadoCivil }
+const REP2_VAZIO: Representante2 = { nome: '', cpf: '', nascimento: null, telefone: '', email: '', profissao: '', estado_civil: 'solteiro' };
+type Form = Omit<Pasta, 'id' | 'codigo' | 'unidade_id' | 'status' | 'criado_por' | 'criado_por_id' | 'criada_em' | 'imobiliarias' | 'unidades_numeros' | 'codigo_aprovacao' | 'submetida_em' | 'submetida_por' | 'representante2'>;
 
 const FORM_VAZIO: Form = {
   imobiliaria_id: '', comprador_nome: '', comprador_cpf: '', comprador_nascimento: null, comprador_telefone: '',
@@ -198,6 +202,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
   const pixIntegrado = cfgPix?.pix_modo === 'integrado';
   const equipe = ehEquipe(perfil);
   const [pasta, setPasta] = useState<Pasta | null>(null);
+  const [rep2, setRep2] = useState<Representante2 | null>(null);
   // Pasta criada a partir de um lead: já vem com nome, telefone e e-mail
   const [doLead] = useState<{ lead: string; nome: string | null; telefone: string | null; email: string | null; imobiliaria_id: string | null } | null>(() => {
     if (!nova) return null;
@@ -233,6 +238,8 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       conjuge_telefone: formatarTelefone(p.conjuge_telefone), conjuge_email: p.conjuge_email ?? '', conjuge_profissao: p.conjuge_profissao ?? '',
       observacoes: p.observacoes ?? '',
     });
+    const r2 = p.representante2;
+    setRep2(r2 ? { ...REP2_VAZIO, ...r2, cpf: formatarCPF(r2.cpf), telefone: formatarTelefone(r2.telefone) } : null);
   }, [id, nova]);
 
   useEffect(() => { carregar(); }, [carregar, recarga]);
@@ -261,6 +268,10 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     const casal = conjugeNoContrato(form.estado_civil, form.regime_bens, form.conjuge_participa, form.tipo_pessoa);
     if (casal && form.conjuge_cpf && !cpfValido(form.conjuge_cpf)) { setErro('O CPF do cônjuge não é válido. Confira os números.'); return; }
     if (casal && (form.conjuge_profissao || '').trim().length < 2) { setErro('Informe a profissão do cônjuge.'); return; }
+    const comRep2 = pj && rep2 !== null;
+    if (comRep2 && rep2.nome.trim().length < 3) { setErro('Informe o nome completo do 2º representante.'); return; }
+    if (comRep2 && !cpfValido(rep2.cpf)) { setErro('O CPF do 2º representante não é válido. Confira os números.'); return; }
+    if (comRep2 && rep2.profissao.trim().length < 2) { setErro('Informe a profissão do 2º representante.'); return; }
     if (nova && equipe && !form.imobiliaria_id) { setErro('Escolha a imobiliária responsável pela pasta.'); return; }
 
     const vazioNulo = (s: string | null) => (s && s.trim() ? s.trim() : null);
@@ -280,6 +291,10 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       conjuge_email: casal ? vazioNulo(form.conjuge_email) : null,
       conjuge_profissao: casal ? vazioNulo(form.conjuge_profissao) : null,
       observacoes: vazioNulo(form.observacoes),
+      ...(pj || pasta?.representante2 ? { representante2: comRep2 ? {
+        nome: rep2.nome.trim(), cpf: soDigitos(rep2.cpf), nascimento: rep2.nascimento || null,
+        telefone: vazioNulo(soDigitos(rep2.telefone)), email: vazioNulo(rep2.email), profissao: rep2.profissao.trim(), estado_civil: rep2.estado_civil,
+      } : null } : {}),
     };
     setSalvando(true);
     if (nova) {
@@ -293,7 +308,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
     } else {
       const { error } = await supabase.from('pastas').update(dados).eq('id', id);
       setSalvando(false);
-      if (error) { setErro(error.message.includes('DADOS_INCOMPLETOS') ? 'Preencha telefone, e-mail e profissão do comprador.' : `Não foi possível salvar as alterações. (Detalhe: ${error.message.slice(0, 120)})`); return; }
+      if (error) { setErro(error.message.includes('REPRESENTANTE2') ? 'Preencha nome, CPF, profissão e estado civil do 2º representante.' : error.message.includes('DADOS_INCOMPLETOS') ? 'Preencha telefone, e-mail e profissão do comprador.' : `Não foi possível salvar as alterações. (Detalhe: ${error.message.slice(0, 120)})`); return; }
       setEditando(false); setAviso('Dados salvos.'); setRecarga((n) => n + 1);
     }
   };
@@ -390,7 +405,35 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
               </select>
             </label>
           )}
+          {pj && <p className="largo sub">No PJ não é preciso informar o cônjuge do representante: basta o comprovante de estado civil, que serve só para qualificá-lo.</p>}
         </fieldset>
+
+        {pj && rep2 === null && editando && (
+          <div className="acoes-esquerda">
+            <button type="button" className="botao" onClick={() => setRep2({ ...REP2_VAZIO })}>+ Adicionar 2º representante</button>
+          </div>
+        )}
+        {pj && rep2 !== null && (
+          <>
+            <div className="titulo-linha">
+              <h3>2º representante legal</h3>
+              {editando && <button type="button" className="mini" onClick={() => setRep2(null)}>Remover</button>}
+            </div>
+            <fieldset disabled={!editando || salvando} className="grade-campos">
+              <label className="largo">Nome completo<input value={rep2.nome} maxLength={160} onChange={(e) => setRep2((r) => r && { ...r, nome: e.target.value })} required /></label>
+              <label>CPF<input value={rep2.cpf} inputMode="numeric" required onChange={(e) => setRep2((r) => r && { ...r, cpf: formatarCPF(e.target.value) })} /></label>
+              <label>Data de nascimento<input type="date" value={rep2.nascimento ?? ''} onChange={(e) => setRep2((r) => r && { ...r, nascimento: e.target.value || null })} /></label>
+              <label>Telefone (opcional)<input value={rep2.telefone} inputMode="tel" onChange={(e) => setRep2((r) => r && { ...r, telefone: formatarTelefone(e.target.value) })} /></label>
+              <label>E-mail (opcional)<input type="email" value={rep2.email} maxLength={160} onChange={(e) => setRep2((r) => r && { ...r, email: e.target.value })} /></label>
+              <label>Profissão<input value={rep2.profissao} maxLength={120} required onChange={(e) => setRep2((r) => r && { ...r, profissao: e.target.value })} /></label>
+              <label>Estado civil
+                <select value={rep2.estado_civil} onChange={(e) => setRep2((r) => r && { ...r, estado_civil: e.target.value as EstadoCivil })}>
+                  {ESTADOS_CIVIS.map((x) => <option key={x.valor} value={x.valor}>{x.rotulo}</option>)}
+                </select>
+              </label>
+            </fieldset>
+          </>
+        )}
 
         {casal && (
           <>
@@ -451,7 +494,7 @@ function VincularUnidade({ pasta }: { pasta: Pasta; aoMudar?: () => void }) {
 // =====================================================================
 // Documentos
 // =====================================================================
-interface Tipo { id: number; nome: string; pessoa: 'comprador' | 'conjuge' | 'geral'; obrigatorio_para: EstadoCivil[]; exibir_para: EstadoCivil[]; multiplo: boolean; ordem: number; aplica_a: 'pf' | 'pj' | 'ambos'; obrigatorio_pj: boolean; eh_pix?: boolean }
+interface Tipo { id: number; nome: string; pessoa: 'comprador' | 'conjuge' | 'geral' | 'representante2'; obrigatorio_para: EstadoCivil[]; exibir_para: EstadoCivil[]; multiplo: boolean; ordem: number; aplica_a: 'pf' | 'pj' | 'ambos'; obrigatorio_pj: boolean; eh_pix?: boolean }
 interface Documento {
   id: string; tipo_id: number; caminho: string; nome_arquivo: string; tamanho: number | null; status: StatusDocumento;
   motivo_recusa: string | null; atual: boolean; enviado_por: string | null; enviado_em: string;
@@ -463,6 +506,7 @@ const LIMITE = 15 * 1024 * 1024;
 const PESSOAS: { valor: Tipo['pessoa']; titulo: string }[] = [
   { valor: 'comprador', titulo: 'Documentos do comprador' },
   { valor: 'conjuge', titulo: 'Documentos do cônjuge' },
+  { valor: 'representante2', titulo: 'Documentos do 2º representante' },
   { valor: 'geral', titulo: 'Documentos complementares' },
 ];
 
@@ -512,7 +556,7 @@ function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar, pixIntegrado
   };
   const pj = pasta.tipo_pessoa === 'pj';
   const visiveis = tipos.filter((t) => !(pixIntegrado && t.eh_pix) && (pj
-    ? t.aplica_a !== 'pf'
+    ? t.aplica_a !== 'pf' && (t.pessoa !== 'representante2' || !!pasta.representante2)
     : t.aplica_a !== 'pj' && (t.pessoa !== 'conjuge' || conjuge) && (t.exibir_para.length === 0 || t.exibir_para.includes(estadoCivil))));
 
   return (
@@ -530,7 +574,7 @@ function Documentos({ pasta, estadoCivil, conjuge, equipe, aoMudar, pixIntegrado
         if (!lista.length) return null;
         return (
           <div key={p.valor} className="bloco-docs">
-            <h3>{p.titulo}</h3>
+            <h3>{pj && p.valor === 'comprador' ? 'Documentos da empresa e do representante' : p.titulo}</h3>
             <ul className="docs">
               {lista.map((t) => (
                 <LinhaDocumento key={t.id} tipo={t} pasta={pasta} equipe={equipe}

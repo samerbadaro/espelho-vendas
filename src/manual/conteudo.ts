@@ -48,6 +48,14 @@ export const REVISAO_MANUAL = '21/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '21/11/2026', titulo: 'Pastas de empresa: 2º representante e estado civil',
+    itens: [
+      'Pasta de pessoa jurídica pede o comprovante de estado civil do representante.',
+      'Botão “+ Adicionar 2º representante”, com dados e documentos próprios.',
+      'Os dois representantes entram na leitura com IA, no Quadro Resumo, na Carta Proposta e no envelope de assinatura.',
+    ],
+  },
+  {
     data: '21/11/2026', titulo: 'Propostas: busca, ajuste nominal e resumo',
     itens: [
       'Busca na lista de propostas por unidade, cliente, imobiliária, corretor ou código.',
@@ -258,7 +266,8 @@ export const CAPITULOS: Capitulo[] = [
           'Em Pastas, clique em “Nova pasta”.',
           'Escolha se o comprador é pessoa física ou pessoa jurídica (empresa).',
           'Pessoa física: nome completo, CPF, nascimento, telefone, e-mail, profissão e estado civil. Se casado ou em união estável, informe o regime de bens.',
-          'Pessoa jurídica: razão social, CNPJ e os dados do representante legal (quem assina pela empresa).',
+          'Pessoa jurídica: razão social, CNPJ e os dados do representante legal (quem assina pela empresa), com o estado civil dele.',
+          'Se a empresa assina com dois representantes, clique em “+ Adicionar 2º representante” e preencha nome, CPF, profissão e estado civil (telefone e e-mail são opcionais). Para tirar, use “Remover” e salve.',
           'Clique em “Criar pasta e seguir para os documentos”.',
         ],
         dica: 'Pasta criada a partir de um lead (módulo Leads) já vem com nome, telefone e e-mail preenchidos.',
@@ -269,12 +278,14 @@ export const CAPITULOS: Capitulo[] = [
           'Casado ou em união estável: em regra, o cônjuge também assina e precisa dos dados e documentos dele.',
           'Separação total ou obrigatória de bens: o sistema pergunta se o cônjuge também assina. Respondendo “Não, só o comprador”, os documentos do cônjuge deixam de ser obrigatórios.',
           'Sem o regime de bens informado, a pasta não pode ser submetida.',
+          'Pessoa jurídica: o cônjuge do representante não é informado nem assina. Basta o “Comprovante de estado civil” de cada representante (certidão de nascimento, casamento, averbação de divórcio ou óbito, ou escritura de união estável), que serve só para qualificá-lo no contrato.',
         ],
       },
       {
         titulo: 'Documentos',
         passos: [
           'Na pasta, cada documento aparece com a etiqueta Obrigatório ou Opcional (a lista muda conforme estado civil e tipo de comprador).',
+          'Pessoa jurídica: aparecem os documentos da empresa e do representante e, se houver 2º representante, o bloco “Documentos do 2º representante” (RG ou CNH, comprovante de endereço e comprovante de estado civil).',
           'Clique em “Enviar arquivo” e escolha o arquivo: PDF, JPG, PNG ou HEIC, até 15 MB.',
           'Documento recusado mostra o motivo. Envie um arquivo novo no lugar.',
         ],
@@ -449,7 +460,7 @@ export const CAPITULOS: Capitulo[] = [
       {
         titulo: '1. Partes do contrato (leitura com IA)',
         passos: [
-          'Clique em ler os documentos com IA. Ela lê RG, CNH, certidões, comprovantes e, para empresas, contrato social e cartão CNPJ.',
+          'Clique em ler os documentos com IA. Ela lê RG, CNH, certidões, comprovantes e, para empresas, contrato social e cartão CNPJ. Com 2º representante, os dados dele aparecem em um quadro próprio para conferir.',
           'Confira cada campo sugerido (nome, nacionalidade, profissão, documento, endereço, regime de bens). Corrija o que for preciso.',
           'Marque como conferido. Só dados conferidos vão para os documentos.',
         ],

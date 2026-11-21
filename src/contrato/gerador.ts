@@ -19,6 +19,8 @@ export interface ContextoContrato {
   empresa?: Empresa | null;
   comprador: Pessoa;
   conjuge?: Pessoa | null;
+  /** 2º representante legal (só PJ) */
+  representante2?: Pessoa | null;
   unidade: string;
   areas: Areas | null;
   series: SerieContrato[];
@@ -152,7 +154,7 @@ class EscritorPdf {
 
 // ---------- blocos ----------
 export function nomesCompradores(c: ContextoContrato): string[][] {
-  if (c.tipoPessoa === 'pj') return [[up(c.empresa?.razao_social), `p.p. ${up(c.comprador.nome)}`]];
+  if (c.tipoPessoa === 'pj') return [[up(c.empresa?.razao_social), `p.p. ${up(c.comprador.nome)}${c.representante2?.nome ? ` e ${up(c.representante2.nome)}` : ''}`]];
   return [[up(c.comprador.nome), 'COMPRADOR(A)'], ...(c.conjuge?.nome ? [[up(c.conjuge.nome), 'COMPRADOR(A)']] : [])];
 }
 
@@ -183,6 +185,7 @@ function blocoPartes(e: Escritor) {
     ]);
     e.para('QUALIFICAÇÃO DO(S) REPRESENTANTE(S) LEGAL(IS):', { negrito: true });
     tabelaPessoa(e, c.comprador);
+    if (c.representante2?.nome) tabelaPessoa(e, c.representante2);
     return;
   }
   tabelaPessoa(e, c.comprador);

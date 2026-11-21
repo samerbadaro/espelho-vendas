@@ -23,12 +23,12 @@ export const CAMPOS_EMPRESA = [
   ['data_abertura', 'Data de abertura'], ['telefone', 'Telefone'], ['email', 'E-mail'],
 ] as const;
 export type Empresa = Partial<Record<(typeof CAMPOS_EMPRESA)[number][0], string>> & { endereco?: Partial<Record<(typeof CAMPOS_ENDERECO)[number][0], string>> };
-export interface DadosContrato { comprador?: Pessoa; conjuge?: Pessoa; empresa?: Empresa }
+export interface DadosContrato { comprador?: Pessoa; conjuge?: Pessoa; empresa?: Empresa; /** 2º representante legal (só PJ) */ representante2?: Pessoa }
 export interface Alerta { nivel: 'atencao' | 'info'; texto: string }
 
 interface DocInfo { id: string; caminho: string; arquivo: string; mime: string | null; tipo: string; pessoa: string }
 interface Contexto {
-  pasta: { codigo: string; tipo_pessoa?: 'pf' | 'pj'; empresa?: Record<string, string | null> | null; estado_civil: string; regime_bens: string | null; conjuge_no_contrato: boolean; comprador: Record<string, string | null>; conjuge: Record<string, string | null> };
+  pasta: { codigo: string; tipo_pessoa?: 'pf' | 'pj'; empresa?: Record<string, string | null> | null; estado_civil: string; regime_bens: string | null; conjuge_no_contrato: boolean; comprador: Record<string, string | null>; conjuge: Record<string, string | null>; representante2?: Record<string, string | null> | null };
   documentos: DocInfo[];
 }
 
@@ -70,6 +70,7 @@ const FERRAMENTA = {
     properties: {
       comprador: pessoaSchema,
       conjuge: pessoaSchema,
+      representante2: { ...pessoaSchema, description: 'Só quando a pessoa jurídica tem 2º representante legal.' },
       empresa: {
         type: 'object', description: 'Só quando o comprador é pessoa jurídica.',
         properties: {
@@ -97,7 +98,8 @@ Regras:
 - Estado civil e regime de bens: da certidão de casamento, quando houver. Se o regime da certidão for diferente do informado na pasta, gere um alerta.
 - Se a pasta disser que o cônjuge NÃO participa do contrato, não preencha "conjuge".
 - Endereço: do comprovante de endereço.
-- Se a pasta for de PESSOA JURÍDICA: preencha "empresa" com os dados do contrato social, da última alteração e do cartão CNPJ (endereço da empresa pelo comprovante da empresa ou cartão CNPJ), e use "comprador" para o REPRESENTANTE LEGAL (quem assina pela empresa). Confira se o representante tem poderes no contrato social e gere alerta se não tiver. Não preencha "conjuge".
+- Se a pasta for de PESSOA JURÍDICA: preencha "empresa" com os dados do contrato social, da última alteração e do cartão CNPJ (endereço da empresa pelo comprovante da empresa ou cartão CNPJ), e use "comprador" para o REPRESENTANTE LEGAL (quem assina pela empresa). Confira se o representante tem poderes no contrato social e gere alerta se não tiver. Não preencha "conjuge". Se a pasta tiver 2º representante, use "representante2" para ele, só com os documentos marcados "2º representante", e confira os poderes dele também.
+- No PJ, o comprovante de estado civil do representante serve só para qualificá-lo (estado civil e regime de bens); não qualifique o cônjuge.
 - Em "fontes", indique de qual documento (D1, D2...) veio cada campo preenchido.
 - Em "alertas" (nivel "atencao"), aponte em português simples:
   * CPF, nome ou data de nascimento diferentes do que foi digitado na pasta;
@@ -143,7 +145,7 @@ export function padronizar(d: DadosContrato): DadosContrato {
       if (emp.endereco.uf) emp.endereco.uf = emp.endereco.uf.trim().toUpperCase();
     }
   }
-  return { ...d, comprador: um(d.comprador), conjuge: um(d.conjuge), empresa: emp };
+  return { ...d, comprador: um(d.comprador), conjuge: um(d.conjuge), representante2: um(d.representante2), empresa: emp };
 }
 
 export interface ResultadoLeitura { dados: DadosContrato; fontes: Record<string, string>; alertas: Alerta[]; lidos: number; ignorados: string[]; tokensEntrada: number; tokensSaida: number }
@@ -161,7 +163,7 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
   const temConj = !pj && ctx.pasta.conjuge_no_contrato !== false && ['casado', 'uniao_estavel'].includes(ctx.pasta.estado_civil);
   const conteudo: unknown[] = [{
     type: 'text',
-    text: `Pasta ${ctx.pasta.codigo}.${pj ? ` COMPRADOR PESSOA JURÍDICA: ${ctx.pasta.empresa?.razao_social ?? ''}, CNPJ ${ctx.pasta.empresa?.cnpj ?? ''}. Os dados de pessoa abaixo são do representante legal.` : ''} Estado civil informado: ${ctx.pasta.estado_civil}.${ctx.pasta.regime_bens ? ` Regime de bens informado: ${rotuloRegime}.` : ''}${temConj ? '' : ' O cônjuge NÃO participa do contrato.'}\nDados digitados na pasta (para comparar):\n${JSON.stringify({ comprador: ctx.pasta.comprador, conjuge: ctx.pasta.conjuge })}\n\nDocumentos a seguir:`,
+    text: `Pasta ${ctx.pasta.codigo}.${pj ? ` COMPRADOR PESSOA JURÍDICA: ${ctx.pasta.empresa?.razao_social ?? ''}, CNPJ ${ctx.pasta.empresa?.cnpj ?? ''}. Os dados de pessoa abaixo são do representante legal.${ctx.pasta.representante2 ? ' HÁ 2º REPRESENTANTE LEGAL (preencha "representante2").' : ''}` : ''} Estado civil informado: ${ctx.pasta.estado_civil}.${ctx.pasta.regime_bens ? ` Regime de bens informado: ${rotuloRegime}.` : ''}${temConj ? '' : ' O cônjuge NÃO participa do contrato.'}\nDados digitados na pasta (para comparar):\n${JSON.stringify({ comprador: ctx.pasta.comprador, conjuge: ctx.pasta.conjuge, ...(pj && ctx.pasta.representante2 ? { representante2: ctx.pasta.representante2 } : {}) })}\n\nDocumentos a seguir:`,
   }];
   const ignorados: string[] = [];
   const nomes: Record<string, string> = {};
@@ -187,7 +189,7 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
       if (!foto) { ignorados.push(`${d.tipo} (${d.arquivo}): formato que o navegador não abre (ex.: HEIC). Peça em JPG ou PDF.`); continue; }
       bloco = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: paraBase64(await foto.arrayBuffer()) } };
     }
-    const dono = d.pessoa === 'conjuge' ? 'cônjuge' : d.pessoa === 'comprador' ? 'comprador' : 'geral';
+    const dono = d.pessoa === 'conjuge' ? 'cônjuge' : d.pessoa === 'representante2' ? '2º representante' : d.pessoa === 'comprador' ? (pj ? 'empresa / 1º representante' : 'comprador') : 'geral';
     conteudo.push({ type: 'text', text: `${codigo}: ${d.tipo} (${dono}), arquivo "${d.arquivo}"` }, bloco);
     lidos++;
   }
@@ -217,7 +219,8 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
   if (!uso) throw new Error('A IA não devolveu os dados. Tente de novo.');
   const alertas: Alerta[] = Array.isArray(uso.alertas) ? uso.alertas : [];
 
-  const dados: DadosContrato = { comprador: uso.comprador ?? {}, conjuge: temConj ? uso.conjuge ?? undefined : undefined, empresa: pj ? uso.empresa ?? {} : undefined };
+  const comRep2 = pj && !!ctx.pasta.representante2;
+  const dados: DadosContrato = { comprador: uso.comprador ?? {}, conjuge: temConj ? uso.conjuge ?? undefined : undefined, empresa: pj ? uso.empresa ?? {} : undefined, representante2: comRep2 ? uso.representante2 ?? {} : undefined };
   if (pj && dados.empresa) {
     dados.empresa.razao_social ||= ctx.pasta.empresa?.razao_social ?? '';
     dados.empresa.cnpj ||= ctx.pasta.empresa?.cnpj ?? '';
@@ -226,15 +229,17 @@ export async function lerDocumentosComIA(pastaId: string, progresso: (t: string)
   }
   if (rotuloRegime) for (const q of ['comprador', 'conjuge'] as const) { const p = dados[q]; if (p && !p.regime_bens) p.regime_bens = rotuloRegime; }
   // completa com o que já está na pasta (e-mail, telefone, profissão) quando a IA não achou
-  for (const quem of ['comprador', 'conjuge'] as const) {
+  const ROT = { comprador: 'comprador', conjuge: 'cônjuge', representante2: '2º representante' } as const;
+  for (const quem of ['comprador', 'conjuge', 'representante2'] as const) {
     const base = ctx.pasta[quem];
     if (quem === 'conjuge' && (!temConj || !base?.nome)) continue;
+    if (quem === 'representante2' && !comRep2) continue;
     const p: Pessoa = (dados[quem] ??= {});
     for (const k of ['email', 'telefone', 'profissao'] as const) if (!p[k] && base?.[k]) p[k] = String(base[k]);
     // conferências que não dependem da IA
-    if (p.cpf && !cpfValido(p.cpf)) alertas.push({ nivel: 'atencao', texto: `CPF lido do ${quem === 'conjuge' ? 'cônjuge' : 'comprador'} (${p.cpf}) não é válido. Confira no documento.` });
+    if (p.cpf && !cpfValido(p.cpf)) alertas.push({ nivel: 'atencao', texto: `CPF lido do ${ROT[quem]} (${p.cpf}) não é válido. Confira no documento.` });
     if (p.cpf && base?.cpf && soDigitos(p.cpf) !== soDigitos(String(base.cpf)))
-      alertas.push({ nivel: 'atencao', texto: `CPF do ${quem === 'conjuge' ? 'cônjuge' : 'comprador'} no documento é diferente do digitado na pasta.` });
+      alertas.push({ nivel: 'atencao', texto: `CPF do ${ROT[quem]} no documento é diferente do digitado na pasta.` });
   }
   ignorados.forEach((t) => alertas.push({ nivel: 'atencao', texto: `Não lido: ${t}` }));
   // troca D1, D2… pelo nome do documento, para a equipe saber de onde veio

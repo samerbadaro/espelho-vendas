@@ -195,7 +195,7 @@ function conteudo(d: DadosCarta, simples: boolean): Bloco[] {
   if (!simples) {
     const quem = pt
       ? pt.empresa
-        ? [{ nome: pt.empresa.razao_social || 'Proponente', sub: `p.p. ${pt.proponentes[0]?.nome ?? ''}${pt.empresa.cnpj ? ` · CNPJ ${cnpj(pt.empresa.cnpj)}` : ''}` }]
+        ? [{ nome: pt.empresa.razao_social || 'Proponente', sub: `p.p. ${pt.proponentes.map((x) => x.nome).filter(Boolean).join(' e ')}${pt.empresa.cnpj ? ` · CNPJ ${cnpj(pt.empresa.cnpj)}` : ''}` }]
         : pt.proponentes.map((x) => ({ nome: x.nome || 'Proponente', sub: `Proponente${x.cpf ? ` · CPF ${cpf(x.cpf.replace(/\D/g, ''))}` : ''}` }))
       : [
         { nome: p?.comprador_nome || 'Proponente', sub: `Proponente${p?.comprador_cpf ? ` · CPF ${cpf(p.comprador_cpf)}` : ''}` },
