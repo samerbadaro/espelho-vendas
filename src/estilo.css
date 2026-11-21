@@ -98,7 +98,7 @@ textarea { resize: vertical; }
 /* ===== Estrutura do painel: menu lateral ===== */
 .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
 .lateral {
-  position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 6px;
+  position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column; gap: 6px;
   background: var(--primaria); color: var(--primaria-texto); padding: 18px 12px;
 }
 .lateral-topo { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 18px; }
@@ -116,6 +116,14 @@ textarea { resize: vertical; }
 .lateral-links a { font-size: 0.8125rem; padding: 7px 12px; }
 .lateral-usuario { display: flex; align-items: center; gap: 10px; padding: 12px 8px 2px; border-top: 1px solid rgba(127, 127, 127, 0.25); margin-top: 8px; }
 .lateral-menu + .lateral-usuario { margin-top: auto; }
+/* Menu longo: só a lista de módulos rola; logo, links e usuário (sair) ficam sempre visíveis */
+.lateral-topo, .lateral-links, .lateral-usuario { flex: none; }
+.lateral-menu { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -12px; padding: 0 12px;
+  scrollbar-width: thin; scrollbar-color: rgba(127, 127, 127, 0.45) transparent; }
+.lateral-menu::-webkit-scrollbar { width: 6px; }
+.lateral-menu::-webkit-scrollbar-thumb { background: rgba(127, 127, 127, 0.45); border-radius: 3px; }
+/* Campos em grade: o campo fica sempre na base da linha, mesmo com rótulos de tamanhos diferentes */
+.grade-campos label { justify-content: flex-end; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; background: var(--destaque); color: var(--destaque-texto); }
 .usuario-dados { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
 .usuario-dados strong { font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -913,6 +921,7 @@ small.bloco { display: block; color: var(--tinta-2); }
 .dc-pessoa legend { font-weight: 700; padding: 0 6px; }
 .dc-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
 .dc-grade .dc-largo { grid-column: span 2; }
+.dc-grade label { display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; }
 .dc-grade label > span { display: flex; align-items: center; gap: 6px; }
 .dc-fonte { font-size: 0.6875rem; color: var(--tinta-2); background: var(--superficie-2); border-radius: 4px; padding: 0 5px; font-weight: 500; }
 .dc-dica { flex: 1; margin: 0; }
