@@ -1080,3 +1080,7 @@ small.bloco { display: block; color: var(--tinta-2); }
   .manual-impressao h3 { break-after: avoid; margin-top: 22px; }
   .manual-impressao h4 { break-after: avoid; }
 }
+.ct-data { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 10px; }
+.ct-data > span { font-weight: 600; }
+.ct-data label { display: inline-flex; align-items: center; gap: 6px; }
+.ct-data input[type="date"], .cartao .ct-data input[type="date"], section .ct-data input[type="date"] { width: auto; max-width: 190px; flex: 0 0 auto; }

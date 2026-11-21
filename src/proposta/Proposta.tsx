@@ -55,6 +55,8 @@ export function EditorProposta({
   const [parteSinal, setParteSinal] = useState(parteInicial ?? CFG.comissao.parteDoSinal);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [verFluxo, setVerFluxo] = useState(false);
+  // "⟲ ajustar": iguala o PV (valor presente) ou o valor nominal ao da tabela
+  const [meta, setMeta] = useState<'pv' | 'nominal'>('pv');
 
   const r = useMemo(
     () => calcular(CFG, unidade, series, { dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal, diasVencimento: dias, observacoes }),
@@ -74,12 +76,16 @@ export function EditorProposta({
     setSeries((l) => [...l, { id: novoId(), qtd: 1, periodicidade: 'Mensais', vencimento: venc < dataMinima ? dataMinima : venc, valor: 0 }]);
   };
   const pvZero = (id: string) => {
-    const res = redistribuir(CFG, unidade, series, id);
+    const res = redistribuir(CFG, unidade, series, id, meta);
     if ('erro' in res) setMensagem(res.erro);
     else { setSeries(res); setMensagem(null); }
   };
 
   const avisosDa = (id: string) => r.avisos.filter((a) => a.serieId === id);
+  const difNominal = r.proposta.total - r.tabela.total;
+  const sinalR = (v: number) => `${v > 0.005 ? '+' : v < -0.005 ? '−' : ''}${fmtReal(Math.abs(v))}`;
+  const chaves = r.marcos.find((m) => m.rotulo === 'Até a entrega');
+  const capDif = chaves ? chaves.proposta * r.proposta.total - chaves.tabela * r.tabela.total : 0;
   const avisosGerais = r.avisos.filter((a) => !a.serieId);
   const positivo = r.diferencaVPL >= -0.005;
   const outrosErros = r.avisos.some((a) => a.nivel === 'erro');
@@ -108,6 +114,13 @@ export function EditorProposta({
             </div>
           </div>
           <div className="grupo">
+            <span title="O que o botão ⟲ ajustar de cada série iguala ao da tabela">Ajustar para</span>
+            <div className="segmentos">
+              <button className={meta === 'pv' ? 'ativo' : ''} onClick={() => setMeta('pv')} title="Sem desconto em valor presente">Zerar PV</button>
+              <button className={meta === 'nominal' ? 'ativo' : ''} onClick={() => setMeta('nominal')} title="Mesmo valor total da tabela; o PV pode ficar abaixo">Zerar nominal</button>
+            </div>
+          </div>
+          <div className="grupo">
             <span title="Quanto do preço é pago direto até as chaves (sinal incluso). O resto vai para o financiamento. Vale para Mensais, Semestrais e Anuais.">Até as chaves</span>
             <div className="pct">
               <CelulaNumero rotulo="Percentual até as chaves" valor={(preChaves ?? preChavesTabela) * 100} casas={1}
@@ -125,7 +138,7 @@ export function EditorProposta({
             <thead>
               <tr>
                 <th>Nº parc.</th><th>Periodicidade</th><th>1º vencimento</th><th className="dir">Valor da parcela</th>
-                <th className="dir">Total da série</th><th>Último venc.</th><th className="dir">% do total</th>{!ro && <><th>PV zero</th><th /></>}
+                <th className="dir">Total da série</th><th>Último venc.</th><th className="dir">% do total</th>{!ro && <><th title={meta === 'pv' ? 'Ajusta a parcela para o PV ficar igual ao da tabela' : 'Ajusta a parcela para o valor total ficar igual ao da tabela'}>{meta === 'pv' ? 'Zerar PV' : 'Zerar nominal'}</th><th /></>}
               </tr>
             </thead>
             <tbody>
@@ -157,7 +170,7 @@ export function EditorProposta({
                     <td className="mono">{s.vencimento ? fmtData(dataDaParcela(s, s.qtd - 1)) : '—'}</td>
                     <td className="dir mono">{r.proposta.total > 0 ? fmtPct(totalSerie / r.proposta.total) : '—'}</td>
                     {!ro && <>
-                      <td><button className="mini" onClick={() => pvZero(s.id)} title="Recalcula a parcela desta série para o PV ficar igual ao da tabela">⟲ ajustar</button></td>
+                      <td><button className="mini" onClick={() => pvZero(s.id)} title={meta === 'pv' ? 'Recalcula a parcela desta série para o PV ficar igual ao da tabela' : 'Recalcula a parcela desta série para o valor total ficar igual ao da tabela'}>⟲ ajustar</button></td>
                       <td><button className="mini x" onClick={() => remover(s.id)} aria-label="Remover série">✕</button></td>
                     </>}
                   </tr>
@@ -188,13 +201,24 @@ export function EditorProposta({
             <em>{fmtPct(r.variacaoVPL, 2)} sobre o VPL da tabela</em>
           </div>
           <table className="comp">
-            <thead><tr><th /><th className="dir">Tabela</th><th className="dir">Proposta</th><th className="dir">Variação</th></tr></thead>
+            <thead><tr><th /><th className="dir">Tabela</th><th className="dir">Proposta</th><th className="dir">Variação</th><th className="dir">Diferença (R$)</th></tr></thead>
             <tbody>
-              <tr><td>Valor total</td><td className="dir mono">{fmtReal(r.tabela.total)}</td><td className="dir mono">{fmtReal(r.proposta.total)}</td><td className="dir mono">{fmtPct(r.proposta.total / r.tabela.total - 1, 2)}</td></tr>
-              <tr><td>VPL ({fmtPct(CFG.taxaVP, 2)} a.m.)</td><td className="dir mono">{fmtReal(r.tabela.vpl)}</td><td className="dir mono">{fmtReal(r.proposta.vpl)}</td><td className="dir mono">{fmtPct(r.variacaoVPL, 2)}</td></tr>
-              <tr><td>Preço do m²</td><td className="dir mono">{fmtReal(r.tabela.m2)}</td><td className="dir mono">{fmtReal(r.proposta.m2)}</td><td className="dir mono">{fmtPct(r.proposta.m2 / r.tabela.m2 - 1, 2)}</td></tr>
+              <tr><td>Valor total</td><td className="dir mono">{fmtReal(r.tabela.total)}</td><td className="dir mono">{fmtReal(r.proposta.total)}</td><td className="dir mono">{fmtPct(r.proposta.total / r.tabela.total - 1, 2)}</td><td className={`dir mono ${difNominal < -0.005 ? 'texto-ruim' : ''}`}>{sinalR(difNominal)}</td></tr>
+              <tr><td>VPL ({fmtPct(CFG.taxaVP, 2)} a.m.)</td><td className="dir mono">{fmtReal(r.tabela.vpl)}</td><td className="dir mono">{fmtReal(r.proposta.vpl)}</td><td className="dir mono">{fmtPct(r.variacaoVPL, 2)}</td><td className={`dir mono ${r.diferencaVPL < -0.005 ? 'texto-ruim' : ''}`}>{sinalR(r.diferencaVPL)}</td></tr>
+              <tr><td>Preço do m²</td><td className="dir mono">{fmtReal(r.tabela.m2)}</td><td className="dir mono">{fmtReal(r.proposta.m2)}</td><td className="dir mono">{fmtPct(r.proposta.m2 / r.tabela.m2 - 1, 2)}</td><td className="dir mono">{sinalR(r.proposta.m2 - r.tabela.m2)}</td></tr>
+              {chaves && (
+                <tr><td>Captação até as chaves</td>
+                  <td className="dir mono">{fmtPct(chaves.tabela)}<br /><small>{fmtReal(chaves.tabela * r.tabela.total)}</small></td>
+                  <td className="dir mono">{fmtPct(chaves.proposta)}<br /><small>{fmtReal(chaves.proposta * r.proposta.total)}</small></td>
+                  <td className="dir mono">{chaves.variacao === null ? '—' : fmtPct(chaves.variacao, 2)}</td>
+                  <td className={`dir mono ${capDif < -0.005 ? 'texto-ruim' : ''}`}>{sinalR(capDif)}</td></tr>
+              )}
             </tbody>
           </table>
+          <p className="dica">
+            {difNominal < -0.005 ? <>Desconto nominal de <strong>{fmtReal(-difNominal)}</strong> sobre o valor de tabela. </> : difNominal > 0.005 ? <>Valor nominal <strong>{fmtReal(difNominal)}</strong> acima da tabela. </> : <>Valor nominal igual ao da tabela. </>}
+            {r.diferencaVPL < -0.005 ? <>Desconto em valor presente de <strong>{fmtReal(-r.diferencaVPL)}</strong>.</> : <>Sem desconto em valor presente.</>}
+          </p>
           {avisosGerais.length > 0 && (
             <ul className="prop-avisos">
               {avisosGerais.map((a, i) => <li key={i} className={a.nivel}>{a.texto}</li>)}

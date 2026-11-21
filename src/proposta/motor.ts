@@ -288,9 +288,18 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
 // Redistribuir ("atingir meta"): calcula o valor da parcela de uma série
 // para que o VPL da proposta fique igual ao da tabela (PV zero).
 // ---------------------------------------------------------------------
-export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], serieId: string): Serie[] | { erro: string } {
+export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], serieId: string, meta: 'pv' | 'nominal' = 'pv'): Serie[] | { erro: string } {
   const alvo = series.find((s) => s.id === serieId);
   if (!alvo) return { erro: 'Série não encontrada.' };
+  if (meta === 'nominal') {
+    // valor nominal da proposta igual ao valor total da tabela (sem desconto nominal; o PV pode ficar abaixo)
+    const totalTabela = total(parcelas(cfg, seriesDaTabela(cfg, u)));
+    const outras = series.filter((s) => s.id !== serieId).reduce((t, s) => t + s.valor * s.qtd, 0);
+    if (!(alvo.qtd >= 1)) return { erro: 'A série precisa ter número de parcelas.' };
+    const valor = Math.ceil(((totalTabela - outras) / alvo.qtd) * 100) / 100;
+    if (valor <= 0) return { erro: 'As outras séries já somam o valor da tabela; não sobra valor para esta série.' };
+    return series.map((s) => (s.id === serieId ? { ...s, valor } : s));
+  }
   const vplTabela = vpl(cfg, parcelas(cfg, seriesDaTabela(cfg, u)));
   const outras = vpl(cfg, parcelas(cfg, series.filter((s) => s.id !== serieId)));
   // VPL da série-alvo com parcela de R$ 1,00

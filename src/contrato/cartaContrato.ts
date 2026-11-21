@@ -2,7 +2,7 @@
 import { supabase } from '../dados';
 import { calcular, type Serie } from '../proposta/motor';
 import { carregarContexto, doBanco } from '../proposta/dadosProposta';
-import { gerarCarta, type DadosPasta, type PartesCarta, type ProponenteCarta } from '../proposta/carta';
+import { gerarCarta, gerarCartaWord, type DadosPasta, type PartesCarta, type ProponenteCarta } from '../proposta/carta';
 import { enderecoTexto } from './gerador';
 import type { DadosContrato, Pessoa } from './leitura';
 
@@ -21,7 +21,7 @@ export function partesDaLeitura(d: DadosContrato, comConjuge: boolean, pj: boole
   };
 }
 
-export async function cartaDaProposta(propostaId: string, partes?: PartesCarta | null, emp: Record<string, string> = {}): Promise<Blob> {
+export async function cartaDaProposta(propostaId: string, partes?: PartesCarta | null, emp: Record<string, string> = {}, o: { data?: string; formato?: 'pdf' | 'docx' } = {}): Promise<Blob> {
   const { data: p } = await supabase.from('propostas')
     .select('codigo, data_proposta, unidade_id, pasta_id, imobiliaria_id, criado_por, series, observacoes, comissao_pct, parte_sinal')
     .eq('id', propostaId).maybeSingle();
@@ -45,12 +45,12 @@ export async function cartaDaProposta(propostaId: string, partes?: PartesCarta |
     parteDoSinal: pr.parte_sinal != null ? Number(pr.parte_sinal) : undefined,
     diasVencimento: ctx.comercial.dias_vencimento, observacoes: pr.observacoes,
   });
-  const blob = await gerarCarta({
+  const blob = await (o.formato === 'docx' ? gerarCartaWord : gerarCarta)({
     codigo: pr.codigo, dataProposta: pr.data_proposta, empreendimento: ctx.nome,
     comercial: { ...ctx.comercial, vendedora: ctx.comercial.vendedora || emp['vendedora.razao_social'] || null, vendedora_cnpj: ctx.comercial.vendedora_cnpj || emp['vendedora.cnpj'] || null },
     unidade: { numero: unidade.numero, area: unidade.area, andar: unidade.andar }, pasta: (pasta as DadosPasta | null) ?? null,
     imobiliaria: (im as { nome: string } | null)?.nome ?? '', corretor: pr.criado_por ?? '',
-    series, resultado, observacoes: pr.observacoes, logoUrl: ctx.logoUrl, corDestaque: ctx.corDestaque, partes,
+    series, resultado, observacoes: pr.observacoes, logoUrl: ctx.logoUrl, corDestaque: ctx.corDestaque, partes, dataDocumento: o.data ?? null,
   }, { blob: true });
   if (!blob) throw new Error('Não foi possível gerar a carta proposta.');
   return blob;
