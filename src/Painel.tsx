@@ -1,8 +1,10 @@
 import { Leads, DetalheLead } from './Leads';
+import { Manual } from './manual/Manual';
+import type { ModuloManual, PapelManual } from './manual/conteudo';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  Home, FileSignature, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap, ScrollText, Megaphone,
+  Home, FileSignature, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap, ScrollText, Megaphone, BookOpen,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -334,6 +336,28 @@ function Casca({ perfil }: { perfil: Perfil }) {
   }, [avisar]);
   useSaidaPorInatividade(MINUTOS_INATIVIDADE, sair);
 
+  // Módulos visíveis por perfil (o manual usa a mesma regra do menu)
+  const modulosDe = useCallback((p: PapelManual): Set<ModuloManual> => {
+    const m = new Set<ModuloManual>();
+    const add = (cond: boolean, ...k: ModuloManual[]) => { if (cond) k.forEach((x) => m.add(x)); };
+    if (p === 'recepcao') { add(meetingAtivo, 'meeting'); return m; }
+    if (p === 'admin' || p === 'vendas') {
+      add(true, 'inicio', 'espelho');
+      add(tvAtiva, 'tv');
+      add(pastasAtivas, 'pastas');
+      add(funilAtivo, 'funil');
+      add(leadsLigados || p === 'admin', 'leads');
+      add(propostasLigadas || (p === 'admin' && propostasExiste), 'propostas', 'contratos');
+      add(portalAtivo, 'portal'); add(rodadasAtivas, 'rodadas'); add(treinosAtivos, 'treinamentos'); add(meetingAtivo, 'meeting');
+      add(p === 'admin', 'imobiliarias', 'empreendimento');
+      return m;
+    }
+    add(leadsLigados, 'leads'); add(pastasAtivas, 'pastas'); add(funilAtivo, 'funil'); add(propostasLigadas, 'propostas');
+    add(portalAtivo, 'portal'); add(rodadasAtivas, 'rodadas'); add(treinosAtivos, 'treinamentos'); add(espelhoParceiros, 'espelho');
+    add(p === 'imobiliaria', 'corretores');
+    return m;
+  }, [meetingAtivo, tvAtiva, pastasAtivas, funilAtivo, leadsLigados, propostasLigadas, propostasExiste, portalAtivo, rodadasAtivas, treinosAtivos, espelhoParceiros]);
+
   type Item = { c: string; r: string; i: ReactNode };
   const menu: Item[] = recepcao
     ? (meetingAtivo ? [{ c: '/painel/recepcao', r: 'Meeting', i: <ClipboardCheck size={18} /> }] : [])
@@ -367,6 +391,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(espelhoParceiros ? [{ c: '/painel/espelho', r: 'Espelho', i: <LayoutGrid size={18} /> }] : []),
     ];
   if (!menu.length) menu.push({ c: '/painel/sem-modulos', r: 'Início', i: <Home size={18} /> });
+  menu.push({ c: '/painel/manual', r: 'Manual', i: <BookOpen size={18} /> });
   const inicial = menu[0].c;
   const atual = rota === '/painel' ? inicial : rota;
   const ativo = (c: string) => (c === '/painel' ? atual === '/painel' : atual.startsWith(c));
@@ -378,7 +403,8 @@ function Casca({ perfil }: { perfil: Perfil }) {
   const idLead = atual.match(/^\/painel\/leads\/([^/]+)$/)?.[1];
   const idContrato = atual.match(/^\/painel\/contratos\/([^/]+)$/)?.[1];
   const catPortal = atual.match(/^\/painel\/portal(?:\/([a-z_]+))?$/);
-  if (recepcao) pagina = meetingAtivo ? <Recepcao /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
+  if (atual === '/painel/manual') pagina = <Manual papel={perfil.papel as PapelManual} modulosDe={modulosDe} />;
+  else if (recepcao) pagina = meetingAtivo ? <Recepcao /> : <Aviso texto="O Meeting não está liberado no momento. Fale com a equipe de vendas." />;
   else if (idLead && (leadsLigados || (admin && leadsVisiveis))) pagina = <DetalheLead key={idLead} id={idLead} perfil={perfil} />;
   else if (atual === '/painel/leads' && leadsVisiveis) pagina = <Leads perfil={perfil} />;
   else if (idProposta && propostasVisiveis) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
