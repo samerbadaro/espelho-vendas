@@ -21,6 +21,7 @@ export interface Marca {
   modulo_meeting: boolean;
   modulo_treinamentos?: boolean;
   modulo_propostas?: boolean;
+  modulo_leads?: boolean;
   modulo_tv: boolean;
   modulo_cadastro: boolean;
   modulo_espelho_parceiros: boolean;

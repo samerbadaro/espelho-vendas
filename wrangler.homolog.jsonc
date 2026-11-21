@@ -8,6 +8,7 @@
   "workers_dev": true,
   "routes": [{ "pattern": "homolog.gestorlm.com.br", "custom_domain": true }],
   "build": { "command": "npm run build:homolog" },
+  "triggers": { "crons": ["* * * * *"] },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

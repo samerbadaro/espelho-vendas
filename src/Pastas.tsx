@@ -198,7 +198,14 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
   const pixIntegrado = cfgPix?.pix_modo === 'integrado';
   const equipe = ehEquipe(perfil);
   const [pasta, setPasta] = useState<Pasta | null>(null);
-  const [form, setForm] = useState<Form>(FORM_VAZIO);
+  // Pasta criada a partir de um lead: já vem com nome, telefone e e-mail
+  const [doLead] = useState<{ lead: string; nome: string | null; telefone: string | null; email: string | null; imobiliaria_id: string | null } | null>(() => {
+    if (!nova) return null;
+    try { const v = sessionStorage.getItem('lead-para-pasta'); sessionStorage.removeItem('lead-para-pasta'); return v ? JSON.parse(v) : null; } catch { return null; }
+  });
+  const [form, setForm] = useState<Form>(() => (doLead ? {
+    ...FORM_VAZIO, comprador_nome: doLead.nome ?? '', comprador_telefone: doLead.telefone ?? '', comprador_email: doLead.email ?? '', imobiliaria_id: doLead.imobiliaria_id ?? '',
+  } : FORM_VAZIO));
   const [editando, setEditando] = useState(nova);
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
@@ -281,6 +288,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       setSalvando(false);
       if (error || !data) { setErro('Não foi possível criar a pasta. Confira os dados e tente novamente.'); return; }
       if (corretorNovo) await supabase.rpc('atribuir_corretor', { p_pasta: data.id, p_corretor: corretorNovo });
+      if (doLead) await supabase.rpc('vincular_pasta_lead', { p_lead: doLead.lead, p_pasta: data.id });
       ir(`/painel/pastas/${data.id}`);
     } else {
       const { error } = await supabase.from('pastas').update(dados).eq('id', id);
