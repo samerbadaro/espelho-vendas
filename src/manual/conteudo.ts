@@ -44,9 +44,20 @@ const PARCEIROS: PapelManual[] = ['imobiliaria', 'corretor'];
 const TODOS: PapelManual[] = ['admin', 'vendas', 'imobiliaria', 'corretor'];
 
 /** Atualizado a cada entrega (data da última revisão do manual). */
-export const REVISAO_MANUAL = '21/11/2026';
+export const REVISAO_MANUAL = '22/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
+  {
+    data: '22/11/2026', titulo: 'Cliente desistiu e devolução de Pix',
+    itens: [
+      'Botão “Cliente desistiu” na pasta, com motivo.',
+      'Com Pix cadastrado, a pasta vai para “Devolução de Pix”; sem Pix, fica “Cliente cancelado”.',
+    ],
+  },
+  {
+    data: '22/11/2026', titulo: 'Fluxo consolidado', papeis: ['admin'],
+    itens: ['Fluxo mensal das propostas aprovadas, com a comissão abatida, filtros, estatísticas e exportação.'],
+  },
   {
     data: '21/11/2026', titulo: 'Pastas de empresa: 2º representante e estado civil',
     itens: [
@@ -308,6 +319,24 @@ export const CAPITULOS: Capitulo[] = [
         atencao: 'Depois de submetida, a imobiliária e o corretor não editam mais os dados do comprador; só substituem documentos recusados. Para corrigir um dado, fale com a Sec. Vendas.',
       },
       {
+        titulo: 'Cliente desistiu', papeis: [...PARCEIROS, ...EQUIPE],
+        passos: [
+          'Abra a pasta e clique em “Cliente desistiu”.',
+          'Escreva o motivo da desistência e clique em “Registrar desistência”. Confirme.',
+          'Se a pasta tinha Pix cadastrado (comprovante anexado ou Pix pago pelo sistema), ela vai para “Devolução de Pix”. Sem Pix, fica como “Cliente cancelado”.',
+          'A pasta deixa de receber documentos e sai do funil.',
+        ],
+        atencao: 'Se a pasta tem unidade em negociação no espelho, libere a unidade primeiro. O Pix é devolvido em até 48 horas depois da desistência.',
+      },
+      {
+        titulo: 'Devolução de Pix', papeis: EQUIPE,
+        passos: [
+          'Em Pastas, filtre o status “Devolução de Pix” (o Início mostra quantas estão na fila).',
+          'Devolva o Pix ao cliente pelo banco.',
+          'Abra a pasta, escreva uma observação se quiser (por exemplo, a data da devolução) e clique em “Pix devolvido: mover para Cliente cancelado”.',
+        ],
+      },
+      {
         titulo: 'Corretor responsável', papeis: ['imobiliaria', ...EQUIPE],
         texto: 'Na pasta, escolha o corretor que acompanha a venda. Ele passa a ver a pasta, o funil e o andamento das unidades daquela venda. A imobiliária vê as pastas de todos os seus corretores.',
       },
@@ -434,6 +463,30 @@ export const CAPITULOS: Capitulo[] = [
           'Recusar ou cancelar: o motivo é obrigatório.',
         ],
         dica: 'Com o módulo desligado, só o administrador vê Propostas (para testar). Tabela, taxa e comissão são configuradas pela Launch; dias de vencimento e alçadas, pelo administrador em “Parâmetros da proposta”.',
+      },
+    ],
+  },
+
+  // =========================================================================
+  {
+    id: 'fluxo', modulo: 'propostas', titulo: 'Fluxo consolidado', papeis: ['admin'],
+    resumo: 'O fluxo de recebimento do incorporador com todas as propostas aprovadas, mês a mês, já sem a comissão.',
+    responsabilidades: { admin: ['Acompanhar a curva de recebimento e exportar o fluxo para as análises de caixa.'] },
+    blocos: [
+      {
+        titulo: 'O que entra no fluxo',
+        texto: 'Entram as propostas aprovadas (a mais recente de cada unidade). Ficam de fora as pastas de clientes que desistiram. Os valores são nominais, sem correção pelo INCC. A comissão sai do sinal; o que o sinal não cobre sai das parcelas seguintes. Permutas não entram no caixa.',
+      },
+      {
+        titulo: 'Usar a tela',
+        passos: [
+          'No menu, abra “Fluxo consolidado”.',
+          'Filtre por Unidade, Imobiliária, Cliente, Tipologia ou Final. O botão “Consolidado” limpa os filtros.',
+          'Os quadros mostram unidades, VGV aprovado, comissão, líquido do incorporador, quanto entra até as chaves e quanto vem do financiamento.',
+          'Na “Curva de recebimento”, escolha “Mensal” ou “Anual”. As barras são o líquido do período; a linha é o % acumulado.',
+          'A tabela mostra bruto, comissão, líquido, acumulado e % acumulado de cada período. “Exportar CSV” baixa essa tabela para o Excel.',
+          'Em “Estatísticas”, agrupe por imobiliária, tipologia ou final para ver unidades, VGV, ticket médio, R$/m², comissão e líquido.',
+        ],
       },
     ],
   },

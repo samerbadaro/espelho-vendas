@@ -137,3 +137,28 @@ select.celula { cursor: pointer; }
 .param-check { display: flex; align-items: center; gap: 8px; }
 .param-check input { width: auto; margin: 0; }
 .parametros-proposta .grade-campos { max-width: 620px; }
+
+/* Fluxo consolidado */
+.fluxo-consolidado .cartao { margin-bottom: 16px; }
+.fluxo-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+.fluxo-filtros label { display: grid; gap: 4px; font-size: 0.8125rem; font-weight: 600; min-width: 150px; flex: 1 1 150px; }
+.fluxo-filtros .botao { flex: 0 0 auto; }
+.kpis.fluxo-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
+.fluxo-kpis .kpi-valor { font-size: 1.35rem; }
+@media (max-width: 760px) { .kpis.fluxo-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fluxo-grafico svg { width: 100%; height: auto; display: block; }
+.fluxo-grafico .grade { stroke: var(--borda); stroke-width: 1; }
+.fluxo-grafico .eixo { font-size: 11px; fill: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.fluxo-grafico rect.barra-chaves { fill: var(--primaria); }
+.fluxo-grafico rect.barra-pos { fill: var(--apoio, #D0BFAE); }
+.fluxo-grafico .linha-acum { fill: none; stroke: var(--destaque); stroke-width: 2.5; }
+.fluxo-legenda { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: 0.8125rem; color: var(--tinta-2); margin-top: 6px; }
+.fluxo-legenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+.fluxo-legenda i.barra-chaves { background: var(--primaria); }
+.fluxo-legenda i.barra-pos { background: var(--apoio, #D0BFAE); }
+.fluxo-legenda i.linha-acum { height: 3px; background: var(--destaque); }
+.fluxo-legenda strong { color: var(--tinta); margin-left: auto; }
+.fluxo-tabela tr.zerado td { color: var(--tinta-2); }
+.fluxo-tabela tfoot td { font-weight: 700; border-top: 1px solid var(--borda-forte); padding: 11px 14px; }
+.em-linha { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 600; }
+.em-linha select { width: auto; }

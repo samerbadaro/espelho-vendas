@@ -74,7 +74,7 @@ export const conjugeNoContrato = (e: EstadoCivil, regime: string | null | undefi
   (tipo ?? 'pf') === 'pf' && temConjuge(e) && (!ehSeparacao(regime) || participa !== false);
 export type TipoPessoa = 'pf' | 'pj';
 
-export type StatusPasta = 'incompleta' | 'pronta' | 'aguardando_analise' | 'em_analise' | 'pendente_correcao' | 'aprovada';
+export type StatusPasta = 'incompleta' | 'pronta' | 'aguardando_analise' | 'em_analise' | 'pendente_correcao' | 'aprovada' | 'devolucao_pix' | 'cancelada';
 export const STATUS_PASTA: { valor: StatusPasta; rotulo: string }[] = [
   { valor: 'incompleta', rotulo: 'Incompleta' },
   { valor: 'pronta', rotulo: 'Pronta para submeter' },
@@ -82,7 +82,11 @@ export const STATUS_PASTA: { valor: StatusPasta; rotulo: string }[] = [
   { valor: 'em_analise', rotulo: 'Em análise' },
   { valor: 'pendente_correcao', rotulo: 'Pendente de correção' },
   { valor: 'aprovada', rotulo: 'Documentação aprovada' },
+  { valor: 'devolucao_pix', rotulo: 'Devolução de Pix' },
+  { valor: 'cancelada', rotulo: 'Cliente cancelado' },
 ];
+/** Cliente desistiu: a pasta sai do fluxo (devolução de Pix ou cancelada). */
+export const desistiu = (s: string) => s === 'devolucao_pix' || s === 'cancelada';
 export const rotuloPasta = (s: StatusPasta) => STATUS_PASTA.find((x) => x.valor === s)?.rotulo ?? s;
 
 export type StatusDocumento = 'enviado' | 'em_analise' | 'aprovado' | 'recusado';

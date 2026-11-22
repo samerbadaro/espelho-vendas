@@ -304,6 +304,8 @@ button.unidade:hover { transform: translateY(-1px) scale(1.05); position: relati
 .sp-em_analise, .sd-em_analise         { --fundo-selo: #F6EBD3; --cor-selo: #7F5309; }
 .sp-pendente_correcao, .sd-recusado    { --fundo-selo: #F8E2DF; --cor-selo: #8E2A23; }
 .sp-aprovada, .sd-aprovado             { --fundo-selo: #DFF1E5; --cor-selo: #21683F; }
+.sp-devolucao_pix                      { --fundo-selo: #FBE3D2; --cor-selo: #8A3B0B; }
+.sp-cancelada                          { --fundo-selo: #E4E4E0; --cor-selo: #4A4A45; text-decoration: line-through; }
 
 /* ===== Formulários em grade ===== */
 .grade-campos { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 16px; }
@@ -1086,3 +1088,12 @@ small.bloco { display: block; color: var(--tinta-2); }
 .ct-data input[type="date"], .cartao .ct-data input[type="date"], section .ct-data input[type="date"] { width: auto; max-width: 190px; flex: 0 0 auto; }
 .acoes-esquerda { display: flex; gap: 8px; margin: 4px 0 12px; }
 .titulo-linha { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* Desistência do cliente */
+.desistencia { margin: 12px 0; display: grid; gap: 6px; }
+.desistencia > .botao { justify-self: start; }
+.desistencia.devolucao_pix, .desistencia.cancelada { padding: 14px 16px; border-radius: 10px; border: 1px solid #E9C9B2; background: #FDF3EC; }
+.desistencia.cancelada { border-color: #D6D6D0; background: #F3F3F0; }
+.desistencia p { margin: 0; }
+.desistencia-acao { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.desistencia-acao label { display: grid; gap: 4px; flex: 1 1 320px; }

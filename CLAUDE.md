@@ -73,8 +73,9 @@ O push na branch publica sozinho (cerca de 1 minuto). Segredos do servidor no Cl
   (`gerador.ts`, `marcadores.ts`), envelope D4Sign (`Envelope.tsx`), data do contrato.
 - `src/manual/`: manual por perfil (`conteudo.ts`) e página (`Manual.tsx`).
 - `worker/`: `index.ts` (rotas e cron), `d4sign.ts`, `leads.ts` (entrada da planilha e avisos Brevo).
-- `supabase/migrations/001…049`: 035 propostas, 041–046 contratos/D4Sign/Pix, 047 leads,
-  048 vídeos do manual, 049 PJ com 2º representante.
+- `supabase/migrations/001…050`: 035 propostas, 041–046 contratos/D4Sign/Pix, 047 leads,
+  048 vídeos do manual, 049 PJ com 2º representante, 050 desistência (Devolução de Pix → Cliente cancelado).
+- `src/proposta/Fluxo.tsx`: fluxo consolidado do incorporador (só admin, /painel/fluxo).
 - Testes locais do banco: `/tmp/rodar.sh` (Postgres local) quando existir; senão, rode os testes no banco de homologação.
 - Prévia local: `.preview/` (Supabase simulado; `?logado`, `&imob`, `&corretor`, `&contrato`).
 
