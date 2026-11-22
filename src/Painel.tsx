@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import type { Session } from '@supabase/supabase-js';
 import {
   Home, FileSignature, LayoutGrid, FolderOpen, Building2, Users, Settings, LogOut, ExternalLink, Tv, Menu, X, Kanban, Handshake, ClipboardCheck, Library, GraduationCap, ScrollText, Megaphone, BookOpen,
+  LineChart,
 } from 'lucide-react';
 import {
   supabase, configurado, useEspelho, STATUS, rotuloStatus, formatarArea, formatarDataHora, formatarReais, lerNumero,
@@ -22,6 +23,7 @@ import { Recepcao } from './Recepcao';
 import { Treinamentos } from './Treinamentos';
 import { Portal } from './Portal';
 import { ListaPropostas, PaginaProposta } from './proposta/Propostas';
+import { FluxoConsolidado } from './proposta/Fluxo';
 import { ListaContratos, PaginaContrato } from './contrato/Contratos';
 import { useRota, ir, CAMPOS_PERFIL, formatarCPF, formatarCNPJ, cpfValido, cnpjValido, nomeCompleto, ERROS_CADASTRO, type Perfil } from './util';
 import { Logo, useMarca, useDialogos, useSaidaPorInatividade } from './ui';
@@ -370,6 +372,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
       ...(funilAtivo ? [{ c: '/painel/funil', r: 'Funil de vendas', i: <Kanban size={18} /> }] : []),
       ...(propostasVisiveis ? [{ c: '/painel/propostas', r: 'Propostas', i: <FileSignature size={18} /> }] : []),
       ...(propostasVisiveis ? [{ c: '/painel/contratos', r: 'Contratos', i: <ScrollText size={18} /> }] : []),
+      ...(propostasVisiveis && admin ? [{ c: '/painel/fluxo', r: 'Fluxo consolidado', i: <LineChart size={18} /> }] : []),
       ...(portalAtivo ? [{ c: '/painel/portal', r: 'Portal do Corretor', i: <Library size={18} /> }] : []),
       ...(rodadasAtivas ? [{ c: '/painel/rodadas', r: 'Rodadas de negócios', i: <Handshake size={18} /> }] : []),
       ...(treinosAtivos ? [{ c: '/painel/treinamentos', r: 'Treinamentos', i: <GraduationCap size={18} /> }] : []),
@@ -409,6 +412,7 @@ function Casca({ perfil }: { perfil: Perfil }) {
   else if (atual === '/painel/leads' && leadsVisiveis) pagina = <Leads perfil={perfil} />;
   else if (idProposta && propostasVisiveis) pagina = <PaginaProposta key={idProposta} id={idProposta} perfil={perfil} />;
   else if (atual === '/painel/propostas' && propostasVisiveis) pagina = <ListaPropostas perfil={perfil} />;
+  else if (atual === '/painel/fluxo' && propostasVisiveis && admin) pagina = <FluxoConsolidado />;
   else if (idContrato && equipe && propostasVisiveis) pagina = <PaginaContrato key={idContrato} id={idContrato} perfil={perfil} />;
   else if (atual === '/painel/contratos' && equipe && propostasVisiveis) pagina = <ListaContratos />;
   else if (catPortal && portalAtivo) pagina = <Portal key={catPortal[1] ?? 'inicio'} perfil={perfil} categoria={catPortal[1]} />;

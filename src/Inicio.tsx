@@ -85,6 +85,7 @@ export function Inicio({ perfil }: { perfil: Perfil }) {
             <Kpi valor={n('pendente_correcao')} rotulo="Pendentes de correção" detalhe="Aguardando a imobiliária" cor="vendida" />
             <Kpi valor={n('aprovada')} rotulo="Documentação aprovada" cor="disponivel" />
             <Kpi valor={(ind?.pastas_total ?? 0) - (ind?.pastas_submetidas ?? 0)} rotulo="Em preparação" detalhe="Ainda não submetidas" />
+            {n('devolucao_pix') > 0 && <Kpi valor={n('devolucao_pix')} rotulo="Devolução de Pix" detalhe="Cliente desistiu: devolver o Pix" cor="vendida" />}
           </div>
         </div>
       )}

@@ -6,7 +6,7 @@ import { zipSync } from 'fflate';
 import { PixDaPasta, useConfigPix } from './PixSinal';
 import {
   ir, chamarApi, soDigitos, formatarCPF, cpfValido, formatarCNPJ, cnpjValido, formatarTelefone, formatarData, formatarTamanho,
-  ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, temConjuge, ROTULO_DOC, REGIMES, ehSeparacao, conjugeNoContrato, type RegimeBens, type TipoPessoa,
+  ESTADOS_CIVIS, STATUS_PASTA, rotuloPasta, desistiu, temConjuge, ROTULO_DOC, REGIMES, ehSeparacao, conjugeNoContrato, type RegimeBens, type TipoPessoa,
   type EstadoCivil, type StatusPasta, type StatusDocumento, type Perfil,
 } from './util';
 
@@ -184,6 +184,8 @@ interface Pasta {
   codigo_aprovacao: string | null; submetida_em: string | null; submetida_por: string | null;
   imobiliarias?: { nome: string } | null; unidades_numeros?: string | null;
   representante2?: Representante2 | null;
+  desistencia_em?: string | null; desistencia_por?: string | null; desistencia_motivo?: string | null; status_antes_desistencia?: string | null;
+  pix_devolvido_em?: string | null; pix_devolvido_por?: string | null; pix_devolucao_obs?: string | null;
 }
 /** 2º representante legal (só pessoa jurídica). */
 interface Representante2 { nome: string; cpf: string; nascimento: string | null; telefone: string; email: string; profissao: string; estado_civil: EstadoCivil }
@@ -342,7 +344,7 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
       <form className="cartao" onSubmit={salvar}>
         <div className="cartao-topo">
           <h3>{pj ? 'Comprador pessoa jurídica' : 'Dados do comprador'}</h3>
-          {!nova && !editando && (equipe || !pasta!.codigo_aprovacao) && <button type="button" className="botao" onClick={() => setEditando(true)}>Editar dados</button>}
+          {!nova && !editando && !desistiu(pasta!.status) && (equipe || !pasta!.codigo_aprovacao) && <button type="button" className="botao" onClick={() => setEditando(true)}>Editar dados</button>}
         </div>
         <fieldset disabled={!editando || salvando} className="grade-campos">
           {nova && equipe && (
@@ -468,7 +470,8 @@ export function DetalhePasta({ id, perfil }: { id: string; perfil: Perfil }) {
         )}
       </form>
 
-      {!nova && <Submissao pasta={pasta!} equipe={equipe} aoSubmeter={() => setRecarga((n) => n + 1)} />}
+      {!nova && <Desistencia pasta={pasta!} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
+      {!nova && !desistiu(pasta!.status) && <Submissao pasta={pasta!} equipe={equipe} aoSubmeter={() => setRecarga((n) => n + 1)} />}
       {!nova && pixIntegrado && <PixDaPasta pastaId={id} codigoPasta={pasta!.codigo} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && <Documentos pixIntegrado={pixIntegrado} pasta={pasta!} estadoCivil={pasta!.estado_civil} conjuge={conjugeNoContrato(pasta!.estado_civil, pasta!.regime_bens, pasta!.conjuge_participa, pasta!.tipo_pessoa)} equipe={equipe} aoMudar={() => setRecarga((n) => n + 1)} />}
       {!nova && <HistoricoPasta pastaId={id} recarga={recarga} />}
@@ -604,7 +607,7 @@ function LinhaDocumento({ tipo, pasta, equipe, obrigatorio, docs, aoMudar }: {
   const anteriores = docs.filter((d) => !d.atual);
   const principal = atuais[0];
   const situacao: StatusDocumento | 'pendente' = tipo.multiplo ? (atuais.length ? 'enviado' : 'pendente') : principal?.status ?? 'pendente';
-  const podeEnviar = equipe || tipo.multiplo || !principal || principal.status === 'enviado' || principal.status === 'recusado';
+  const podeEnviar = !desistiu(pasta.status) && (equipe || tipo.multiplo || !principal || principal.status === 'enviado' || principal.status === 'recusado');
 
   const enviar = async (arquivo: File) => {
     setErro('');
@@ -779,6 +782,80 @@ function HistoricoPasta({ pastaId, recarga }: { pastaId: string; recarga: number
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Cliente desistiu → Devolução de Pix (se havia Pix) → Cliente cancelado
+// ---------------------------------------------------------------------
+function Desistencia({ pasta, equipe, aoMudar }: { pasta: Pasta; equipe: boolean; aoMudar: () => void }) {
+  const { confirmar, avisar } = useDialogos();
+  const [abrir, setAbrir] = useState(false);
+  const [texto, setTexto] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const registrar = async () => {
+    setErro('');
+    if (!texto.trim()) { setErro('Informe o motivo da desistência.'); return; }
+    if (!(await confirmar({ titulo: `Registrar a desistência de ${pasta.comprador_nome}?`, texto: 'Se houver Pix cadastrado, a pasta vai para a fila de Devolução de Pix; sem Pix, o cliente fica cancelado. A pasta deixa de receber documentos. Não dá para desfazer pelo sistema.', confirmar: 'Cliente desistiu', perigo: true }))) return;
+    setEnviando(true);
+    const { data, error } = await supabase.rpc('cliente_desistiu', { p_pasta: pasta.id, p_motivo: texto });
+    setEnviando(false);
+    if (error) {
+      setErro(error.message.includes('UNIDADE_VINCULADA') ? 'Esta pasta tem unidade em negociação no espelho. Libere a unidade no espelho e registre a desistência de novo.'
+        : error.message.includes('JA_DESISTIU') ? 'A desistência já foi registrada.'
+        : 'Não foi possível registrar a desistência. Tente novamente.');
+      return;
+    }
+    avisar((data as Pasta).status === 'devolucao_pix' ? 'Desistência registrada. A pasta foi para a Devolução de Pix.' : 'Desistência registrada. Cliente cancelado.');
+    setAbrir(false); setTexto(''); aoMudar();
+  };
+
+  const devolvido = async () => {
+    setErro('');
+    if (!(await confirmar({ titulo: 'Confirmar a devolução do Pix?', texto: 'Confirme só depois de o Pix ter sido devolvido ao cliente. A pasta passa a "Cliente cancelado".', confirmar: 'Pix devolvido' }))) return;
+    setEnviando(true);
+    const { error } = await supabase.rpc('confirmar_devolucao_pix', { p_pasta: pasta.id, p_obs: texto });
+    setEnviando(false);
+    if (error) { setErro('Não foi possível confirmar a devolução. Tente novamente.'); return; }
+    avisar('Pix devolvido. Cliente cancelado.');
+    setTexto(''); aoMudar();
+  };
+
+  if (pasta.status === 'devolucao_pix' || pasta.status === 'cancelada') {
+    return (
+      <div className={`desistencia ${pasta.status}`}>
+        <p><strong>{pasta.status === 'devolucao_pix' ? 'Cliente desistiu: devolver o Pix' : 'Cliente cancelado'}</strong></p>
+        <p className="dica">
+          Desistência registrada{pasta.desistencia_em && <> em {formatarDataHora(pasta.desistencia_em)}</>}{pasta.desistencia_por && <> por {pasta.desistencia_por}</>}.
+          {pasta.desistencia_motivo && <> Motivo: {pasta.desistencia_motivo}.</>}
+          {pasta.pix_devolvido_em && <> Pix devolvido em {formatarDataHora(pasta.pix_devolvido_em)}{pasta.pix_devolvido_por && <> por {pasta.pix_devolvido_por}</>}{pasta.pix_devolucao_obs && <> ({pasta.pix_devolucao_obs})</>}.</>}
+        </p>
+        {pasta.status === 'devolucao_pix' && (equipe ? (
+          <div className="desistencia-acao">
+            <label>Observação da devolução (opcional)<input value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={500} placeholder="Ex.: devolvido pelo Itaú em 25/11, comprovante no e-mail" /></label>
+            <button className="botao principal" disabled={enviando} onClick={devolvido}>{enviando ? 'Salvando…' : 'Pix devolvido: mover para Cliente cancelado'}</button>
+          </div>
+        ) : <p className="dica">O administrativo devolve o Pix em até 48 horas e depois marca a pasta como Cliente cancelado.</p>)}
+        {erro && <p className="erro">{erro}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="desistencia">
+      {!abrir ? (
+        <button type="button" className="botao perigo" onClick={() => setAbrir(true)}>Cliente desistiu</button>
+      ) : (
+        <div className="desistencia-acao">
+          <label>Motivo da desistência<input autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={500} placeholder="Ex.: comprou em outro empreendimento" /></label>
+          <button type="button" className="botao" onClick={() => { setAbrir(false); setErro(''); }}>Voltar</button>
+          <button type="button" className="botao perigo" disabled={enviando} onClick={registrar}>{enviando ? 'Registrando…' : 'Registrar desistência'}</button>
+        </div>
+      )}
+      {erro && <p className="erro">{erro}</p>}
     </div>
   );
 }
