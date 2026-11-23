@@ -32,7 +32,11 @@ async function d4(env: EnvD4, caminho: string, init: RequestInit = {}) {
   let j: unknown;
   try { j = JSON.parse(txt); } catch { j = { message: txt }; }
   if (!r.ok) {
-    const m = (j as { mensagem_pt?: string; message?: string })?.mensagem_pt || (j as { message?: string })?.message || `erro ${r.status}`;
+    const m = (j as { mensagem_pt?: string; message?: string; error?: string })?.mensagem_pt || (j as { error?: string })?.error || (j as { message?: string })?.message || `erro ${r.status}`;
+    if (/tempo limite|time limit|rate/i.test(m)) {
+      console.log('D4Sign limite', r.status, caminho.split('?')[0]);
+      throw new ErroD4('A D4Sign limitou as chamadas desta chave de API por um tempo. Aguarde cerca de uma hora e tente de novo; o envelope continua montado.');
+    }
     const etapa = caminho.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, '…');
     console.log('D4Sign erro', r.status, etapa, txt.slice(0, 500));
     throw new ErroD4(r.status === 429 || /limit/i.test(m) ? 'Limite de uso da D4Sign atingido. Tente de novo mais tarde.' : `D4Sign: ${m} (etapa ${etapa}${txt && !/^\s*$/.test(txt) && m === `erro ${r.status}` ? `: ${txt.slice(0, 160)}` : ''})`);
