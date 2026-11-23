@@ -6,6 +6,7 @@
  * própria D4Sign (e confere o HMAC quando D4SIGN_HMAC existe).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { PDFDocument } from 'pdf-lib';
 
 export interface EnvD4 {
   SUPABASE_URL: string;
@@ -44,7 +45,7 @@ async function d4(env: EnvD4, caminho: string, init: RequestInit = {}) {
   return j;
 }
 
-interface DocEnv { tipo: 'contrato' | 'fixo'; id: string; nome: string; versao?: number; arquivo: string; d4sign_uuid?: string | null }
+interface DocEnv { tipo: 'contrato' | 'fixo'; id: string; nome: string; versao?: number; arquivo: string; d4sign_uuid?: string | null; /** página onde o documento começa no PDF único */ pagina_inicial?: number }
 interface Envelope {
   id: string; pasta_id: string; proposta_id: string | null; d4sign_uuid: string | null; status: string; documentos: DocEnv[];
 }
@@ -150,55 +151,60 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       const { data: fs } = idsF.length ? await adm.from('contrato_anexos_fixos').select('*').in('id', idsF).eq('ativo', true) : { data: [] };
       const fixos = (fs ?? []) as { id: string; nome: string; caminho: string; arquivo: string | null; ordem: number }[];
 
-      // ordem: Quadro Resumo (principal), Normas, Carta Proposta, fixos na ordem cadastrada
-      const pos: Record<string, number> = { quadro_resumo: 0, normas: 1, carta_proposta: 2 };
-      contratos.sort((a, b) => (pos[a.documento] ?? 9) - (pos[b.documento] ?? 9));
-      fixos.sort((a, b) => a.ordem - b.ordem);
-      const itens: (DocEnv & { caminho: string; mime: string })[] = [
+      // ordem do envelope: Carta Proposta, Contrato de Intermediação (quando houver), Quadro Resumo,
+      // Normas Contratuais e os demais documentos fixos na ordem cadastrada
+      const intermed = (t: string) => /intermedia/i.test(t);
+      const peso = (tipo: 'contrato' | 'fixo', documento: string, nome: string, ordem = 0) =>
+        documento === 'carta_proposta' ? 0 : intermed(`${documento} ${nome}`) ? 1 : documento === 'quadro_resumo' ? 2 : documento === 'normas' ? 3 : tipo === 'contrato' ? 4 : 5 + ordem / 1000;
+      const itens: (DocEnv & { caminho: string; mime: string; peso: number })[] = [
         ...contratos.map((c) => {
           const usaPdf = !!c.caminho;
           return { tipo: 'contrato' as const, id: c.id, nome: c.nome, versao: c.versao, caminho: (usaPdf ? c.caminho : c.caminho_docx)!, mime: usaPdf ? 'application/pdf' : DOCX,
-            arquivo: nomeArquivo(`${c.numero} - ${c.nome} (v${c.versao}).${usaPdf ? 'pdf' : 'docx'}`) };
+            arquivo: nomeArquivo(`${c.numero} - ${c.nome} (v${c.versao}).${usaPdf ? 'pdf' : 'docx'}`), peso: peso('contrato', c.documento, c.nome) };
         }),
         ...fixos.map((f) => ({ tipo: 'fixo' as const, id: f.id, nome: f.nome, caminho: f.caminho, mime: /\.docx$/i.test(f.caminho) ? DOCX : 'application/pdf',
-          arquivo: nomeArquivo(f.arquivo || `${f.nome}.${/\.docx$/i.test(f.caminho) ? 'docx' : 'pdf'}`) })),
-      ];
+          arquivo: nomeArquivo(f.arquivo || `${f.nome}.${/\.docx$/i.test(f.caminho) ? 'docx' : 'pdf'}`), peso: peso('fixo', '', `${f.nome} ${f.arquivo ?? ''}`, f.ordem) })),
+      ].sort((a, b) => a.peso - b.peso);
       if (itens.some((i) => !i.caminho)) return erro('Há documento sem arquivo.');
+      const semPdf = itens.filter((i) => i.mime !== 'application/pdf');
+      if (semPdf.length) return erro(`Para juntar o envelope num arquivo só, todos os documentos precisam estar em PDF. Em Word: ${semPdf.map((i) => i.nome).join(', ')}.`);
 
-      const uuidCofre = await cofre(env, adm);
-      const subir = async (i: (typeof itens)[number], destino: string) => {
+      // nome na D4Sign: unidade - empreendimento - cliente (ex.: 206 - Duo Haus - Fulano de Tal)
+      const [{ data: pa }, { data: cfg }, { data: pr }] = await Promise.all([
+        adm.from('pastas').select('comprador_nome, tipo_pessoa, empresa_razao_social').eq('id', pasta).maybeSingle(),
+        adm.from('config').select('nome_empreendimento').eq('id', 1).maybeSingle(),
+        contratos[0].proposta_id ? adm.from('propostas').select('unidades(numero)').eq('id', contratos[0].proposta_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const unidade = ((pr as { unidades?: { numero?: string } } | null)?.unidades?.numero) ?? '';
+      const emp = String(cfg?.nome_empreendimento ?? '').split(/\s+[–—-]\s+/)[0].trim();
+      const cliente = (pa?.tipo_pessoa === 'pj' ? pa?.empresa_razao_social : pa?.comprador_nome) ?? '';
+      const nomeEnvelope = nomeArquivo([unidade, emp, cliente].filter((x) => String(x).trim()).join(' - ') || 'Contrato') + '.pdf';
+
+      // junta tudo num PDF só: a D4Sign conta as chamadas por hora, e um arquivo único gasta uma só
+      const unico = await PDFDocument.create();
+      const docs: DocEnv[] = [];
+      for (const i of itens) {
         const { data: arq } = await adm.storage.from('contratos').download(i.caminho);
         if (!arq) throw new ErroD4(`Não foi possível ler o arquivo "${i.nome}".`);
-        const fd = new FormData();
-        fd.append('file', new File([arq], i.arquivo, { type: i.mime }));
-        return (await d4(env, destino, { method: 'POST', body: fd })) as { uuid?: string };
-      };
-      const principal = await subir(itens[0], `/documents/${uuidCofre}/upload`);
+        let origemPdf: PDFDocument;
+        try { origemPdf = await PDFDocument.load(await arq.arrayBuffer(), { ignoreEncryption: true }); }
+        catch { throw new ErroD4(`O arquivo "${i.nome}" não é um PDF válido.`); }
+        const inicio = unico.getPageCount() + 1;
+        const paginas = await unico.copyPages(origemPdf, origemPdf.getPageIndices());
+        paginas.forEach((pg) => unico.addPage(pg));
+        const { caminho: _c, mime: _m, peso: _p, ...resto } = i;
+        docs.push({ ...resto, pagina_inicial: inicio });
+      }
+      const bytes = await unico.save();
+      const uuidCofre = await cofre(env, adm);
+      const fd = new FormData();
+      fd.append('file', new File([bytes], nomeEnvelope, { type: 'application/pdf' }));
+      const principal = (await d4(env, `/documents/${uuidCofre}/upload`, { method: 'POST', body: fd })) as { uuid?: string };
       if (!principal.uuid) throw new ErroD4('A D4Sign não devolveu o identificador do documento.');
-      const docs: DocEnv[] = [{ ...itens[0], d4sign_uuid: principal.uuid }];
-      // a D4Sign mostra os anexos do mais novo para o mais antigo: subimos do último para o primeiro,
-      // para o envelope ficar na ordem Quadro Resumo, Normas, Carta Proposta, documentos fixos
-      const anexos = itens.slice(1);
-      const uuids: Record<string, string | null> = {};
-      for (const i of [...anexos].reverse()) {
-        const r = await subir(i, `/documents/${principal.uuid}/uploadslave`);
-        uuids[i.arquivo] = r.uuid ?? null;
-      }
-      // a resposta do upload de anexo não traz o identificador: busca na lista de anexos pelo nome do arquivo
-      if (anexos.some((i) => !uuids[i.arquivo])) {
-        const l = (await d4(env, `/documents/${principal.uuid}/listslaves`).catch(() => null)) as unknown;
-        const lista = (Array.isArray(l) ? l : Array.isArray((l as { data?: unknown })?.data) ? (l as { data: unknown[] }).data : []) as Record<string, string>[];
-        for (const x of lista) {
-          const nome = x.nameDoc ?? x.name_document ?? x.nome ?? '';
-          const id = x.uuidDoc ?? x.uuid_doc ?? x.uuid ?? '';
-          const alvo = anexos.find((i) => i.arquivo === nome || nome.startsWith(i.arquivo.replace(/\.(pdf|docx)$/i, '')));
-          if (alvo && id && !uuids[alvo.arquivo]) uuids[alvo.arquivo] = id;
-        }
-      }
-      for (const i of anexos) docs.push({ ...i, d4sign_uuid: uuids[i.arquivo] ?? null });
+      for (const d of docs) d.d4sign_uuid = principal.uuid;
       const origem = new URL(req.url).origin;
       await d4(env, `/documents/${principal.uuid}/webhooks`, { method: 'POST', body: JSON.stringify({ url: `${origem}/api/d4sign/webhook` }) }).catch(() => null);
-      const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid }));
+      const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }));
       const { data: env_ } = await adm.from('envelopes').insert({
         pasta_id: pasta, proposta_id: contratos[0].proposta_id, d4sign_uuid: principal.uuid, documentos: limpos, criado_por: email,
       }).select('id').single();
@@ -312,7 +318,7 @@ async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { n
       if (!quem || !doc?.d4sign_uuid) continue;
       // o carimbo da assinatura fica logo acima da linha
       pinos.push({
-        document: doc.d4sign_uuid, email: quem.email.trim().toLowerCase(), page: String(p.pagina),
+        document: doc.d4sign_uuid, email: quem.email.trim().toLowerCase(), page: String((doc.pagina_inicial ?? 1) - 1 + p.pagina),
         page_width: '210', page_height: '297', position_x: String(Math.round(p.x + 4)), position_y: String(Math.max(0, Math.round(p.y - 14))), type: '0',
       });
     }

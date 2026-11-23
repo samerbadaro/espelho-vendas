@@ -51,7 +51,7 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
     data: '23/11/2026', titulo: 'Assinaturas no lugar certo', papeis: ['admin', 'vendas'],
     itens: [
       'Na D4Sign, cada assinatura vai para a linha com o nome do assinante no Quadro Resumo, nas Normas e na Carta Proposta.',
-      'Envelope e lista de documentos na mesma ordem: Quadro Resumo, Normas, Carta Proposta.',
+      'Envelope num PDF só, na ordem Carta Proposta, Intermediação, Quadro Resumo, Normas e demais, com o nome “unidade - empreendimento - cliente”.',
     ],
   },
   {
@@ -547,14 +547,14 @@ export const CAPITULOS: Capitulo[] = [
       {
         titulo: '5. Envelope de assinatura (D4Sign)',
         passos: [
-          'Com todos os documentos validados, clique em “Montar envelope na D4Sign”. O Quadro Resumo é o principal; Normas, Carta Proposta e documentos fixos vão como anexos.',
-          'Confira a prévia (PDF do principal ou o pacote completo em ZIP). Se algo estiver errado, use “Descartar e ajustar”.',
+          'Com todos os documentos validados, clique em “Montar envelope na D4Sign”. Os documentos marcados viram um PDF só, nesta ordem: Carta Proposta, Contrato de Intermediação (quando houver), Quadro Resumo, Normas Contratuais e os demais documentos fixos. Na D4Sign o arquivo aparece como “unidade - empreendimento - cliente” (ex.: 206 - Duo Haus - Fulano de Tal).',
+          'Confira a prévia (PDF do envelope ou o pacote completo em ZIP). Se algo estiver errado, use “Descartar e ajustar”.',
           'Revise os assinantes e a ordem: cliente e cônjuge, imobiliária, incorporadora e testemunhas. Cada um pode receber por e-mail ou WhatsApp.',
           'A assinatura de cada pessoa vai para a linha com o nome dela nos documentos gerados pelo sistema. Por isso, o nome do assinante tem que ser o mesmo que aparece embaixo da linha. Quem não tiver linha com o nome assina na folha de assinaturas da D4Sign.',
           'Clique em “Enviar para assinatura”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
           'Quando todos assinarem, baixe o pacote assinado (ZIP).',
         ],
-        dica: 'O envelope sai na mesma ordem da tela: Quadro Resumo, Normas, Carta Proposta e documentos fixos. Documentos emitidos antes de 23/11/2026 não têm a posição das assinaturas: emita de novo para posicionar.',
+        dica: 'Todos os documentos do envelope precisam estar em PDF. Documentos emitidos antes de 23/11/2026 não têm a posição das assinaturas: emita de novo para posicionar. A D4Sign limita as chamadas por hora da chave de API; se aparecer o aviso de limite, aguarde e tente de novo.',
         atencao: 'Enquanto o envelope estiver montado ou em assinatura, os documentos ficam travados. Para mudar algo, descarte (antes do envio) ou cancele o envelope.',
       },
       {

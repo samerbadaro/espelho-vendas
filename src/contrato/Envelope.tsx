@@ -1,5 +1,5 @@
-// Envelope único de assinatura da pasta (D4Sign): Quadro Resumo como principal,
-// Normas, Carta Proposta e documentos fixos como anexos. Montar → conferir prévia →
+// Envelope único de assinatura da pasta (D4Sign): um PDF só, na ordem Carta Proposta,
+// Contrato de Intermediação, Quadro Resumo, Normas e documentos fixos. Montar → conferir prévia →
 // assinantes e ordem → enviar → acompanhar → pacote assinado.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Download, Eye, FileArchive, Package, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
@@ -11,7 +11,7 @@ import type { DadosContrato as Dados } from './leitura';
 export interface DocEmitido { id: string; numero: number; documento: string; nome: string; versao: number; validacao: string; assinatura: string; cancelado_em: string | null }
 interface Fixo { id: string; nome: string; arquivo: string | null; ordem: number }
 interface EnvelopeRow {
-  id: string; status: 'preparado' | 'enviado' | 'assinado' | 'cancelado'; documentos: { tipo: string; id: string; nome: string; versao?: number; arquivo: string }[];
+  id: string; status: 'preparado' | 'enviado' | 'assinado' | 'cancelado'; documentos: { tipo: string; id: string; nome: string; versao?: number; arquivo: string; pagina_inicial?: number }[];
   criado_em: string; criado_por: string | null; enviado_em: string | null; assinado_em: string | null; caminho_assinado: string | null; cancelado_em: string | null;
 }
 interface Assinante { id?: number; ordem: number; papel: string; nome: string; email: string; whatsapp: string; canal: 'email' | 'whatsapp'; testemunha?: boolean; assinado?: boolean; assinado_em?: string | null }
@@ -28,7 +28,7 @@ const SITUACAO: Record<string, [string, string]> = {
   preparado: ['Montado na D4Sign — conferir prévia', 'sp-em_analise'], enviado: ['Aguardando assinaturas', 'sp-aguardando_analise'],
   assinado: ['Assinado por todos', 'sp-aprovada'], cancelado: ['Cancelado', 'sp-pendente_correcao'],
 };
-const ORDEM_DOC: Record<string, number> = { quadro_resumo: 0, normas: 1, carta_proposta: 2 };
+const ORDEM_DOC: Record<string, number> = { carta_proposta: 0, intermediacao: 1, quadro_resumo: 2, normas: 3 };
 const NOME_ESPERADO: Record<string, string> = { quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais', carta_proposta: 'Carta Proposta' };
 
 export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj, emp, imobiliariaId, aoMudar }: {
@@ -146,7 +146,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
       <div className="cartao-topo">
         <div>
           <h3>Envelope de assinatura</h3>
-          <p className="sub">Um único envelope por venda na D4Sign{sit?.ambiente ? ` (${sit.ambiente})` : ''}: o Quadro Resumo é o documento principal e os demais vão como anexos.
+          <p className="sub">Um único envelope por venda na D4Sign{sit?.ambiente ? ` (${sit.ambiente})` : ''}: os documentos marcados viram um PDF só, nesta ordem: Carta Proposta, Contrato de Intermediação (quando houver), Quadro Resumo, Normas e os demais.
             {ativo?.enviado_em && <> Enviado em {formatarDataHora(ativo.enviado_em)}.</>}{ativo?.assinado_em && <> Concluído em {formatarDataHora(ativo.assinado_em)}.</>}</p>
         </div>
         {ativo ? <span className={`selo ${SITUACAO[ativo.status][1]}`}>{SITUACAO[ativo.status][0]}</span> : <span className="selo sp-incompleta">Não montado</span>}
@@ -163,7 +163,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
             {atuais.map((d) => (
               <li key={d.id}>
                 <label><input type="checkbox" disabled={d.documento === 'quadro_resumo'} checked={usarDoc[d.id] ?? true} onChange={(e) => setUsarDoc({ ...usarDoc, [d.id]: e.target.checked })} />
-                  <strong>{d.nome}</strong> <span className="sub">nº {d.numero} · v{d.versao}{d.documento === 'quadro_resumo' && ' · principal'}</span></label>
+                  <strong>{d.nome}</strong> <span className="sub">nº {d.numero} · v{d.versao}</span></label>
                 {d.validacao === 'validado' ? <span className="selo sp-aprovada">Validado</span> : <span className="selo sp-pendente_correcao">Falta validar</span>}
               </li>
             ))}
@@ -188,13 +188,13 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
         </>
       ) : (
         <ul className="env-docs">
-          {ativo.documentos.map((d, i) => <li key={`${d.tipo}-${d.id}`}><span><strong>{d.nome}</strong> <span className="sub">{d.arquivo}{i === 0 && ' · principal'}</span></span></li>)}
+          {ativo.documentos.map((d) => <li key={`${d.tipo}-${d.id}`}><span><strong>{d.nome}</strong> <span className="sub">{d.pagina_inicial ? `a partir da página ${d.pagina_inicial}` : d.arquivo}</span></span></li>)}
         </ul>
       )}
 
       {editavel && (
         <div className="acoes env-topo">
-          <button type="button" className="botao" disabled={!!ocupado} onClick={() => abrir(false)}><Eye size={16} /> Prévia do principal (PDF)</button>
+          <button type="button" className="botao" disabled={!!ocupado} onClick={() => abrir(false)}><Eye size={16} /> Prévia do envelope (PDF)</button>
           <button type="button" className="botao" disabled={!!ocupado} onClick={() => abrir(true)}><FileArchive size={16} /> Pacote completo (ZIP)</button>
           <button type="button" className="botao" disabled={!!ocupado} onClick={async () => {
             if (await confirmar({ titulo: 'Descartar o envelope?', texto: 'Use quando a prévia mostrar algo a ajustar: os documentos voltam para edição e você monta de novo depois.', confirmar: 'Descartar' }))

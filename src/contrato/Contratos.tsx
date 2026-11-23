@@ -162,8 +162,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     setReg(rg);
     setAreas((ar as Areas) ?? null);
     setEmp((e?.dados as Record<string, string>) ?? {});
-    // mesma ordem do envelope: Quadro Resumo, Normas, Carta Proposta; dentro de cada um, a versão mais nova primeiro
-    const ordemDoc: Record<string, number> = { quadro_resumo: 0, normas: 1, carta_proposta: 2 };
+    // mesma ordem do envelope: Carta Proposta, Intermediação, Quadro Resumo, Normas; dentro de cada um, a versão mais nova primeiro
+    const ordemDoc: Record<string, number> = { carta_proposta: 0, intermediacao: 1, quadro_resumo: 2, normas: 3 };
     setEmit(((c as Emitido[]) ?? []).sort((x, y) => (ordemDoc[x.documento] ?? 9) - (ordemDoc[y.documento] ?? 9) || y.numero - x.numero));
     // Emissão sugere só o que ainda não foi emitido
     const ativos = new Set(((c as Emitido[]) ?? []).filter((x) => !x.cancelado_em).map((x) => x.documento));
