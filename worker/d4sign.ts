@@ -73,6 +73,13 @@ async function cofre(env: EnvD4, adm: SupabaseClient): Promise<string> {
   return achado.uuid_safe;
 }
 
+/** A D4Sign devolve a hora de Brasília sem fuso ("2026-11-23 18:05:38"): grava com -03:00. */
+const horaD4 = (t?: string) => {
+  if (!t) return new Date().toISOString();
+  const x = t.trim().replace(' ', 'T');
+  return /[zZ]|[+-]\d\d:?\d\d$/.test(x) ? x : `${x}-03:00`;
+};
+
 const idsContratos = (e: Envelope) => e.documentos.filter((d) => d.tipo === 'contrato').map((d) => d.id);
 
 /** Consulta a D4Sign, atualiza assinantes e situação; guarda o pacote assinado quando finaliza. */
@@ -82,7 +89,7 @@ async function sincronizar(env: EnvD4, adm: SupabaseClient, e: Envelope, email: 
   const lista = doc?.list ?? [];
   for (const s of lista) {
     await adm.from('envelope_assinantes').update({
-      assinado: s.signed === '1', assinado_em: s.signed === '1' ? s.sign_info?.date_signed ?? new Date().toISOString() : null, atualizado_em: new Date().toISOString(),
+      assinado: s.signed === '1', assinado_em: s.signed === '1' ? horaD4(s.sign_info?.date_signed) : null, atualizado_em: new Date().toISOString(),
     }).eq('envelope_id', e.id).eq('key_signer', s.key_signer);
   }
   const status = String(doc?.statusId ?? '');

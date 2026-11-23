@@ -52,6 +52,7 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
     itens: [
       'Ao enviar o envelope, a unidade passa sozinha para “Contrato em assinatura” no espelho; quando todos assinam, vira “Vendida”; se o envelope for cancelado, volta para “Proposta recebida”.',
       'Na lista de Contratos, a situação mostra “Envelope montado”, “Contrato enviado” e “Contrato assinado”.',
+      'Botão “Atualizar status” no painel de Assinaturas: consulta a D4Sign para todos os envelopes em assinatura de uma vez.',
     ],
   },
   {
@@ -576,6 +577,7 @@ export const CAPITULOS: Capitulo[] = [
           'Os quadros mostram quantos contratos estão em assinatura, quantos estão parados há 2 dias ou mais, quantos já foram assinados (com o tempo médio) e quantos estão montados sem envio.',
           'As colunas mostram em quem cada contrato está parado: Comprador (inclui cônjuge e representantes), Imobiliária, Incorporadora, Testemunhas e Assinado.',
           'Cada cartão mostra a unidade, o cliente, a imobiliária, uma barrinha por assinante (verde: assinou; laranja: é a vez dele), quem falta e há quantos dias está parado. Em vermelho, os parados há 2 dias ou mais.',
+          'O painel se atualiza sozinho com o aviso da D4Sign. Se alguma assinatura demorar a aparecer, clique em “Atualizar status” no topo: o sistema consulta a D4Sign para todos os envelopes em assinatura (uma consulta por envelope; a D4Sign limita as consultas por hora).',
           'Clique no cartão para abrir o contrato e usar “Reenviar” ou “Atualizar status”. Use a busca para achar por cliente, unidade, imobiliária ou proposta, e “Mostrar cancelados” para ver os envelopes cancelados.',
         ],
         dica: 'O painel usa o retorno automático da D4Sign e não gasta chamadas da API ao abrir.',

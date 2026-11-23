@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase, formatarDataHora } from '../dados';
 import { ir } from '../util';
-import { Search } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 
 interface Assinante { envelope_id: string; ordem: number; papel: string; nome: string | null; email: string; assinado: boolean; assinado_em: string | null }
 interface Envelope {
@@ -44,6 +44,31 @@ export function PainelAssinaturas() {
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
   const [verCancelados, setVerCancelados] = useState(false);
+  const [atualizando, setAtualizando] = useState('');
+  const [aviso, setAviso] = useState('');
+  const [versao, setVersao] = useState(0);
+
+  /** Consulta a D4Sign para cada envelope em assinatura (uma chamada por envelope). */
+  async function atualizarTodos() {
+    const alvo = (envs ?? []).filter((x) => x.status === 'enviado');
+    if (!alvo.length) { setAviso('Nenhum envelope em assinatura para atualizar.'); return; }
+    setAviso('');
+    const { data } = await supabase.auth.getSession();
+    let ok = 0;
+    for (const [i, x] of alvo.entries()) {
+      setAtualizando(`Atualizando ${i + 1} de ${alvo.length}…`);
+      const r = await fetch('/api/d4sign', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${data.session?.access_token ?? ''}` },
+        body: JSON.stringify({ acao: 'sincronizar', envelope: x.id }),
+      }).then((y) => y.json().catch(() => ({ erro: 'Resposta inválida do servidor.' })), () => ({ erro: 'Sem conexão com o servidor.' })) as { erro?: string };
+      if (r.erro) { setAviso(`${ok} de ${alvo.length} atualizado(s). Parou em um envelope: ${r.erro}`); break; }
+      ok++;
+    }
+    if (ok === alvo.length) setAviso(`${ok} envelope(s) atualizado(s) com a D4Sign.`);
+    setAtualizando('');
+    setVersao((v) => v + 1);
+  }
 
   useEffect(() => {
     (async () => {
@@ -62,7 +87,7 @@ export function PainelAssinaturas() {
       });
       setEnvs(lista); setAss((a as Assinante[]) ?? []);
     })();
-  }, []);
+  }, [versao]);
 
   const linhas = useMemo(() => (envs ?? []).map((e) => {
     const lista = ass.filter((a) => a.envelope_id === e.id).sort((x, y) => x.ordem - y.ordem);
@@ -93,9 +118,14 @@ export function PainelAssinaturas() {
       <div className="secao-topo">
         <div>
           <h2>Assinaturas</h2>
-          <p className="sub">Envelopes da D4Sign por etapa: em que assinatura cada contrato está parado. Atualiza com o retorno automático da D4Sign.</p>
+          <p className="sub">Envelopes da D4Sign por etapa: em que assinatura cada contrato está parado. Atualiza com o retorno automático da D4Sign ou pelo botão “Atualizar status”.</p>
         </div>
+        <button type="button" className="botao" onClick={atualizarTodos} disabled={!!atualizando}
+          title="Consulta a D4Sign para todos os envelopes em assinatura (usa uma chamada da API por envelope)">
+          <RefreshCw size={16} /> {atualizando || 'Atualizar status'}
+        </button>
       </div>
+      {aviso && <p className="sub">{aviso}</p>}
 
       <div className="kpis as-kpis">
         <div className="kpi"><strong className="kpi-valor">{emAssinatura.length}</strong><span className="kpi-rotulo">Em assinatura</span><span className="kpi-detalhe">Enviados, faltando alguém</span></div>
