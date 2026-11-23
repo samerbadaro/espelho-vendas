@@ -1,7 +1,7 @@
 // Envelope único de assinatura da pasta (D4Sign): Quadro Resumo como principal,
 // Normas, Carta Proposta e documentos fixos como anexos. Montar → conferir prévia →
 // assinantes e ordem → enviar → acompanhar → pacote assinado.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Download, Eye, FileArchive, Package, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
@@ -89,7 +89,13 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
       { ordem: 6, papel: 'Testemunha', nome: emp['testemunha2.nome'] ?? '', email: emp['testemunha2.email'] ?? '', whatsapp: '', canal: 'email', testemunha: true },
     ]);
   }, [dados, temConjuge, pj, emp, imobiliariaId]);
-  useEffect(() => { if (env?.status === 'preparado') sugerir(); }, [env?.status, env?.id, sugerir]);
+  // sugere uma vez por envelope montado; depois, o que a pessoa digitar não é sobrescrito
+  const sugeridoPara = useRef<string | null>(null);
+  useEffect(() => {
+    if (env?.status !== 'preparado' || sugeridoPara.current === env.id) return;
+    sugeridoPara.current = env.id;
+    sugerir();
+  }, [env?.status, env?.id, sugerir]);
 
   const executar = async (rotulo: string, corpo: Record<string, unknown>, ok?: string) => {
     setOcupado(rotulo);

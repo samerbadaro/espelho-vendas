@@ -33,7 +33,9 @@ async function d4(env: EnvD4, caminho: string, init: RequestInit = {}) {
   try { j = JSON.parse(txt); } catch { j = { message: txt }; }
   if (!r.ok) {
     const m = (j as { mensagem_pt?: string; message?: string })?.mensagem_pt || (j as { message?: string })?.message || `erro ${r.status}`;
-    throw new ErroD4(r.status === 429 || /limit/i.test(m) ? 'Limite de uso da D4Sign atingido. Tente de novo mais tarde.' : `D4Sign: ${m}`);
+    const etapa = caminho.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, '…');
+    console.log('D4Sign erro', r.status, etapa, txt.slice(0, 500));
+    throw new ErroD4(r.status === 429 || /limit/i.test(m) ? 'Limite de uso da D4Sign atingido. Tente de novo mais tarde.' : `D4Sign: ${m} (etapa ${etapa}${txt && !/^\s*$/.test(txt) && m === `erro ${r.status}` ? `: ${txt.slice(0, 160)}` : ''})`);
   }
   return j;
 }
