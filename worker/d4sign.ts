@@ -338,9 +338,13 @@ async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { n
       if (!quem || !doc?.d4sign_uuid) continue;
       // A D4Sign desenha o carimbo com tamanho fixo (cerca de 150 × 78 na escala da página que recebe).
       // Mandamos a página na escala de pixels de um A4 (794 × 1123) para o carimbo ficar com ~40 × 21 mm,
-      // centralizado na linha e com a base encostada nela.
-      const PX = 794 / 210, PY = 1123 / 297, LARG_MM = 40, ALT_MM = 21;
-      const xMm = p.x + Math.max(0, (p.largura - LARG_MM) / 2), yMm = Math.max(0, p.y - ALT_MM);
+      // centralizado na linha. O traço da assinatura fica na parte de baixo do carimbo, então o carimbo
+      // desce ~5 mm abaixo da linha para a assinatura "sentar" nela (como numa assinatura à mão).
+      // No teste de 23/11 a D4Sign espalhou as posições ~5% a partir do centro da página na horizontal;
+      // compensamos aproximando o centro do carimbo do meio da folha.
+      const PX = 794 / 210, PY = 1123 / 297, LARG_MM = 40, ACIMA_MM = 16, ESPALHA = 1.05;
+      const centro = 105 + (p.x + p.largura / 2 - 105) / ESPALHA;
+      const xMm = Math.max(0, centro - LARG_MM / 2), yMm = Math.max(0, p.y - ACIMA_MM);
       pinos.push({
         document: doc.d4sign_uuid, email: quem.email.trim().toLowerCase(), page: String((doc.pagina_inicial ?? 1) - 1 + p.pagina),
         page_width: '794', page_height: '1123', position_x: String(Math.round(xMm * PX)), position_y: String(Math.round(yMm * PY)), type: '0',
