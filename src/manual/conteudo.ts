@@ -48,6 +48,13 @@ export const REVISAO_MANUAL = '23/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '23/11/2026', titulo: 'Espelho acompanha o envelope de assinatura', papeis: EQUIPE,
+    itens: [
+      'Ao enviar o envelope, a unidade passa sozinha para “Contrato em assinatura” no espelho; quando todos assinam, vira “Vendida”; se o envelope for cancelado, volta para “Proposta recebida”.',
+      'Na lista de Contratos, a situação mostra “Envelope montado”, “Contrato enviado” e “Contrato assinado”.',
+    ],
+  },
+  {
     data: '23/11/2026', titulo: 'Painel de assinaturas', papeis: ['admin', 'vendas'],
     itens: ['Menu “Assinaturas”: todos os envelopes em colunas por etapa (comprador, imobiliária, incorporadora, testemunhas, assinado), com quem falta e há quantos dias está parado.'],
   },
@@ -199,7 +206,7 @@ export const CAPITULOS: Capitulo[] = [
           'Disponível: livre para venda.',
           'Reservada: segurada para um cliente com pasta de documentação aprovada.',
           'Proposta recebida: proposta aprovada, com valor e PV registrados.',
-          'Contrato em assinatura: contrato emitido e enviado para assinatura.',
+          'Contrato em assinatura: envelope enviado para assinatura na D4Sign (o sistema muda sozinho ao enviar; ao assinarem todos, vira Vendida).',
           'Vendida: contrato assinado.',
           'Bloqueada: fora de venda (decisão da incorporadora).',
           'Permutante: unidade dada em permuta (por exemplo, ao dono do terreno).',
@@ -555,8 +562,9 @@ export const CAPITULOS: Capitulo[] = [
           'Confira a prévia (PDF do envelope ou o pacote completo em ZIP). Se algo estiver errado, use “Descartar e ajustar”.',
           'Revise os assinantes e a ordem: cliente e cônjuge, imobiliária, incorporadora e testemunhas. Cada um pode receber por e-mail ou WhatsApp.',
           'A assinatura de cada pessoa vai para a linha com o nome dela nos documentos gerados pelo sistema. Por isso, o nome do assinante tem que ser o mesmo que aparece embaixo da linha. Quem não tiver linha com o nome assina na folha de assinaturas da D4Sign.',
-          'Clique em “Enviar para assinatura”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
-          'Quando todos assinarem, baixe o pacote assinado (ZIP).',
+          'Clique em “Enviar para assinatura”. A unidade passa sozinha para “Contrato em assinatura” no espelho e a lista de Contratos mostra “Contrato enviado”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
+          'Quando todos assinarem, a unidade vira “Vendida” no espelho e o contrato aparece como “Contrato assinado”. Baixe o pacote assinado (ZIP).',
+          'Se cancelar o envelope (aqui ou na D4Sign), a unidade volta para “Proposta recebida”. Uma unidade já vendida não muda sozinha.',
         ],
         dica: 'Para acompanhar todos os envelopes de uma vez, use o menu “Assinaturas”. Todos os documentos do envelope precisam estar em PDF. Documentos emitidos antes de 23/11/2026 não têm a posição das assinaturas: emita de novo para posicionar. A D4Sign limita as chamadas por hora da chave de API; se aparecer o aviso de limite, aguarde e tente de novo.',
         atencao: 'Enquanto o envelope estiver montado ou em assinatura, os documentos ficam travados. Para mudar algo, descarte (antes do envio) ou cancele o envelope.',

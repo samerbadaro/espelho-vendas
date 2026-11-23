@@ -50,6 +50,13 @@ interface Envelope {
   id: string; pasta_id: string; proposta_id: string | null; d4sign_uuid: string | null; status: string; documentos: DocEnv[];
 }
 
+/** Leva o envelope ao espelho: enviado → Contrato em assinatura; assinado → Vendida; cancelado → Proposta recebida. */
+async function espelho(adm: SupabaseClient, e: Envelope, evento: 'enviado' | 'assinado' | 'cancelado', email: string | null) {
+  const { data, error } = await adm.rpc('contrato_espelho', { p_envelope: e.id, p_evento: evento });
+  if (error) await historico(adm, e.pasta_id, 'Espelho não atualizado pelo envelope', { evento, erro: error.message }, email).catch(() => null);
+  return data as string | null;
+}
+
 async function historico(adm: SupabaseClient, pasta: string, acao: string, detalhes: Record<string, unknown>, email: string | null) {
   await adm.from('historico_pastas').insert({ pasta_id: pasta, acao, detalhes, usuario_email: email });
 }
@@ -92,11 +99,13 @@ async function sincronizar(env: EnvD4, adm: SupabaseClient, e: Envelope, email: 
     }
     const agora = new Date().toISOString();
     await adm.from('envelopes').update({ status: 'assinado', assinado_em: agora, caminho_assinado: caminho }).eq('id', e.id);
+    await espelho(adm, e, 'assinado', email);
     const ids = idsContratos(e);
     if (ids.length) await adm.from('contratos').update({ assinatura: 'assinado', assinado_em: agora }).in('id', ids);
     await historico(adm, e.pasta_id, 'Envelope assinado por todos', { documentos: e.documentos.length }, email);
   } else if (status === '6' && e.status !== 'cancelado') {
     await adm.from('envelopes').update({ status: 'cancelado', cancelado_em: new Date().toISOString(), cancelado_por: 'D4Sign' }).eq('id', e.id);
+    if (e.status === 'enviado') await espelho(adm, e, 'cancelado', email);
     const ids = idsContratos(e);
     if (ids.length) await adm.from('contratos').update({ assinatura: 'nao_enviado' }).in('id', ids);
     await historico(adm, e.pasta_id, 'Envelope cancelado na D4Sign', {}, email);
@@ -263,6 +272,7 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       });
       const agora = new Date().toISOString();
       await adm.from('envelopes').update({ status: 'enviado', enviado_em: agora }).eq('id', e.id);
+      await espelho(adm, e, 'enviado', email);
       const ids = idsContratos(e);
       if (ids.length) await adm.from('contratos').update({ assinatura: 'enviado', enviado_assinatura_em: agora }).in('id', ids);
       await historico(adm, e.pasta_id, 'Envelope enviado para assinatura', { assinantes: ordenada.length, documentos: e.documentos.length }, email);
@@ -285,6 +295,7 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       const ids = idsContratos(e);
       if (ids.length) await adm.from('contratos').update({ assinatura: 'nao_enviado' }).in('id', ids);
       await historico(adm, e.pasta_id, 'Envelope cancelado', {}, email);
+      await espelho(adm, e, 'cancelado', email);
       return json({ ok: true });
     }
     return erro('Ação desconhecida.');

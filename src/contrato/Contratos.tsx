@@ -40,6 +40,7 @@ export function ListaContratos() {
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [regs, setRegs] = useState<Record<string, Registro>>({});
   const [emitidos, setEmitidos] = useState<Record<string, number>>({});
+  const [envelopes, setEnvelopes] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState('');
 
   useEffect(() => {
@@ -51,10 +52,13 @@ export function ListaContratos() {
       setLinhas(ls);
       const ids = ls.map((l) => l.pasta_id);
       if (!ids.length) return;
-      const [{ data: r }, { data: c }] = await Promise.all([
+      const [{ data: r }, { data: c }, { data: ev }] = await Promise.all([
         supabase.from('dados_contrato').select('pasta_id, status, pagamento_conferido_em').in('pasta_id', ids),
         supabase.from('contratos').select('pasta_id').in('pasta_id', ids).is('cancelado_em', null),
+        supabase.from('envelopes').select('pasta_id, status, criado_em').in('pasta_id', ids).neq('status', 'cancelado').order('criado_em'),
       ]);
+      // situação do envelope mais recente de cada pasta (preparado, enviado ou assinado)
+      setEnvelopes(Object.fromEntries(((ev as { pasta_id: string; status: string }[]) ?? []).map((x) => [x.pasta_id, x.status])));
       setRegs(Object.fromEntries(((r as Registro[]) ?? []).map((x) => [x.pasta_id, x])));
       const n: Record<string, number> = {};
       ((c as { pasta_id: string }[]) ?? []).forEach((x) => { n[x.pasta_id] = (n[x.pasta_id] ?? 0) + 1; });
@@ -70,6 +74,10 @@ export function ListaContratos() {
 
   const etapa = (l: Linha) => {
     const r = regs[l.pasta_id];
+    const e = envelopes[l.pasta_id];
+    if (e === 'assinado') return ['Contrato assinado', 'sp-aprovada'];
+    if (e === 'enviado') return ['Contrato enviado', 'sp-aguardando_analise'];
+    if (e === 'preparado') return ['Envelope montado', 'sp-pronta'];
     if (emitidos[l.pasta_id]) return ['Emitido', 'sp-aprovada'];
     if (r?.status === 'conferido' && r.pagamento_conferido_em) return ['Pronto para emitir', 'sp-pronta'];
     if (r) return ['Em conferência', 'sp-em_analise'];
