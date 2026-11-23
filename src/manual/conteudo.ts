@@ -48,6 +48,10 @@ export const REVISAO_MANUAL = '23/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '23/11/2026', titulo: 'Painel de assinaturas', papeis: ['admin', 'vendas'],
+    itens: ['Menu “Assinaturas”: todos os envelopes em colunas por etapa (comprador, imobiliária, incorporadora, testemunhas, assinado), com quem falta e há quantos dias está parado.'],
+  },
+  {
     data: '23/11/2026', titulo: 'Assinaturas no lugar certo', papeis: ['admin', 'vendas'],
     itens: [
       'Na D4Sign, cada assinatura vai para a linha com o nome do assinante no Quadro Resumo, nas Normas e na Carta Proposta.',
@@ -554,8 +558,19 @@ export const CAPITULOS: Capitulo[] = [
           'Clique em “Enviar para assinatura”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
           'Quando todos assinarem, baixe o pacote assinado (ZIP).',
         ],
-        dica: 'Todos os documentos do envelope precisam estar em PDF. Documentos emitidos antes de 23/11/2026 não têm a posição das assinaturas: emita de novo para posicionar. A D4Sign limita as chamadas por hora da chave de API; se aparecer o aviso de limite, aguarde e tente de novo.',
+        dica: 'Para acompanhar todos os envelopes de uma vez, use o menu “Assinaturas”. Todos os documentos do envelope precisam estar em PDF. Documentos emitidos antes de 23/11/2026 não têm a posição das assinaturas: emita de novo para posicionar. A D4Sign limita as chamadas por hora da chave de API; se aparecer o aviso de limite, aguarde e tente de novo.',
         atencao: 'Enquanto o envelope estiver montado ou em assinatura, os documentos ficam travados. Para mudar algo, descarte (antes do envio) ou cancele o envelope.',
+      },
+      {
+        titulo: 'Painel de assinaturas', papeis: EQUIPE,
+        passos: [
+          'No menu, abra “Assinaturas”.',
+          'Os quadros mostram quantos contratos estão em assinatura, quantos estão parados há 2 dias ou mais, quantos já foram assinados (com o tempo médio) e quantos estão montados sem envio.',
+          'As colunas mostram em quem cada contrato está parado: Comprador (inclui cônjuge e representantes), Imobiliária, Incorporadora, Testemunhas e Assinado.',
+          'Cada cartão mostra a unidade, o cliente, a imobiliária, uma barrinha por assinante (verde: assinou; laranja: é a vez dele), quem falta e há quantos dias está parado. Em vermelho, os parados há 2 dias ou mais.',
+          'Clique no cartão para abrir o contrato e usar “Reenviar” ou “Atualizar status”. Use a busca para achar por cliente, unidade, imobiliária ou proposta, e “Mostrar cancelados” para ver os envelopes cancelados.',
+        ],
+        dica: 'O painel usa o retorno automático da D4Sign e não gasta chamadas da API ao abrir.',
       },
       {
         titulo: 'Configuração (Empreendimento)', papeis: ['admin'],
