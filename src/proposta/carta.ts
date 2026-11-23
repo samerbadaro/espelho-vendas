@@ -74,7 +74,7 @@ type Bloco =
 const vazio = (v: string) => !v || v === '—' || v.includes('____');
 
 /** Opções: `simples` tira campos em branco e as assinaturas (resumo para o cliente). */
-export interface OpcoesCarta { blob?: boolean; simples?: boolean }
+export interface OpcoesCarta { blob?: boolean; simples?: boolean; /** recebe onde ficou cada linha de assinatura (mm, A4) */ aoAssinaturas?: (p: { pagina: number; x: number; y: number; largura: number; nomes: string[] }[]) => void }
 
 function conteudo(d: DadosCarta, simples: boolean): Bloco[] {
   const c = d.comercial;
@@ -292,8 +292,10 @@ export async function gerarCarta(d: DadosCarta, o: OpcoesCarta = {}): Promise<Bl
     y = fimTabela() + 4;
   };
 
+  const posicoes: { pagina: number; x: number; y: number; largura: number; nomes: string[] }[] = [];
   const assinatura = (x: number, w: number, nome: string, sub: string) => {
     doc.setDrawColor(60); doc.setLineWidth(0.25); doc.line(x, y, x + w, y);
+    posicoes.push({ pagina: doc.getNumberOfPages(), x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, largura: Math.round(w * 10) / 10, nomes: [nome, sub].filter(Boolean) });
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20); doc.text(nome, x, y + 4.5);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...cinza); doc.text(sub, x, y + 8);
   };
@@ -351,6 +353,7 @@ export async function gerarCarta(d: DadosCarta, o: OpcoesCarta = {}): Promise<Bl
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(150);
     doc.text(`${d.empreendimento} · ${d.codigo} · unidade ${d.unidade.numero} · página ${i} de ${n}`, L - m, A - 8, { align: 'right' });
   }
+  o.aoAssinaturas?.(posicoes);
   if (o.blob) return doc.output('blob');
   doc.save(nomeArquivo(d, 'pdf', o.simples));
 }

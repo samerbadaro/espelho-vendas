@@ -44,9 +44,28 @@ const PARCEIROS: PapelManual[] = ['imobiliaria', 'corretor'];
 const TODOS: PapelManual[] = ['admin', 'vendas', 'imobiliaria', 'corretor'];
 
 /** Atualizado a cada entrega (data da última revisão do manual). */
-export const REVISAO_MANUAL = '22/11/2026';
+export const REVISAO_MANUAL = '23/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
+  {
+    data: '23/11/2026', titulo: 'Espelho acompanha o envelope de assinatura', papeis: EQUIPE,
+    itens: [
+      'Ao enviar o envelope, a unidade passa sozinha para “Contrato em assinatura” no espelho; quando todos assinam, vira “Vendida”; se o envelope for cancelado, volta para “Proposta recebida”.',
+      'Na lista de Contratos, a situação mostra “Envelope montado”, “Contrato enviado” e “Contrato assinado”.',
+      'Botão “Atualizar status” no painel de Assinaturas: consulta a D4Sign para todos os envelopes em assinatura de uma vez.',
+    ],
+  },
+  {
+    data: '23/11/2026', titulo: 'Painel de assinaturas', papeis: ['admin', 'vendas'],
+    itens: ['Menu “Assinaturas”: todos os envelopes em colunas por etapa (comprador, imobiliária, incorporadora, testemunhas, assinado), com quem falta e há quantos dias está parado.'],
+  },
+  {
+    data: '23/11/2026', titulo: 'Assinaturas no lugar certo', papeis: ['admin', 'vendas'],
+    itens: [
+      'Na D4Sign, cada assinatura vai para a linha com o nome do assinante no Quadro Resumo, nas Normas e na Carta Proposta.',
+      'Envelope num PDF só, na ordem Carta Proposta, Intermediação, Quadro Resumo, Normas e demais, com o nome “unidade - empreendimento - cliente”.',
+    ],
+  },
   {
     data: '22/11/2026', titulo: 'Cliente desistiu e devolução de Pix',
     itens: [
@@ -188,7 +207,7 @@ export const CAPITULOS: Capitulo[] = [
           'Disponível: livre para venda.',
           'Reservada: segurada para um cliente com pasta de documentação aprovada.',
           'Proposta recebida: proposta aprovada, com valor e PV registrados.',
-          'Contrato em assinatura: contrato emitido e enviado para assinatura.',
+          'Contrato em assinatura: envelope enviado para assinatura na D4Sign (o sistema muda sozinho ao enviar; ao assinarem todos, vira Vendida).',
           'Vendida: contrato assinado.',
           'Bloqueada: fora de venda (decisão da incorporadora).',
           'Permutante: unidade dada em permuta (por exemplo, ao dono do terreno).',
@@ -540,13 +559,28 @@ export const CAPITULOS: Capitulo[] = [
       {
         titulo: '5. Envelope de assinatura (D4Sign)',
         passos: [
-          'Com todos os documentos validados, clique em “Montar envelope na D4Sign”. O Quadro Resumo é o principal; Normas, Carta Proposta e documentos fixos vão como anexos.',
-          'Confira a prévia (PDF do principal ou o pacote completo em ZIP). Se algo estiver errado, use “Descartar e ajustar”.',
+          'Com todos os documentos validados, clique em “Montar envelope na D4Sign”. Os documentos marcados viram um PDF só, nesta ordem: Carta Proposta, Contrato de Intermediação (quando houver), Quadro Resumo, Normas Contratuais e os demais documentos fixos. Na D4Sign o arquivo aparece como “unidade - empreendimento - cliente” (ex.: 206 - Duo Haus - Fulano de Tal).',
+          'Confira a prévia (PDF do envelope ou o pacote completo em ZIP). Se algo estiver errado, use “Descartar e ajustar”.',
           'Revise os assinantes e a ordem: cliente e cônjuge, imobiliária, incorporadora e testemunhas. Cada um pode receber por e-mail ou WhatsApp.',
-          'Clique em “Enviar para assinatura”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
-          'Quando todos assinarem, baixe o pacote assinado (ZIP).',
+          'A assinatura de cada pessoa vai para a linha com o nome dela nos documentos gerados pelo sistema. Por isso, o nome do assinante tem que ser o mesmo que aparece embaixo da linha. Quem não tiver linha com o nome assina na folha de assinaturas da D4Sign.',
+          'Clique em “Enviar para assinatura”. A unidade passa sozinha para “Contrato em assinatura” no espelho e a lista de Contratos mostra “Contrato enviado”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
+          'Quando todos assinarem, a unidade vira “Vendida” no espelho e o contrato aparece como “Contrato assinado”. Baixe o pacote assinado (ZIP).',
+          'Se cancelar o envelope (aqui ou na D4Sign), a unidade volta para “Proposta recebida”. Uma unidade já vendida não muda sozinha.',
         ],
+        dica: 'Para acompanhar todos os envelopes de uma vez, use o menu “Assinaturas”. Todos os documentos do envelope precisam estar em PDF. Documentos emitidos antes de 23/11/2026 não têm a posição das assinaturas: emita de novo para posicionar. A D4Sign limita as chamadas por hora da chave de API; se aparecer o aviso de limite, aguarde e tente de novo.',
         atencao: 'Enquanto o envelope estiver montado ou em assinatura, os documentos ficam travados. Para mudar algo, descarte (antes do envio) ou cancele o envelope.',
+      },
+      {
+        titulo: 'Painel de assinaturas', papeis: EQUIPE,
+        passos: [
+          'No menu, abra “Assinaturas”.',
+          'Os quadros mostram quantos contratos estão em assinatura, quantos estão parados há 2 dias ou mais, quantos já foram assinados (com o tempo médio) e quantos estão montados sem envio.',
+          'As colunas mostram em quem cada contrato está parado: Comprador (inclui cônjuge e representantes), Imobiliária, Incorporadora, Testemunhas e Assinado.',
+          'Cada cartão mostra a unidade, o cliente, a imobiliária, uma barrinha por assinante (verde: assinou; laranja: é a vez dele), quem falta e há quantos dias está parado. Em vermelho, os parados há 2 dias ou mais.',
+          'O painel se atualiza sozinho com o aviso da D4Sign. Se alguma assinatura demorar a aparecer, clique em “Atualizar status” no topo: o sistema consulta a D4Sign para todos os envelopes em assinatura (uma consulta por envelope; a D4Sign limita as consultas por hora).',
+          'Clique no cartão para abrir o contrato e usar “Reenviar” ou “Atualizar status”. Use a busca para achar por cliente, unidade, imobiliária ou proposta, e “Mostrar cancelados” para ver os envelopes cancelados.',
+        ],
+        dica: 'O painel usa o retorno automático da D4Sign e não gasta chamadas da API ao abrir.',
       },
       {
         titulo: 'Configuração (Empreendimento)', papeis: ['admin'],

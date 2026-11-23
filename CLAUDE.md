@@ -47,8 +47,11 @@ direto, sem jargão técnico desnecessário.
 | --- | --- | --- |
 | Branch | `homologacao` | `main` |
 | Site | homolog.gestorlm.com.br | casa7.gestorlm.com.br |
-| Worker Cloudflare | `espelho-vendas-homolog` (`wrangler.homolog.jsonc`) | `espelho-vendas` (`wrangler.jsonc`, `D4SIGN_AMBIENTE=producao`) |
+| Worker Cloudflare | `espelho-vendas-homolog` (`wrangler.homolog.jsonc`) | `espelho-vendas` (`wrangler.jsonc`) |
 | Supabase | `iujmvrnxfwsyqpzktfjr` (acesso pelo conector) | `mtlzwuiqznsyqasmdkew` (sem acesso: o Samer roda o SQL) |
+
+D4Sign: os dois ambientes usam a API real (`D4SIGN_AMBIENTE=producao`); a homologação usa a conta
+pessoal de testes do Samer e a produção, a conta da Casa 7 (chaves e cofre diferentes).
 
 O push na branch publica sozinho (cerca de 1 minuto). Segredos do servidor no Cloudflare:
 `ANTHROPIC_API_KEY`, `BREVO_API_KEY`, chaves da D4Sign.

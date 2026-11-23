@@ -6,6 +6,7 @@
  * própria D4Sign (e confere o HMAC quando D4SIGN_HMAC existe).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { PDFDocument } from 'pdf-lib';
 
 export interface EnvD4 {
   SUPABASE_URL: string;
@@ -32,15 +33,28 @@ async function d4(env: EnvD4, caminho: string, init: RequestInit = {}) {
   let j: unknown;
   try { j = JSON.parse(txt); } catch { j = { message: txt }; }
   if (!r.ok) {
-    const m = (j as { mensagem_pt?: string; message?: string })?.mensagem_pt || (j as { message?: string })?.message || `erro ${r.status}`;
-    throw new ErroD4(r.status === 429 || /limit/i.test(m) ? 'Limite de uso da D4Sign atingido. Tente de novo mais tarde.' : `D4Sign: ${m}`);
+    const m = (j as { mensagem_pt?: string; message?: string; error?: string })?.mensagem_pt || (j as { error?: string })?.error || (j as { message?: string })?.message || `erro ${r.status}`;
+    if (/tempo limite|time limit|rate/i.test(m)) {
+      console.log('D4Sign limite', r.status, caminho.split('?')[0]);
+      throw new ErroD4('A D4Sign limitou as chamadas desta chave de API por um tempo. Aguarde cerca de uma hora e tente de novo; o envelope continua montado.');
+    }
+    const etapa = caminho.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, '…');
+    console.log('D4Sign erro', r.status, etapa, txt.slice(0, 500));
+    throw new ErroD4(r.status === 429 || /limit/i.test(m) ? 'Limite de uso da D4Sign atingido. Tente de novo mais tarde.' : `D4Sign: ${m} (etapa ${etapa}${txt && !/^\s*$/.test(txt) && m === `erro ${r.status}` ? `: ${txt.slice(0, 160)}` : ''})`);
   }
   return j;
 }
 
-interface DocEnv { tipo: 'contrato' | 'fixo'; id: string; nome: string; versao?: number; arquivo: string; d4sign_uuid?: string | null }
+interface DocEnv { tipo: 'contrato' | 'fixo'; id: string; nome: string; versao?: number; arquivo: string; d4sign_uuid?: string | null; /** página onde o documento começa no PDF único */ pagina_inicial?: number }
 interface Envelope {
   id: string; pasta_id: string; proposta_id: string | null; d4sign_uuid: string | null; status: string; documentos: DocEnv[];
+}
+
+/** Leva o envelope ao espelho: enviado → Contrato em assinatura; assinado → Vendida; cancelado → Proposta recebida. */
+async function espelho(adm: SupabaseClient, e: Envelope, evento: 'enviado' | 'assinado' | 'cancelado', email: string | null) {
+  const { data, error } = await adm.rpc('contrato_espelho', { p_envelope: e.id, p_evento: evento });
+  if (error) await historico(adm, e.pasta_id, 'Espelho não atualizado pelo envelope', { evento, erro: error.message }, email).catch(() => null);
+  return data as string | null;
 }
 
 async function historico(adm: SupabaseClient, pasta: string, acao: string, detalhes: Record<string, unknown>, email: string | null) {
@@ -59,6 +73,13 @@ async function cofre(env: EnvD4, adm: SupabaseClient): Promise<string> {
   return achado.uuid_safe;
 }
 
+/** A D4Sign devolve a hora de Brasília sem fuso ("2026-11-23 18:05:38"): grava com -03:00. */
+const horaD4 = (t?: string) => {
+  if (!t) return new Date().toISOString();
+  const x = t.trim().replace(' ', 'T');
+  return /[zZ]|[+-]\d\d:?\d\d$/.test(x) ? x : `${x}-03:00`;
+};
+
 const idsContratos = (e: Envelope) => e.documentos.filter((d) => d.tipo === 'contrato').map((d) => d.id);
 
 /** Consulta a D4Sign, atualiza assinantes e situação; guarda o pacote assinado quando finaliza. */
@@ -68,7 +89,7 @@ async function sincronizar(env: EnvD4, adm: SupabaseClient, e: Envelope, email: 
   const lista = doc?.list ?? [];
   for (const s of lista) {
     await adm.from('envelope_assinantes').update({
-      assinado: s.signed === '1', assinado_em: s.signed === '1' ? s.sign_info?.date_signed ?? new Date().toISOString() : null, atualizado_em: new Date().toISOString(),
+      assinado: s.signed === '1', assinado_em: s.signed === '1' ? horaD4(s.sign_info?.date_signed) : null, atualizado_em: new Date().toISOString(),
     }).eq('envelope_id', e.id).eq('key_signer', s.key_signer);
   }
   const status = String(doc?.statusId ?? '');
@@ -85,11 +106,13 @@ async function sincronizar(env: EnvD4, adm: SupabaseClient, e: Envelope, email: 
     }
     const agora = new Date().toISOString();
     await adm.from('envelopes').update({ status: 'assinado', assinado_em: agora, caminho_assinado: caminho }).eq('id', e.id);
+    await espelho(adm, e, 'assinado', email);
     const ids = idsContratos(e);
     if (ids.length) await adm.from('contratos').update({ assinatura: 'assinado', assinado_em: agora }).in('id', ids);
     await historico(adm, e.pasta_id, 'Envelope assinado por todos', { documentos: e.documentos.length }, email);
   } else if (status === '6' && e.status !== 'cancelado') {
     await adm.from('envelopes').update({ status: 'cancelado', cancelado_em: new Date().toISOString(), cancelado_por: 'D4Sign' }).eq('id', e.id);
+    if (e.status === 'enviado') await espelho(adm, e, 'cancelado', email);
     const ids = idsContratos(e);
     if (ids.length) await adm.from('contratos').update({ assinatura: 'nao_enviado' }).in('id', ids);
     await historico(adm, e.pasta_id, 'Envelope cancelado na D4Sign', {}, email);
@@ -117,6 +140,14 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
 
   const configurado = !!env.D4SIGN_TOKEN;
   if (acao === 'situacao') return json({ configurado, ambiente: env.D4SIGN_AMBIENTE === 'producao' ? 'produção' : 'sandbox (testes)' });
+  if (acao === 'diagnostico') {
+    // confere as chaves sem mostrá-las: só o começo e o tamanho, e uma chamada de leitura (lista de cofres)
+    const t = (env.D4SIGN_TOKEN ?? ''), c = (env.D4SIGN_CRYPTKEY ?? '');
+    const forma = (v: string) => ({ inicio: v.slice(0, 5), tamanho: v.length, espacos: v !== v.trim() });
+    let teste = 'ok';
+    try { const r = await d4(env, '/safes'); teste = `ok: ${Array.isArray(r) ? r.length : 0} cofre(s)`; } catch (e) { teste = (e as Error).message; }
+    return json({ configurado, ambiente: env.D4SIGN_AMBIENTE === 'producao' ? 'produção' : 'sandbox (testes)', token: forma(t), cryptKey: forma(c), teste });
+  }
   if (!configurado) return erro('A D4Sign ainda não foi configurada (chaves ausentes no servidor).', 400);
 
   try {
@@ -136,44 +167,67 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       const { data: fs } = idsF.length ? await adm.from('contrato_anexos_fixos').select('*').in('id', idsF).eq('ativo', true) : { data: [] };
       const fixos = (fs ?? []) as { id: string; nome: string; caminho: string; arquivo: string | null; ordem: number }[];
 
-      // ordem: Quadro Resumo (principal), Normas, Carta Proposta, fixos na ordem cadastrada
-      const pos: Record<string, number> = { quadro_resumo: 0, normas: 1, carta_proposta: 2 };
-      contratos.sort((a, b) => (pos[a.documento] ?? 9) - (pos[b.documento] ?? 9));
-      fixos.sort((a, b) => a.ordem - b.ordem);
-      const itens: (DocEnv & { caminho: string; mime: string })[] = [
+      // ordem do envelope: Carta Proposta, Contrato de Intermediação (quando houver), Quadro Resumo,
+      // Normas Contratuais e os demais documentos fixos na ordem cadastrada
+      const intermed = (t: string) => /intermedia/i.test(t);
+      const peso = (tipo: 'contrato' | 'fixo', documento: string, nome: string, ordem = 0) =>
+        documento === 'carta_proposta' ? 0 : intermed(`${documento} ${nome}`) ? 1 : documento === 'quadro_resumo' ? 2 : documento === 'normas' ? 3 : tipo === 'contrato' ? 4 : 5 + ordem / 1000;
+      const itens: (DocEnv & { caminho: string; mime: string; peso: number })[] = [
         ...contratos.map((c) => {
           const usaPdf = !!c.caminho;
           return { tipo: 'contrato' as const, id: c.id, nome: c.nome, versao: c.versao, caminho: (usaPdf ? c.caminho : c.caminho_docx)!, mime: usaPdf ? 'application/pdf' : DOCX,
-            arquivo: nomeArquivo(`${c.numero} - ${c.nome} (v${c.versao}).${usaPdf ? 'pdf' : 'docx'}`) };
+            arquivo: nomeArquivo(`${c.numero} - ${c.nome} (v${c.versao}).${usaPdf ? 'pdf' : 'docx'}`), peso: peso('contrato', c.documento, c.nome) };
         }),
         ...fixos.map((f) => ({ tipo: 'fixo' as const, id: f.id, nome: f.nome, caminho: f.caminho, mime: /\.docx$/i.test(f.caminho) ? DOCX : 'application/pdf',
-          arquivo: nomeArquivo(f.arquivo || `${f.nome}.${/\.docx$/i.test(f.caminho) ? 'docx' : 'pdf'}`) })),
-      ];
+          arquivo: nomeArquivo(f.arquivo || `${f.nome}.${/\.docx$/i.test(f.caminho) ? 'docx' : 'pdf'}`), peso: peso('fixo', '', `${f.nome} ${f.arquivo ?? ''}`, f.ordem) })),
+      ].sort((a, b) => a.peso - b.peso);
       if (itens.some((i) => !i.caminho)) return erro('Há documento sem arquivo.');
+      const semPdf = itens.filter((i) => i.mime !== 'application/pdf');
+      if (semPdf.length) return erro(`Para juntar o envelope num arquivo só, todos os documentos precisam estar em PDF. Em Word: ${semPdf.map((i) => i.nome).join(', ')}.`);
 
-      const uuidCofre = await cofre(env, adm);
-      const subir = async (i: (typeof itens)[number], destino: string) => {
+      // nome na D4Sign: unidade - empreendimento - cliente (ex.: 206 - Duo Haus - Fulano de Tal)
+      const [{ data: pa }, { data: cfg }, { data: pr }] = await Promise.all([
+        adm.from('pastas').select('comprador_nome, tipo_pessoa, empresa_razao_social').eq('id', pasta).maybeSingle(),
+        adm.from('config').select('nome_empreendimento').eq('id', 1).maybeSingle(),
+        contratos[0].proposta_id ? adm.from('propostas').select('unidades(numero)').eq('id', contratos[0].proposta_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const unidade = ((pr as { unidades?: { numero?: string } } | null)?.unidades?.numero) ?? '';
+      const emp = String(cfg?.nome_empreendimento ?? '').split(/\s+[–—-]\s+/)[0].trim();
+      const cliente = (pa?.tipo_pessoa === 'pj' ? pa?.empresa_razao_social : pa?.comprador_nome) ?? '';
+      const nomeEnvelope = nomeArquivo([unidade, emp, cliente].filter((x) => String(x).trim()).join(' - ') || 'Contrato') + '.pdf';
+
+      // junta tudo num PDF só: a D4Sign conta as chamadas por hora, e um arquivo único gasta uma só
+      const unico = await PDFDocument.create();
+      const docs: DocEnv[] = [];
+      for (const i of itens) {
         const { data: arq } = await adm.storage.from('contratos').download(i.caminho);
         if (!arq) throw new ErroD4(`Não foi possível ler o arquivo "${i.nome}".`);
-        const fd = new FormData();
-        fd.append('file', new File([arq], i.arquivo, { type: i.mime }));
-        return (await d4(env, destino, { method: 'POST', body: fd })) as { uuid?: string };
-      };
-      const principal = await subir(itens[0], `/documents/${uuidCofre}/upload`);
-      if (!principal.uuid) throw new ErroD4('A D4Sign não devolveu o identificador do documento.');
-      const docs: DocEnv[] = [{ ...itens[0], d4sign_uuid: principal.uuid }];
-      for (const i of itens.slice(1)) {
-        const r = await subir(i, `/documents/${principal.uuid}/uploadslave`);
-        docs.push({ ...i, d4sign_uuid: r.uuid ?? null });
+        let origemPdf: PDFDocument;
+        try { origemPdf = await PDFDocument.load(await arq.arrayBuffer(), { ignoreEncryption: true }); }
+        catch { throw new ErroD4(`O arquivo "${i.nome}" não é um PDF válido.`); }
+        const inicio = unico.getPageCount() + 1;
+        const paginas = await unico.copyPages(origemPdf, origemPdf.getPageIndices());
+        paginas.forEach((pg) => unico.addPage(pg));
+        const { caminho: _c, mime: _m, peso: _p, ...resto } = i;
+        docs.push({ ...resto, pagina_inicial: inicio });
       }
+      const bytes = await unico.save();
+      const uuidCofre = await cofre(env, adm);
+      const fd = new FormData();
+      fd.append('file', new File([bytes], nomeEnvelope, { type: 'application/pdf' }));
+      const principal = (await d4(env, `/documents/${uuidCofre}/upload`, { method: 'POST', body: fd })) as { uuid?: string };
+      if (!principal.uuid) throw new ErroD4('A D4Sign não devolveu o identificador do documento.');
+      for (const d of docs) d.d4sign_uuid = principal.uuid;
       const origem = new URL(req.url).origin;
-      await d4(env, `/documents/${principal.uuid}/webhooks`, { method: 'POST', body: JSON.stringify({ url: `${origem}/api/d4sign/webhook` }) }).catch(() => null);
-      const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid }));
+      const falhaAviso = await d4(env, `/documents/${principal.uuid}/webhooks`, { method: 'POST', body: JSON.stringify({ url: `${origem}/api/d4sign/webhook` }) })
+        .then(() => null, (x: unknown) => (x instanceof Error ? x.message : String(x)));
+      const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }));
       const { data: env_ } = await adm.from('envelopes').insert({
         pasta_id: pasta, proposta_id: contratos[0].proposta_id, d4sign_uuid: principal.uuid, documentos: limpos, criado_por: email,
       }).select('id').single();
       await adm.from('contratos').update({ assinatura: 'preparado' }).in('id', idsC);
       await historico(adm, pasta, 'Envelope montado na D4Sign', { documentos: limpos.map((d) => d.nome) }, email);
+      if (falhaAviso) await historico(adm, pasta, 'Aviso automático de assinaturas não registrado na D4Sign', { erro: falhaAviso }, email);
       return json({ ok: true, envelope: env_?.id });
     }
 
@@ -216,11 +270,18 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
         whatsapp: a.canal === 'whatsapp' ? telefone(a.whatsapp || '') : null, canal: a.canal === 'whatsapp' ? 'whatsapp' : 'email',
         key_signer: devolvidos.find((d) => d.email?.toLowerCase() === a.email.trim().toLowerCase())?.key_signer ?? devolvidos[i]?.key_signer ?? null,
       })));
+      // posiciona cada assinatura na linha certa dos documentos gerados pelo sistema (o nome da linha = o nome do assinante)
+      const pinos = await pinosDoEnvelope(adm, e, ordenada);
+      if (pinos.length) {
+        await d4(env, `/documents/${e.d4sign_uuid}/addpins`, { method: 'POST', body: JSON.stringify({ pins: pinos }) })
+          .catch((x) => historico(adm, e.pasta_id, 'Posição das assinaturas não aplicada', { erro: (x as Error).message }, email));
+      }
       await d4(env, `/documents/${e.d4sign_uuid}/sendtosigner`, {
         method: 'POST', body: JSON.stringify({ skip_email: '0', workflow: corpo.emOrdem === false ? '0' : '1', message: String(corpo.mensagem || '').slice(0, 500) }),
       });
       const agora = new Date().toISOString();
       await adm.from('envelopes').update({ status: 'enviado', enviado_em: agora }).eq('id', e.id);
+      await espelho(adm, e, 'enviado', email);
       const ids = idsContratos(e);
       if (ids.length) await adm.from('contratos').update({ assinatura: 'enviado', enviado_assinatura_em: agora }).in('id', ids);
       await historico(adm, e.pasta_id, 'Envelope enviado para assinatura', { assinantes: ordenada.length, documentos: e.documentos.length }, email);
@@ -243,6 +304,7 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       const ids = idsContratos(e);
       if (ids.length) await adm.from('contratos').update({ assinatura: 'nao_enviado' }).in('id', ids);
       await historico(adm, e.pasta_id, 'Envelope cancelado', {}, email);
+      await espelho(adm, e, 'cancelado', email);
       return json({ ok: true });
     }
     return erro('Ação desconhecida.');
@@ -255,6 +317,41 @@ async function hmacHex(chave: string, texto: string) {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(chave), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(texto));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+const normal = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Pinos de assinatura: para cada linha de assinatura gravada na emissão, o assinante com o mesmo nome. */
+async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { nome: string; email: string; papel: string }[]) {
+  const ids = e.documentos.filter((d) => d.tipo === 'contrato' && d.d4sign_uuid).map((d) => d.id);
+  if (!ids.length) return [];
+  const { data } = await adm.from('contratos').select('id, dados').in('id', ids);
+  const pinos: Record<string, string>[] = [];
+  for (const c of (data ?? []) as { id: string; dados: { assinaturas?: { pagina: number; x: number; y: number; largura: number; nomes: string[] }[] } | null }[]) {
+    const doc = e.documentos.find((d) => d.id === c.id);
+    for (const p of c.dados?.assinaturas ?? []) {
+      const nomes = (p.nomes ?? []).map(normal).filter((n) => n.length >= 3);
+      const quem = assinantes.find((a) => {
+        const n = normal(a.nome || '');
+        return n.length >= 3 && nomes.some((x) => x === n || x.includes(n) || (x.length >= 8 && n.includes(x)));
+      });
+      if (!quem || !doc?.d4sign_uuid) continue;
+      // A D4Sign desenha o carimbo com tamanho fixo (cerca de 150 × 78 na escala da página que recebe).
+      // Mandamos a página na escala de pixels de um A4 (794 × 1123) para o carimbo ficar com ~40 × 21 mm,
+      // centralizado na linha. O traço da assinatura fica na parte de baixo do carimbo, então o carimbo
+      // desce ~5 mm abaixo da linha para a assinatura "sentar" nela (como numa assinatura à mão).
+      // No teste de 23/11 a D4Sign espalhou as posições ~5% a partir do centro da página na horizontal;
+      // compensamos aproximando o centro do carimbo do meio da folha.
+      const PX = 794 / 210, PY = 1123 / 297, LARG_MM = 40, ACIMA_MM = 16, ESPALHA = 1.05;
+      const centro = 105 + (p.x + p.largura / 2 - 105) / ESPALHA;
+      const xMm = Math.max(0, centro - LARG_MM / 2), yMm = Math.max(0, p.y - ACIMA_MM);
+      pinos.push({
+        document: doc.d4sign_uuid, email: quem.email.trim().toLowerCase(), page: String((doc.pagina_inicial ?? 1) - 1 + p.pagina),
+        page_width: '794', page_height: '1123', position_x: String(Math.round(xMm * PX)), position_y: String(Math.round(yMm * PY)), type: '0',
+      });
+    }
+  }
+  return pinos;
 }
 
 /** POST /api/d4sign/webhook — chamado pela D4Sign quando alguém assina, finaliza ou cancela. */
@@ -270,6 +367,11 @@ export async function webhookD4Sign(req: Request, env: EnvD4): Promise<Response>
   }
   const adm = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: e } = await adm.from('envelopes').select('*').eq('d4sign_uuid', uuid).maybeSingle<Envelope>();
-  if (e) await sincronizar(env, adm, e, 'D4Sign').catch(() => null);
+  if (e) {
+    const tipo = (() => { try { return String((JSON.parse(bruto) as { type_post?: string }).type_post ?? ''); } catch { return new URLSearchParams(bruto).get('type_post') ?? ''; } })();
+    const falha = await sincronizar(env, adm, e, 'D4Sign').then(() => null, (x: unknown) => (x instanceof Error ? x.message : String(x)));
+    await historico(adm, e.pasta_id, falha ? 'Aviso da D4Sign recebido, mas não foi possível atualizar' : 'Aviso da D4Sign recebido',
+      falha ? { tipo, erro: falha } : { tipo }, 'D4Sign').catch(() => null);
+  }
   return new Response('ok');
 }

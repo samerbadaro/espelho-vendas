@@ -228,7 +228,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   };
 
   const trocarUnidade = (novo: string) => { setUnidadeId(novo); setChaveEditor((k) => k + 1); };
-  const statusEspelho = (s: string) => ({ disponivel: 'disponível', reservada: 'reservada', proposta: 'proposta recebida', contrato: 'contrato', vendida: 'vendida', bloqueada: 'bloqueada', permutante: 'permutante' } as Record<string, string>)[s] ?? s;
+  const statusEspelho = (s: string) => ({ disponivel: 'disponível', reservada: 'reservada', proposta: 'proposta recebida', contrato: 'contrato em assinatura', vendida: 'vendida', bloqueada: 'bloqueada', permutante: 'permutante' } as Record<string, string>)[s] ?? s;
 
   return (
     <section className="secao prop-pagina">

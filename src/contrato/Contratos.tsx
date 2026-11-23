@@ -40,6 +40,7 @@ export function ListaContratos() {
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [regs, setRegs] = useState<Record<string, Registro>>({});
   const [emitidos, setEmitidos] = useState<Record<string, number>>({});
+  const [envelopes, setEnvelopes] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState('');
 
   useEffect(() => {
@@ -51,10 +52,13 @@ export function ListaContratos() {
       setLinhas(ls);
       const ids = ls.map((l) => l.pasta_id);
       if (!ids.length) return;
-      const [{ data: r }, { data: c }] = await Promise.all([
+      const [{ data: r }, { data: c }, { data: ev }] = await Promise.all([
         supabase.from('dados_contrato').select('pasta_id, status, pagamento_conferido_em').in('pasta_id', ids),
         supabase.from('contratos').select('pasta_id').in('pasta_id', ids).is('cancelado_em', null),
+        supabase.from('envelopes').select('pasta_id, status, criado_em').in('pasta_id', ids).neq('status', 'cancelado').order('criado_em'),
       ]);
+      // situação do envelope mais recente de cada pasta (preparado, enviado ou assinado)
+      setEnvelopes(Object.fromEntries(((ev as { pasta_id: string; status: string }[]) ?? []).map((x) => [x.pasta_id, x.status])));
       setRegs(Object.fromEntries(((r as Registro[]) ?? []).map((x) => [x.pasta_id, x])));
       const n: Record<string, number> = {};
       ((c as { pasta_id: string }[]) ?? []).forEach((x) => { n[x.pasta_id] = (n[x.pasta_id] ?? 0) + 1; });
@@ -70,6 +74,10 @@ export function ListaContratos() {
 
   const etapa = (l: Linha) => {
     const r = regs[l.pasta_id];
+    const e = envelopes[l.pasta_id];
+    if (e === 'assinado') return ['Contrato assinado', 'sp-aprovada'];
+    if (e === 'enviado') return ['Contrato enviado', 'sp-aguardando_analise'];
+    if (e === 'preparado') return ['Envelope montado', 'sp-pronta'];
     if (emitidos[l.pasta_id]) return ['Emitido', 'sp-aprovada'];
     if (r?.status === 'conferido' && r.pagamento_conferido_em) return ['Pronto para emitir', 'sp-pronta'];
     if (r) return ['Em conferência', 'sp-em_analise'];
@@ -162,7 +170,11 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     setReg(rg);
     setAreas((ar as Areas) ?? null);
     setEmp((e?.dados as Record<string, string>) ?? {});
-    setEmit((c as Emitido[]) ?? []);
+    // ativos no topo, na ordem do envelope (Carta Proposta, Intermediação, Quadro Resumo, Normas);
+    // cancelados embaixo, do mais recente para o mais antigo
+    const ordemDoc: Record<string, number> = { carta_proposta: 0, intermediacao: 1, quadro_resumo: 2, normas: 3 };
+    setEmit(((c as Emitido[]) ?? []).sort((x, y) => Number(!!x.cancelado_em) - Number(!!y.cancelado_em)
+      || (x.cancelado_em ? 0 : (ordemDoc[x.documento] ?? 9) - (ordemDoc[y.documento] ?? 9)) || y.numero - x.numero));
     // Emissão sugere só o que ainda não foi emitido
     const ativos = new Set(((c as Emitido[]) ?? []).filter((x) => !x.cancelado_em).map((x) => x.documento));
     if (ativos.size) { setEscolha({ quadro_resumo: !ativos.has('quadro_resumo'), normas: !ativos.has('normas') }); setComCarta(!ativos.has('carta_proposta')); }
@@ -255,7 +267,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         setOcupado(`Gerando ${NOME_DOCUMENTO[t]}…`);
         const ctx = contexto();
         // Word sempre a partir do modelo; PDF só quando o modelo é o padrão (com modelo próprio, o PDF sai na D4Sign)
-        const [{ docx }, pdf] = await Promise.all([wordPreenchido(t, ctx), modelos[t] ? null : gerarDocumento(t, ctx).then((x) => x.pdf)]);
+        const [{ docx }, gerado] = await Promise.all([wordPreenchido(t, ctx), modelos[t] ? null : gerarDocumento(t, ctx)]);
+        const pdf = gerado?.pdf ?? null;
         const base = `${pasta.id}/${crypto.randomUUID()}`;
         const caminho = pdf ? `${base}.pdf` : null, caminhoDocx = `${base}.docx`;
         const [u1, u2] = await Promise.all([
@@ -265,7 +278,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         if (u1.error || u2.error) throw new Error('Falha ao guardar os arquivos.');
         const { error } = await supabase.rpc('registrar_contrato', {
           p_pasta: pasta.id, p_proposta: prop.id, p_documento: t, p_nome: `${NOME_DOCUMENTO[t]} — Unidade ${ctx.unidade}`, p_caminho: caminho, p_caminho_docx: caminhoDocx,
-          p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, representante2: ctx.representante2, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas, data_contrato: ctx.data },
+          p_dados: { comprador: ctx.comprador, conjuge: ctx.conjuge, representante2: ctx.representante2, empresa: ctx.empresa, series: ctx.series, comissao: ctx.comissao, areas: ctx.areas, data_contrato: ctx.data, assinaturas: gerado?.assinaturas ?? [] },
         });
         if (error) throw new Error(error.message.includes('NAO_CONFERIDO') ? 'Confira as partes e o pagamento antes de emitir.' : 'Não foi possível registrar o documento.');
       }
@@ -273,8 +286,9 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         setOcupado('Gerando a Carta Proposta…');
         const { cartaDaProposta, partesDaLeitura } = await import('./cartaContrato');
         const partes = partesDaLeitura(padronizar(reg?.dados ?? {}), temConj, pj);
+        let posCarta: unknown[] = [];
         const [pdf, docx] = await Promise.all([
-          cartaDaProposta(prop.id, partes, emp, { data: dataContrato }),
+          cartaDaProposta(prop.id, partes, emp, { data: dataContrato, aoAssinaturas: (p) => { posCarta = p; } }),
           cartaDaProposta(prop.id, partes, emp, { data: dataContrato, formato: 'docx' }),
         ]);
         const base = `${pasta.id}/${crypto.randomUUID()}`;
@@ -286,7 +300,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         if (e1.error || e2.error) throw new Error('Falha ao guardar a carta proposta.');
         const { error } = await supabase.rpc('registrar_contrato', {
           p_pasta: pasta.id, p_proposta: prop.id, p_documento: 'carta_proposta', p_nome: `Carta Proposta ${prop.codigo} — Unidade ${prop.unidades?.numero ?? ''}`,
-          p_caminho: caminho, p_caminho_docx: caminhoDocx, p_dados: { proposta: prop.codigo, data_contrato: dataContrato },
+          p_caminho: caminho, p_caminho_docx: caminhoDocx, p_dados: { proposta: prop.codigo, data_contrato: dataContrato, assinaturas: posCarta },
         });
         if (error) throw new Error('Não foi possível registrar a carta proposta.');
       }
