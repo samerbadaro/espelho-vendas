@@ -17,7 +17,8 @@
   },
   "vars": {
     "SUPABASE_URL": "https://iujmvrnxfwsyqpzktfjr.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_m9fTsM89k0N9lMEqjaqqfw_NqIJ45Qx"
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_m9fTsM89k0N9lMEqjaqqfw_NqIJ45Qx",
+    "D4SIGN_AMBIENTE": "producao"
   }
   // SUPABASE_SECRET_KEY do projeto duo-haus-homolog: cadastrar como "Secret" no painel do Cloudflare
 }
