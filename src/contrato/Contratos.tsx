@@ -123,7 +123,7 @@ export function ListaContratos() {
 }
 
 interface Proposta {
-  id: string; codigo: string; pasta_id: string; status: string; series: SerieContrato[]; resumo: { total?: number; comissao?: number } | null;
+  id: string; codigo: string; pasta_id: string; status: string; series: SerieContrato[]; resumo: { total?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number } | null;
   unidades: { numero: string } | null;
 }
 interface PastaC {
@@ -155,12 +155,13 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     if (!p || (p as unknown as Proposta).status !== 'aprovada') { setErro('Proposta não encontrada ou não aprovada.'); return; }
     const pr = p as unknown as Proposta;
     setProp(pr);
-    const [{ data: pa }, { data: r }, { data: ar }, { data: e }, { data: c }] = await Promise.all([
+    const [{ data: pa }, { data: r }, { data: ar }, { data: e }, { data: c }, { data: cm }] = await Promise.all([
       supabase.from('pastas').select('id, codigo, status, tipo_pessoa, estado_civil, regime_bens, conjuge_participa, comprador_nome, empresa_razao_social, imobiliaria_id, imobiliarias(nome, cnpj)').eq('id', pr.pasta_id).maybeSingle(),
       supabase.from('dados_contrato').select('pasta_id, status, dados, comissao, pagamento_conferido_em, pagamento_conferido_por').eq('pasta_id', pr.pasta_id).maybeSingle(),
       supabase.from('unidade_areas').select('*').eq('numero', pr.unidades?.numero ?? '').maybeSingle(),
       supabase.from('empreendimento_contrato').select('dados').maybeSingle(),
       supabase.from('contratos').select('*').eq('pasta_id', pr.pasta_id).order('numero', { ascending: false }),
+      supabase.from('comercial').select('coordenacao_comercial, coordenacao_documento').eq('id', 1).maybeSingle(),
     ]);
     const { data: ms } = await supabase.from('modelos_contrato').select('documento, caminho').eq('ativo', true);
     setModelos(Object.fromEntries(((ms as { documento: TipoDocumento; caminho: string }[]) ?? []).map((m) => [m.documento, m.caminho])));
@@ -178,9 +179,16 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     // Emissão sugere só o que ainda não foi emitido
     const ativos = new Set(((c as Emitido[]) ?? []).filter((x) => !x.cancelado_em).map((x) => x.documento));
     if (ativos.size) { setEscolha({ quadro_resumo: !ativos.has('quadro_resumo'), normas: !ativos.has('normas') }); setComCarta(!ativos.has('carta_proposta')); }
-    setComissao((rg?.comissao?.length ? rg.comissao : pr.resumo?.comissao
-      ? [{ nome: pc?.imobiliarias?.nome ?? '', documento: pc?.imobiliarias?.cnpj ?? '', valor: Number(pr.resumo.comissao), forma: 'TED / PIX' }] : [])
-      .map((c) => ({ ...c, valor: paraTxt(c.valor) })));
+    // padrão: imobiliária da proposta + coordenação de vendas (paga pelo comprador com o sinal; item 9.3 do Quadro Resumo)
+    const coord = cm as { coordenacao_comercial: string | null; coordenacao_documento: string | null } | null;
+    const parcelasSinal = (pr.series ?? []).filter((x) => x.periodicidade === 'Sinal').reduce((t, x) => t + Number(x.qtd), 0);
+    const forma = parcelasSinal > 1 ? 'A prazo (parcelas do sinal)' : 'À vista (sinal)';
+    const vImob = pr.resumo?.comissao_imobiliaria ?? pr.resumo?.comissao;
+    const vCoord = pr.resumo?.comissao_coordenacao ?? 0;
+    setComissao((rg?.comissao?.length ? rg.comissao : [
+      ...(vImob ? [{ nome: pc?.imobiliarias?.nome ?? '', documento: pc?.imobiliarias?.cnpj ?? '', valor: Number(vImob), forma }] : []),
+      ...(vCoord ? [{ nome: coord?.coordenacao_comercial ?? 'Coordenação de vendas', documento: coord?.coordenacao_documento ?? '', valor: Number(vCoord), forma }] : []),
+    ]).map((c) => ({ ...c, valor: paraTxt(c.valor) })));
   }, [id]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -402,7 +410,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
         </div>
         {difTotal > 0.05 && <p className="erro">A soma das séries ({fmtReal(total)}) é diferente do total da proposta ({fmtReal(Number(prop.resumo?.total))}). Confira a proposta.</p>}
 
-        <h4 className="ct-sub">Comissão (item 5 do Quadro Resumo)</h4>
+        <h4 className="ct-sub">Comissão (item 9.3 do Quadro Resumo)</h4>
         {comissao.map((c, i) => (
           <div key={i} className="ct-comissao">
             <label>Beneficiário<input value={c.nome} onChange={(e) => setComissao(comissao.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))} /></label>

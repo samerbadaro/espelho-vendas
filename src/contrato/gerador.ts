@@ -323,7 +323,91 @@ function blocoAssinaturasFinais(e: Escritor) {
   ]);
 }
 
+// ---------- blocos do modelo Duo Haus (minuta final, 23/11/2026) ----------
+
+/** Item 3: os cinco campos da minuta (unidade, área total, área privativa, vaga e área privativa da vaga). */
+function blocoUnidadeQuadro(e: Escritor) {
+  const a = e.ctx.areas ?? {};
+  const m2 = (k: keyof Areas) => (a[k] == null || a[k] === '' || Number(a[k]) === 0 ? '-' : `${fmtNum(Number(a[k]), 2)} m2`);
+  const vaga = String(a.vagas ?? '').trim();
+  e.tabelaDados([
+    ['Unidade Autônoma', e.ctx.unidade],
+    ['Área Total', m2('area_total')],
+    ['Área Privativa', m2('area_privativa')],
+    ['Vaga de Garagem', vaga && vaga !== '-' ? up(vaga) : 'Não possui'],
+    ['Área Privativa da vaga de garagem', m2('area_acessoria')],
+  ]);
+}
+
+const PER: Record<string, { adj: string; periodo: string }> = {
+  Mensais: { adj: 'mensais', periodo: 'meses' }, Bimestrais: { adj: 'bimestrais', periodo: 'bimestres' },
+  Trimestrais: { adj: 'trimestrais', periodo: 'trimestres' }, Semestrais: { adj: 'semestrais', periodo: 'semestres' },
+  Anuais: { adj: 'anuais', periodo: 'anos' },
+};
+const CORRECAO = 'que serão devidamente acrescidas da correção prevista no item 4.3.1 abaixo';
+
+/** Texto de uma série das parcelas intermediárias (alínea "b"), conforme a periodicidade. */
+export function textoSerieIntermediaria(x: SerieContrato): string {
+  const unit = valorExt(x.valor), tot = valorExt(x.qtd * x.valor), venc = fmtData(x.vencimento);
+  if (x.periodicidade === 'Permuta')
+    return `${qtdExtenso(x.qtd)} parcela${x.qtd > 1 ? 's' : ''} no valor unitário de ${unit}${x.qtd > 1 ? `, totalizando ${tot}` : ''}, a ser${x.qtd > 1 ? 'em' : ''} quitada${x.qtd > 1 ? 's' : ''} por meio de permuta, com vencimento na data de ${venc}, conforme instrumento próprio.`;
+  if (x.qtd === 1 || !PER[x.periodicidade])
+    return x.qtd === 1
+      ? `01 (uma) prestação única, no valor de ${unit}, com vencimento na data de ${venc}, que será devidamente acrescida da correção prevista no item 4.3.1 abaixo.`
+      : `${qtdExtenso(x.qtd)} prestações, no valor unitário de ${unit} cada uma, totalizando ${tot}, com vencimento da primeira na data de ${venc}, ${CORRECAO}.`;
+  const p = PER[x.periodicidade];
+  return `${qtdExtenso(x.qtd)} prestações ${p.adj} e consecutivas, no valor unitário de ${unit} cada uma, totalizando ${tot}, com vencimento da primeira na data de ${venc} e as demais na mesma data dos ${p.periodo} subsequentes, ${CORRECAO}.`;
+}
+
+/** Itens 4 e 4.1: preço; a) sinal (a.1, a.2…); b) intermediárias (b.1, b.2… uma por série); c) habite-se. */
+function blocoPagamentoQuadro(e: Escritor) {
+  const s = e.ctx.series.filter((x) => x.qtd > 0 && x.valor > 0);
+  const total = s.reduce((t, x) => t + x.qtd * x.valor, 0);
+  const soma = (l: SerieContrato[]) => l.reduce((t, x) => t + x.qtd * x.valor, 0);
+  const pct = (v: number) => `${fmtNum((v * 100) / (total || 1), 2)}%`;
+  const sinal = s.filter((x) => x.periodicidade === 'Sinal');
+  const fins = s.filter((x) => x.periodicidade === 'Financiamento');
+  const meio = s.filter((x) => x.periodicidade !== 'Sinal' && x.periodicidade !== 'Financiamento');
+
+  e.para(`O preço ajustado para aquisição da unidade autônoma objeto deste contrato é de ${valorExt(total)} e deverá ser pago pelo COMPRADOR conforme previsto no item 4.1 abaixo.`);
+  e.para('4.1 – FORMA DE PAGAMENTO DO PREÇO', { negrito: true, secao: true });
+
+  const parcSinal = sinal.flatMap((x) => Array.from({ length: x.qtd }, (_, k) => ({ valor: x.valor, venc: dataDaParcela(x, k) })));
+  if (parcSinal.length) {
+    e.para(`a) Sinal: (${pct(soma(sinal))} do valor do contrato): O valor de ${valorExt(soma(sinal))}, a ser pago da forma abaixo:`, { recuo: 8 });
+    parcSinal.forEach((p, i) => e.para(`a.${i + 1}) Parcela no valor de ${valorExt(p.valor)}, com vencimento na data de ${fmtData(p.venc)}.`, { recuo: 8 }));
+  } else e.para('a) Sinal: Sem efeito.', { recuo: 8 });
+
+  if (meio.length) {
+    e.para(`b) Parcelas Intermediárias: (${pct(soma(meio))} do valor do contrato): O valor de ${valorExt(soma(meio))}, a ser pago da forma abaixo:`, { recuo: 8 });
+    meio.forEach((x, i) => e.para(`b.${i + 1}) ${textoSerieIntermediaria(x)}`, { recuo: 8 }));
+  } else e.para('b) Parcelas Intermediárias: Sem efeito.', { recuo: 8 });
+
+  const parcFin = fins.flatMap((x) => Array.from({ length: x.qtd }, (_, k) => ({ valor: x.valor, venc: dataDaParcela(x, k) })));
+  const fimHabite = 'ou no prazo de até 30 (trinta) dias após a expedição do habite-se do empreendimento, o que ocorrer por último. O pagamento poderá ser feito com recursos próprios ou, a critério do COMPRADOR, por meio de financiamento bancário.';
+  if (parcFin.length === 1)
+    e.para(`c) Parcela - Habite-se: (${pct(soma(fins))} do valor do contrato): O valor de ${valorExt(soma(fins))}, que deverá ser pago em 01 (uma) parcela única, devidamente acrescida da correção prevista no item 4.3.1 abaixo, com vencimento na data de ${fmtData(parcFin[0].venc)} ${fimHabite}`, { recuo: 8 });
+  else if (parcFin.length > 1) {
+    e.para(`c) Parcelas - Habite-se: (${pct(soma(fins))} do valor do contrato): O valor de ${valorExt(soma(fins))}, que deverá ser pago em ${qtdExtenso(parcFin.length)} parcelas, devidamente acrescidas da correção prevista no item 4.3.1 abaixo, da forma abaixo, ${fimHabite.replace('o que ocorrer', 'para cada parcela, o que ocorrer')}`, { recuo: 8 });
+    parcFin.forEach((p, i) => e.para(`c.${i + 1}) Parcela no valor de ${valorExt(p.valor)}, com vencimento na data de ${fmtData(p.venc)}.`, { recuo: 8 }));
+  } else e.para('c) Parcela - Habite-se: Sem efeito.', { recuo: 8 });
+}
+
+/** Item 9.3: comissão paga diretamente pelo comprador (imobiliária e coordenação de vendas). */
+function blocoComissaoQuadro(e: Escritor) {
+  const total = e.ctx.comissao.filter((c) => c.nome || c.valor).reduce((t, c) => t + Number(c.valor || 0), 0);
+  e.para(`9.3 – Em atendimento ao Art. 35-A, inciso III, da Lei nº 4.591/64, a comissão devida, no valor de ${valorExt(total)}, foi paga diretamente pelo COMPRADOR à empresa de venda de imóveis e/ou consultores imobiliários independentes responsáveis pelos serviços de intermediação do presente negócio, abaixo identificados, não tendo referido valor integrado o preço de aquisição da unidade autônoma objeto deste contrato:`);
+  blocoComissao(e);
+}
+
+/** Aceite de cláusula: só as linhas de assinatura do(s) comprador(es). */
+function blocoAceiteCompradores(e: Escritor) {
+  e.assinaturas(nomesCompradores(e.ctx));
+}
+
 const BLOCOS: Record<string, (e: Escritor) => void> = {
+  unidade_quadro: blocoUnidadeQuadro, pagamento_quadro: blocoPagamentoQuadro, comissao_quadro: blocoComissaoQuadro,
+  aceite_compradores: blocoAceiteCompradores,
   partes: blocoPartes, quadro_unidade: blocoUnidade, pagamento: blocoPagamento, tabela_comissao: blocoComissao,
   rubrica_compradores: blocoRubrica, local_data: blocoLocalData, assinaturas_finais: blocoAssinaturasFinais,
 };

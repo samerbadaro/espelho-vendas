@@ -167,6 +167,11 @@ function conteudo(d: DadosCarta, simples: boolean): Bloco[] {
 
   // Intermediação
   const linhasCom = d.resultado.comissao.linhas.filter((l) => l.comissao > 0);
+  const nomeCoord = c.coordenacao_comercial || 'Coordenação de vendas';
+  const linhasIntermed = linhasCom.flatMap((l) => [
+    ...(l.coordenacao > 0 ? [{ quem: nomeCoord, funcao: 'Coordenação de vendas', valor: l.coordenacao, data: l.data }] : []),
+    ...(l.imobiliaria > 0 ? [{ quem: d.imobiliaria || (simples ? 'Venda direta' : branco), funcao: 'Imobiliária', valor: l.imobiliaria, data: l.data }] : []),
+  ]);
   if (!simples || linhasCom.length) {
     b.push({ k: 'secao', t: 'Intermediação imobiliária', minimo: 50 });
     b.push({ k: 'texto', t: 'Paga com o sinal de negócio e destacada do valor da proposta.', tam: 8.5, cinza: true });
@@ -175,7 +180,7 @@ function conteudo(d: DadosCarta, simples: boolean): Bloco[] {
       k: 'tabela',
       head: ['Intermediador', 'Função', '%', 'Valor', 'Vencimento'],
       body: [
-        ...linhasCom.map((l): RowInput => [d.imobiliaria || (simples ? 'Venda direta' : branco), 'Imobiliária', total > 0 ? pct(l.comissao / total) : '—', fmtReal(l.comissao), fmtData(l.data)]),
+        ...linhasIntermed.map((l): RowInput => [l.quem, l.funcao, total > 0 ? pct(l.valor / total) : '—', fmtReal(l.valor), fmtData(l.data)]),
         totalLinha('Total da intermediação', fmtReal(d.resultado.comissao.destacada), 5, 3),
       ],
       colunas: { 2: { halign: 'right' }, 3: { halign: 'right' } },
