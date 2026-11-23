@@ -117,6 +117,14 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
 
   const configurado = !!env.D4SIGN_TOKEN;
   if (acao === 'situacao') return json({ configurado, ambiente: env.D4SIGN_AMBIENTE === 'producao' ? 'produção' : 'sandbox (testes)' });
+  if (acao === 'diagnostico') {
+    // confere as chaves sem mostrá-las: só o começo e o tamanho, e uma chamada de leitura (lista de cofres)
+    const t = (env.D4SIGN_TOKEN ?? ''), c = (env.D4SIGN_CRYPTKEY ?? '');
+    const forma = (v: string) => ({ inicio: v.slice(0, 5), tamanho: v.length, espacos: v !== v.trim() });
+    let teste = 'ok';
+    try { const r = await d4(env, '/safes'); teste = `ok: ${Array.isArray(r) ? r.length : 0} cofre(s)`; } catch (e) { teste = (e as Error).message; }
+    return json({ configurado, ambiente: env.D4SIGN_AMBIENTE === 'producao' ? 'produção' : 'sandbox (testes)', token: forma(t), cryptKey: forma(c), teste });
+  }
   if (!configurado) return erro('A D4Sign ainda não foi configurada (chaves ausentes no servidor).', 400);
 
   try {

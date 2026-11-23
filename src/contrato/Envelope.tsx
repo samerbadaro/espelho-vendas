@@ -146,6 +146,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
         {ativo ? <span className={`selo ${SITUACAO[ativo.status][1]}`}>{SITUACAO[ativo.status][0]}</span> : <span className="selo sp-incompleta">Não montado</span>}
       </div>
 
+      <p className="dica"><button type="button" className="mini" onClick={async () => { const r = await d4({ acao: 'diagnostico' }) as Record<string, unknown>; alert(JSON.stringify(r, null, 2)); }}>Testar conexão com a D4Sign</button></p>
       {sit && !sit.configurado && <p className="erro">A D4Sign ainda não foi configurada no servidor (chaves D4SIGN_TOKEN e D4SIGN_CRYPTKEY no Cloudflare). Dá para conferir a composição; o envio fica liberado quando as chaves forem cadastradas.</p>}
 
       {/* composição */}
