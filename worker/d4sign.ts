@@ -212,13 +212,15 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       if (!principal.uuid) throw new ErroD4('A D4Sign não devolveu o identificador do documento.');
       for (const d of docs) d.d4sign_uuid = principal.uuid;
       const origem = new URL(req.url).origin;
-      await d4(env, `/documents/${principal.uuid}/webhooks`, { method: 'POST', body: JSON.stringify({ url: `${origem}/api/d4sign/webhook` }) }).catch(() => null);
+      const falhaAviso = await d4(env, `/documents/${principal.uuid}/webhooks`, { method: 'POST', body: JSON.stringify({ url: `${origem}/api/d4sign/webhook` }) })
+        .then(() => null, (x: unknown) => (x instanceof Error ? x.message : String(x)));
       const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }));
       const { data: env_ } = await adm.from('envelopes').insert({
         pasta_id: pasta, proposta_id: contratos[0].proposta_id, d4sign_uuid: principal.uuid, documentos: limpos, criado_por: email,
       }).select('id').single();
       await adm.from('contratos').update({ assinatura: 'preparado' }).in('id', idsC);
       await historico(adm, pasta, 'Envelope montado na D4Sign', { documentos: limpos.map((d) => d.nome) }, email);
+      if (falhaAviso) await historico(adm, pasta, 'Aviso automático de assinaturas não registrado na D4Sign', { erro: falhaAviso }, email);
       return json({ ok: true, envelope: env_?.id });
     }
 
@@ -354,6 +356,11 @@ export async function webhookD4Sign(req: Request, env: EnvD4): Promise<Response>
   }
   const adm = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: e } = await adm.from('envelopes').select('*').eq('d4sign_uuid', uuid).maybeSingle<Envelope>();
-  if (e) await sincronizar(env, adm, e, 'D4Sign').catch(() => null);
+  if (e) {
+    const tipo = (() => { try { return String((JSON.parse(bruto) as { type_post?: string }).type_post ?? ''); } catch { return new URLSearchParams(bruto).get('type_post') ?? ''; } })();
+    const falha = await sincronizar(env, adm, e, 'D4Sign').then(() => null, (x: unknown) => (x instanceof Error ? x.message : String(x)));
+    await historico(adm, e.pasta_id, falha ? 'Aviso da D4Sign recebido, mas não foi possível atualizar' : 'Aviso da D4Sign recebido',
+      falha ? { tipo, erro: falha } : { tipo }, 'D4Sign').catch(() => null);
+  }
   return new Response('ok');
 }
