@@ -316,10 +316,14 @@ async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { n
         return n.length >= 3 && nomes.some((x) => x === n || x.includes(n) || (x.length >= 8 && n.includes(x)));
       });
       if (!quem || !doc?.d4sign_uuid) continue;
-      // o carimbo da assinatura fica logo acima da linha
+      // A D4Sign desenha o carimbo com tamanho fixo (cerca de 150 × 78 na escala da página que recebe).
+      // Mandamos a página na escala de pixels de um A4 (794 × 1123) para o carimbo ficar com ~40 × 21 mm,
+      // centralizado na linha e com a base encostada nela.
+      const PX = 794 / 210, PY = 1123 / 297, LARG_MM = 40, ALT_MM = 21;
+      const xMm = p.x + Math.max(0, (p.largura - LARG_MM) / 2), yMm = Math.max(0, p.y - ALT_MM);
       pinos.push({
         document: doc.d4sign_uuid, email: quem.email.trim().toLowerCase(), page: String((doc.pagina_inicial ?? 1) - 1 + p.pagina),
-        page_width: '210', page_height: '297', position_x: String(Math.round(p.x + 4)), position_y: String(Math.max(0, Math.round(p.y - 14))), type: '0',
+        page_width: '794', page_height: '1123', position_x: String(Math.round(xMm * PX)), position_y: String(Math.round(yMm * PY)), type: '0',
       });
     }
   }
