@@ -44,9 +44,16 @@ const PARCEIROS: PapelManual[] = ['imobiliaria', 'corretor'];
 const TODOS: PapelManual[] = ['admin', 'vendas', 'imobiliaria', 'corretor'];
 
 /** Atualizado a cada entrega (data da última revisão do manual). */
-export const REVISAO_MANUAL = '22/11/2026';
+export const REVISAO_MANUAL = '23/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
+  {
+    data: '23/11/2026', titulo: 'Assinaturas no lugar certo', papeis: ['admin', 'vendas'],
+    itens: [
+      'Na D4Sign, cada assinatura vai para a linha com o nome do assinante no Quadro Resumo, nas Normas e na Carta Proposta.',
+      'Envelope e lista de documentos na mesma ordem: Quadro Resumo, Normas, Carta Proposta.',
+    ],
+  },
   {
     data: '22/11/2026', titulo: 'Cliente desistiu e devolução de Pix',
     itens: [
@@ -543,9 +550,11 @@ export const CAPITULOS: Capitulo[] = [
           'Com todos os documentos validados, clique em “Montar envelope na D4Sign”. O Quadro Resumo é o principal; Normas, Carta Proposta e documentos fixos vão como anexos.',
           'Confira a prévia (PDF do principal ou o pacote completo em ZIP). Se algo estiver errado, use “Descartar e ajustar”.',
           'Revise os assinantes e a ordem: cliente e cônjuge, imobiliária, incorporadora e testemunhas. Cada um pode receber por e-mail ou WhatsApp.',
+          'A assinatura de cada pessoa vai para a linha com o nome dela nos documentos gerados pelo sistema. Por isso, o nome do assinante tem que ser o mesmo que aparece embaixo da linha. Quem não tiver linha com o nome assina na folha de assinaturas da D4Sign.',
           'Clique em “Enviar para assinatura”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
           'Quando todos assinarem, baixe o pacote assinado (ZIP).',
         ],
+        dica: 'O envelope sai na mesma ordem da tela: Quadro Resumo, Normas, Carta Proposta e documentos fixos. Documentos emitidos antes de 23/11/2026 não têm a posição das assinaturas: emita de novo para posicionar.',
         atencao: 'Enquanto o envelope estiver montado ou em assinatura, os documentos ficam travados. Para mudar algo, descarte (antes do envio) ou cancele o envelope.',
       },
       {

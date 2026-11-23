@@ -170,10 +170,26 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       const principal = await subir(itens[0], `/documents/${uuidCofre}/upload`);
       if (!principal.uuid) throw new ErroD4('A D4Sign não devolveu o identificador do documento.');
       const docs: DocEnv[] = [{ ...itens[0], d4sign_uuid: principal.uuid }];
-      for (const i of itens.slice(1)) {
+      // a D4Sign mostra os anexos do mais novo para o mais antigo: subimos do último para o primeiro,
+      // para o envelope ficar na ordem Quadro Resumo, Normas, Carta Proposta, documentos fixos
+      const anexos = itens.slice(1);
+      const uuids: Record<string, string | null> = {};
+      for (const i of [...anexos].reverse()) {
         const r = await subir(i, `/documents/${principal.uuid}/uploadslave`);
-        docs.push({ ...i, d4sign_uuid: r.uuid ?? null });
+        uuids[i.arquivo] = r.uuid ?? null;
       }
+      // a resposta do upload de anexo não traz o identificador: busca na lista de anexos pelo nome do arquivo
+      if (anexos.some((i) => !uuids[i.arquivo])) {
+        const l = (await d4(env, `/documents/${principal.uuid}/listslaves`).catch(() => null)) as unknown;
+        const lista = (Array.isArray(l) ? l : Array.isArray((l as { data?: unknown })?.data) ? (l as { data: unknown[] }).data : []) as Record<string, string>[];
+        for (const x of lista) {
+          const nome = x.nameDoc ?? x.name_document ?? x.nome ?? '';
+          const id = x.uuidDoc ?? x.uuid_doc ?? x.uuid ?? '';
+          const alvo = anexos.find((i) => i.arquivo === nome || nome.startsWith(i.arquivo.replace(/\.(pdf|docx)$/i, '')));
+          if (alvo && id && !uuids[alvo.arquivo]) uuids[alvo.arquivo] = id;
+        }
+      }
+      for (const i of anexos) docs.push({ ...i, d4sign_uuid: uuids[i.arquivo] ?? null });
       const origem = new URL(req.url).origin;
       await d4(env, `/documents/${principal.uuid}/webhooks`, { method: 'POST', body: JSON.stringify({ url: `${origem}/api/d4sign/webhook` }) }).catch(() => null);
       const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid }));
@@ -224,6 +240,12 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
         whatsapp: a.canal === 'whatsapp' ? telefone(a.whatsapp || '') : null, canal: a.canal === 'whatsapp' ? 'whatsapp' : 'email',
         key_signer: devolvidos.find((d) => d.email?.toLowerCase() === a.email.trim().toLowerCase())?.key_signer ?? devolvidos[i]?.key_signer ?? null,
       })));
+      // posiciona cada assinatura na linha certa dos documentos gerados pelo sistema (o nome da linha = o nome do assinante)
+      const pinos = await pinosDoEnvelope(adm, e, ordenada);
+      if (pinos.length) {
+        await d4(env, `/documents/${e.d4sign_uuid}/addpins`, { method: 'POST', body: JSON.stringify({ pins: pinos }) })
+          .catch((x) => historico(adm, e.pasta_id, 'Posição das assinaturas não aplicada', { erro: (x as Error).message }, email));
+      }
       await d4(env, `/documents/${e.d4sign_uuid}/sendtosigner`, {
         method: 'POST', body: JSON.stringify({ skip_email: '0', workflow: corpo.emOrdem === false ? '0' : '1', message: String(corpo.mensagem || '').slice(0, 500) }),
       });
@@ -263,6 +285,33 @@ async function hmacHex(chave: string, texto: string) {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(chave), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(texto));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+const normal = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Pinos de assinatura: para cada linha de assinatura gravada na emissão, o assinante com o mesmo nome. */
+async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { nome: string; email: string; papel: string }[]) {
+  const ids = e.documentos.filter((d) => d.tipo === 'contrato' && d.d4sign_uuid).map((d) => d.id);
+  if (!ids.length) return [];
+  const { data } = await adm.from('contratos').select('id, dados').in('id', ids);
+  const pinos: Record<string, string>[] = [];
+  for (const c of (data ?? []) as { id: string; dados: { assinaturas?: { pagina: number; x: number; y: number; largura: number; nomes: string[] }[] } | null }[]) {
+    const doc = e.documentos.find((d) => d.id === c.id);
+    for (const p of c.dados?.assinaturas ?? []) {
+      const nomes = (p.nomes ?? []).map(normal).filter((n) => n.length >= 3);
+      const quem = assinantes.find((a) => {
+        const n = normal(a.nome || '');
+        return n.length >= 3 && nomes.some((x) => x === n || x.includes(n) || (x.length >= 8 && n.includes(x)));
+      });
+      if (!quem || !doc?.d4sign_uuid) continue;
+      // o carimbo da assinatura fica logo acima da linha
+      pinos.push({
+        document: doc.d4sign_uuid, email: quem.email.trim().toLowerCase(), page: String(p.pagina),
+        page_width: '210', page_height: '297', position_x: String(Math.round(p.x + 4)), position_y: String(Math.max(0, Math.round(p.y - 14))), type: '0',
+      });
+    }
+  }
+  return pinos;
 }
 
 /** POST /api/d4sign/webhook — chamado pela D4Sign quando alguém assina, finaliza ou cancela. */

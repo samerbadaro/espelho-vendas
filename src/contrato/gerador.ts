@@ -83,9 +83,13 @@ class Escritor {
   }
 }
 
+/** Onde fica cada linha de assinatura no PDF (mm, origem no canto superior esquerdo, página A4). */
+export interface PosicaoAssinatura { pagina: number; x: number; y: number; largura: number; nomes: string[] }
+
 /** Desenha o conteúdo em PDF (jsPDF). */
 class EscritorPdf {
   y = TOPO;
+  posicoes: PosicaoAssinatura[] = [];
   constructor(public doc: JsPDF, public tabela: AutoTable) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(20);
   }
@@ -141,6 +145,7 @@ class EscritorPdf {
         const x = M + k * (w + 10);
         doc.setDrawColor(60); doc.setLineWidth(0.2);
         doc.line(x, this.y + 10, x + w, this.y + 10);
+        this.posicoes.push({ pagina: doc.getNumberOfPages(), x: Math.round(x * 10) / 10, y: Math.round((this.y + 10) * 10) / 10, largura: Math.round(w * 10) / 10, nomes: linhas.filter(Boolean) });
         linhas.forEach((t, j) => {
           doc.setFont('helvetica', j === 0 ? 'bold' : 'normal'); doc.setFontSize(8.3);
           doc.text(doc.splitTextToSize(t, w)[0], x + w / 2, this.y + 14 + j * 4, { align: 'center' });
@@ -345,7 +350,7 @@ async function montar(tipo: TipoDocumento, ctx: ContextoContrato) {
 const rodape = (tipo: TipoDocumento, ctx: ContextoContrato) => `${NOME_DOCUMENTO[tipo]} · Unidade ${ctx.unidade} · ${ctx.referencia}`;
 
 /** Gera o PDF. Devolve o arquivo e os campos do cadastro que estavam vazios. */
-export async function gerarDocumento(tipo: TipoDocumento, ctx: ContextoContrato): Promise<{ pdf: Blob; faltando: string[] }> {
+export async function gerarDocumento(tipo: TipoDocumento, ctx: ContextoContrato): Promise<{ pdf: Blob; faltando: string[]; assinaturas: PosicaoAssinatura[] }> {
   const [{ jsPDF }, { default: autoTable }, e] = await Promise.all([import('jspdf'), import('jspdf-autotable'), montar(tipo, ctx)]);
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   const w = new EscritorPdf(doc, autoTable as unknown as AutoTable);
@@ -361,7 +366,7 @@ export async function gerarDocumento(tipo: TipoDocumento, ctx: ContextoContrato)
     doc.text(rodape(tipo, ctx), M, A4.h - 10);
     doc.text(`Página ${i} de ${n}`, A4.w - M, A4.h - 10, { align: 'right' });
   }
-  return { pdf: doc.output('blob'), faltando: [...e.faltando] };
+  return { pdf: doc.output('blob'), faltando: [...e.faltando], assinaturas: w.posicoes };
 }
 
 // ---------- Word (.docx) editável, com o mesmo conteúdo ----------
