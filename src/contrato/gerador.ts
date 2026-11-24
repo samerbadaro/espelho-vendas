@@ -71,7 +71,7 @@ class Escritor {
       // data base da correção: dia 01 do mês da data do contrato (Quadro Resumo 4.3.4)
       if (k === 'contrato.data_base') { const [a, m] = (this.ctx.data || '').split('-'); return a && m ? `01/${m}/${a}` : `[${k}]`; }
       const v = this.ctx.campos[k];
-      if (v == null || v === '') { this.faltando.add(k); return `[${k}]`; }
+      if (v == null || v === '') { this.faltando.add(k); return '________________'; }
       return v;
     });
   }

@@ -311,7 +311,7 @@ export function EditorProposta({
           {' '}Para o incorporador no sinal: <strong>{fmtReal(r.comissao.linhas.reduce((s, l) => s + l.incorporador, 0))}</strong>.
         </p>
         <div className="tabela-rolagem">
-          <table className="comp">
+          <table className="comp comp-centro">
             <thead><tr><th>Vencimento</th><th className="dir">Parcela de sinal</th>{coordPct > 0 && <th className="dir">{nomeCoord}</th>}<th className="dir">Imobiliária</th><th className="dir">Incorporador</th></tr></thead>
             <tbody>
               {r.comissao.linhas.map((l, i) => (

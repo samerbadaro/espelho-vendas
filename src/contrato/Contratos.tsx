@@ -209,7 +209,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     pagamento: !!reg?.pagamento_conferido_em,
     empreendimento: camposVazios.length === 0,
   };
-  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && ok.empreendimento && (escolha.quadro_resumo || escolha.normas || comCarta);
+  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && (escolha.quadro_resumo || escolha.normas || comCarta);
 
   const salvarComissao = async (conferido: boolean) => {
     if (conferido && comissao.some((c) => !c.nome.trim() || !(doTxt(c.valor) > 0))) { avisar('Preencha nome e valor de cada beneficiário da comissão.', 'erro'); return; }
@@ -438,7 +438,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
           {!ok.partes && <li>Conferir as partes do contrato (leitura com IA → Marcar como conferido).</li>}
           {!ok.unidade && <li>Unidade sem quadro de áreas.</li>}
           {!ok.pagamento && <li>Conferir o fluxo de pagamento e a comissão.</li>}
-          {!ok.empreendimento && <li>Faltam {camposVazios.length} dado(s) da incorporação em Empreendimento → Dados para contrato ({camposVazios.slice(0, 3).map((c) => c.rotulo).join(', ')}{camposVazios.length > 3 ? '…' : ''}).</li>}
+          {!ok.empreendimento && <li>Faltam {camposVazios.length} dado(s) em Empreendimento → Dados para contrato ({camposVazios.map((c) => c.rotulo).join('; ')}). Dá para emitir assim: esses pontos saem em branco (____) no documento, para completar no Word ou emitir de novo depois de preencher.</li>}
         </ul>
         <div className="ct-escolha">
           {(Object.keys(NOME_DOCUMENTO) as TipoDocumento[]).map((t) => (
