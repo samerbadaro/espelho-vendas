@@ -79,15 +79,16 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
       gestor = (data as Gestor | null) ?? null;
     }
     const tel = (t?: string) => (t ? formatarTelefone(t) : '');
-    setLista([
+    setLista(([
       { ordem: 1, papel: pj ? `Comprador (representante de ${dados.empresa?.razao_social ?? 'empresa'})` : 'Comprador', nome: c.nome ?? '', email: c.email ?? '', whatsapp: tel(c.telefone), canal: 'email' },
       ...(pj && dados.representante2?.nome ? [{ ordem: 2, papel: `2º representante de ${dados.empresa?.razao_social ?? 'empresa'}`, nome: dados.representante2.nome ?? '', email: dados.representante2.email ?? '', whatsapp: tel(dados.representante2.telefone), canal: 'email' as const }] : []),
       ...(temConjuge && !pj ? [{ ordem: 2, papel: 'Cônjuge', nome: j.nome ?? '', email: j.email ?? '', whatsapp: tel(j.telefone), canal: 'email' as const }] : []),
       { ordem: 3, papel: 'Imobiliária', nome: gestor?.nome ?? '', email: gestor?.email ?? '', whatsapp: '', canal: 'email' },
+      ...(emp['coordenacao.signatario_email'] ? [{ ordem: 4, papel: 'Coordenação de vendas', nome: emp['coordenacao.signatario_nome'] || emp['coordenacao.razao_social'] || '', email: emp['coordenacao.signatario_email'], whatsapp: '', canal: 'email' as const }] : []),
       { ordem: 4, papel: 'Incorporadora', nome: emp['vendedora.signatario_nome'] ?? '', email: emp['vendedora.signatario_email'] ?? '', whatsapp: '', canal: 'email' },
       { ordem: 5, papel: 'Testemunha', nome: emp['testemunha1.nome'] ?? '', email: emp['testemunha1.email'] ?? '', whatsapp: '', canal: 'email', testemunha: true },
       { ordem: 6, papel: 'Testemunha', nome: emp['testemunha2.nome'] ?? '', email: emp['testemunha2.email'] ?? '', whatsapp: '', canal: 'email', testemunha: true },
-    ]);
+    ] as Assinante[]).map((a, i) => ({ ...a, ordem: i + 1 })));
   }, [dados, temConjuge, pj, emp, imobiliariaId]);
   // sugere uma vez por envelope montado; depois, o que a pessoa digitar não é sobrescrito
   const sugeridoPara = useRef<string | null>(null);

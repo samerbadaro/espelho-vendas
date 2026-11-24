@@ -56,6 +56,7 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
       'No contrato, o sinal sai líquido para a vendedora (já sem a comissão, que o comprador paga direto aos intermediários) e o preço do item 4 também é líquido.',
       'A data base da correção (item 4.3.4) é sempre o dia 01 do mês da data do contrato. Para uma exceção, baixe o Word e ajuste.',
       'O item 3 traz unidade, área total e área privativa; o 3.1 descreve o direito de uso de uma vaga rotativa na garagem coletiva.',
+      'Coordenação de vendas em Dados para contrato (razão social, CNPJ e quem assina): a empresa entra na linha da comissão do item 9.3 e quem assina entra sozinho no envelope, como “Coordenação de vendas”, para assinar a intermediação.',
     ],
   },
   {

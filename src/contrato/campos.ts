@@ -47,6 +47,10 @@ export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
 
   { grupo: 'Assinaturas', chave: 'assinatura.plataforma', rotulo: 'Plataforma de assinatura eletrônica', exemplo: 'D4Sign' },
   { grupo: 'Assinaturas', chave: 'assinatura.cofre', rotulo: 'Cofre na D4Sign (nome)', exemplo: 'Duo Haus – Contratos', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.razao_social', rotulo: 'Razão social da coordenação de vendas (comissão, item 9.3)', exemplo: 'COORDENAÇÃO EXEMPLO LTDA', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.cnpj', rotulo: 'CNPJ da coordenação de vendas', exemplo: '44.555.666/0001-81', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.signatario_nome', rotulo: 'Quem assina pela coordenação — nome', exemplo: 'SÓCIO EXEMPLO', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.signatario_email', rotulo: 'Quem assina pela coordenação — e-mail (entra no envelope para assinar a intermediação)', exemplo: 'coordenacao@exemplo.com', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'vendedora.signatario_nome', rotulo: 'Quem assina pela incorporadora — nome', exemplo: 'REPRESENTANTE EXEMPLO', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'vendedora.signatario_email', rotulo: 'Quem assina pela incorporadora — e-mail', exemplo: 'incorporadora@exemplo.com', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'testemunha1.nome', rotulo: 'Testemunha 1 — nome', exemplo: 'TESTEMUNHA EXEMPLO UM' },

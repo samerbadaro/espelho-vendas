@@ -171,7 +171,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     const rg = (r as Registro) ?? null;
     setReg(rg);
     setAreas((ar as Areas) ?? null);
-    setEmp((e?.dados as Record<string, string>) ?? {});
+    const empDados = (e?.dados as Record<string, string>) ?? {};
+    setEmp(empDados);
     // ativos no topo, na ordem do envelope (Carta Proposta, Intermediação, Quadro Resumo, Normas);
     // cancelados embaixo, do mais recente para o mais antigo
     const ordemDoc: Record<string, number> = { carta_proposta: 0, intermediacao: 1, quadro_resumo: 2, normas: 3 };
@@ -188,7 +189,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     const vCoord = pr.resumo?.comissao_coordenacao ?? 0;
     setComissao((rg?.comissao?.length ? rg.comissao : [
       ...(vImob ? [{ nome: pc?.imobiliarias?.nome ?? '', documento: pc?.imobiliarias?.cnpj ?? '', valor: Number(vImob), forma }] : []),
-      ...(vCoord ? [{ nome: coord?.coordenacao_comercial ?? 'Coordenação de vendas', documento: coord?.coordenacao_documento ?? '', valor: Number(vCoord), forma }] : []),
+      ...(vCoord ? [{ nome: empDados['coordenacao.razao_social'] || coord?.coordenacao_comercial || 'Coordenação de vendas', documento: empDados['coordenacao.cnpj'] || coord?.coordenacao_documento || '', valor: Number(vCoord), forma }] : []),
     ]).map((c) => ({ ...c, valor: paraTxt(c.valor) })));
   }, [id]);
   useEffect(() => { carregar(); }, [carregar]);
