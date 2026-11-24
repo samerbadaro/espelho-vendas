@@ -27,6 +27,8 @@ export interface ContextoContrato {
   comissao: Comissao[];
   data: string;        // AAAA-MM-DD
   referencia: string;  // aparece no rodapé
+  /** parte de cada parcela do sinal que paga a comissão (ex.: 0,7); o contrato mostra o sinal líquido */
+  parteSinal?: number;
 }
 export type TipoDocumento = 'quadro_resumo' | 'normas';
 export const NOME_DOCUMENTO: Record<TipoDocumento, string> = { quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais' };
@@ -66,6 +68,8 @@ class Escritor {
   constructor(public ctx: ContextoContrato) {}
   campo(t: string) {
     return t.replace(/\{\{([\w.]+)\}\}/g, (_, k: string) => {
+      // data base da correção: dia 01 do mês da data do contrato (Quadro Resumo 4.3.4)
+      if (k === 'contrato.data_base') { const [a, m] = (this.ctx.data || '').split('-'); return a && m ? `01/${m}/${a}` : `[${k}]`; }
       const v = this.ctx.campos[k];
       if (v == null || v === '') { this.faltando.add(k); return `[${k}]`; }
       return v;
@@ -325,17 +329,14 @@ function blocoAssinaturasFinais(e: Escritor) {
 
 // ---------- blocos do modelo Duo Haus (minuta final, 23/11/2026) ----------
 
-/** Item 3: os cinco campos da minuta (unidade, área total, área privativa, vaga e área privativa da vaga). */
+/** Item 3: unidade, área total e área privativa (no Duo Haus não há vaga vinculada: ver o 3.1 do modelo). */
 function blocoUnidadeQuadro(e: Escritor) {
   const a = e.ctx.areas ?? {};
   const m2 = (k: keyof Areas) => (a[k] == null || a[k] === '' || Number(a[k]) === 0 ? '-' : `${fmtNum(Number(a[k]), 2)} m2`);
-  const vaga = String(a.vagas ?? '').trim();
   e.tabelaDados([
     ['Unidade Autônoma', e.ctx.unidade],
     ['Área Total', m2('area_total')],
     ['Área Privativa', m2('area_privativa')],
-    ['Vaga de Garagem', vaga && vaga !== '-' ? up(vaga) : 'Não possui'],
-    ['Área Privativa da vaga de garagem', m2('area_acessoria')],
   ]);
 }
 
@@ -359,22 +360,35 @@ export function textoSerieIntermediaria(x: SerieContrato): string {
   return `${qtdExtenso(x.qtd)} prestações ${p.adj} e consecutivas, no valor unitário de ${unit} cada uma, totalizando ${tot}, com vencimento da primeira na data de ${venc} e as demais na mesma data dos ${p.periodo} subsequentes, ${CORRECAO}.`;
 }
 
-/** Itens 4 e 4.1: preço; a) sinal (a.1, a.2…); b) intermediárias (b.1, b.2… uma por série); c) habite-se. */
+/** Itens 4 e 4.1: preço; a) sinal (a.1, a.2…); b) intermediárias (b.1, b.2… uma por série); c) habite-se.
+ *  A comissão é paga pelo comprador direto aos intermediários (item 9.3) e não integra o preço: o contrato
+ *  traz o sinal líquido para a VENDEDORA. Cada parcela de sinal paga a comissão com até "parteSinal" do seu
+ *  valor (ex.: 70%), na ordem, até completá-la; o restante é o que entra no contrato. */
 function blocoPagamentoQuadro(e: Escritor) {
   const s = e.ctx.series.filter((x) => x.qtd > 0 && x.valor > 0);
-  const total = s.reduce((t, x) => t + x.qtd * x.valor, 0);
+  const parte = e.ctx.parteSinal ?? 0.7;
+  let falta = Math.round(e.ctx.comissao.reduce((t, c) => t + Number(c.valor || 0), 0) * 100) / 100;
+  const parcSinal = s.filter((x) => x.periodicidade === 'Sinal')
+    .flatMap((x) => Array.from({ length: x.qtd }, (_, k) => ({ bruto: x.valor, venc: dataDaParcela(x, k) })))
+    .sort((a, b) => a.venc.localeCompare(b.venc))
+    .map((p) => {
+      const c = Math.min(falta, Math.round(p.bruto * parte * 100) / 100);
+      falta = Math.round((falta - c) * 100) / 100;
+      return { valor: Math.round((p.bruto - c) * 100) / 100, venc: p.venc };
+    })
+    .filter((p) => p.valor > 0);
+  const totalSinal = parcSinal.reduce((t, p) => t + p.valor, 0);
   const soma = (l: SerieContrato[]) => l.reduce((t, x) => t + x.qtd * x.valor, 0);
+  const total = totalSinal + soma(s.filter((x) => x.periodicidade !== 'Sinal'));
   const pct = (v: number) => `${fmtNum((v * 100) / (total || 1), 2)}%`;
-  const sinal = s.filter((x) => x.periodicidade === 'Sinal');
   const fins = s.filter((x) => x.periodicidade === 'Financiamento');
   const meio = s.filter((x) => x.periodicidade !== 'Sinal' && x.periodicidade !== 'Financiamento');
 
   e.para(`O preço ajustado para aquisição da unidade autônoma objeto deste contrato é de ${valorExt(total)} e deverá ser pago pelo COMPRADOR conforme previsto no item 4.1 abaixo.`);
   e.para('4.1 – FORMA DE PAGAMENTO DO PREÇO', { negrito: true, secao: true });
 
-  const parcSinal = sinal.flatMap((x) => Array.from({ length: x.qtd }, (_, k) => ({ valor: x.valor, venc: dataDaParcela(x, k) })));
   if (parcSinal.length) {
-    e.para(`a) Sinal: (${pct(soma(sinal))} do valor do contrato): O valor de ${valorExt(soma(sinal))}, a ser pago da forma abaixo:`, { recuo: 8 });
+    e.para(`a) Sinal: (${pct(totalSinal)} do valor do contrato): O valor de ${valorExt(totalSinal)}, a ser pago da forma abaixo:`, { recuo: 8 });
     parcSinal.forEach((p, i) => e.para(`a.${i + 1}) Parcela no valor de ${valorExt(p.valor)}, com vencimento na data de ${fmtData(p.venc)}.`, { recuo: 8 }));
   } else e.para('a) Sinal: Sem efeito.', { recuo: 8 });
 

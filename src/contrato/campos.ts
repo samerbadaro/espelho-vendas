@@ -22,7 +22,6 @@ export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
   { grupo: 'Empreendimento', chave: 'empreendimento.cidade', rotulo: 'Cidade', exemplo: 'Rio Verde' },
   { grupo: 'Empreendimento', chave: 'empreendimento.cidade_uf', rotulo: 'Cidade – UF', exemplo: 'Rio Verde – Goiás' },
   { grupo: 'Empreendimento', chave: 'empreendimento.foro', rotulo: 'Foro (comarca)', exemplo: 'Rio Verde – Goiás' },
-  { grupo: 'Empreendimento', chave: 'empreendimento.data_base_correcao', rotulo: 'Data base da correção das parcelas (Quadro Resumo 4.3.4)', exemplo: '01/11/2026' },
   { grupo: 'Empreendimento', chave: 'empreendimento.email_arrependimento', rotulo: 'E-mail para o direito de arrependimento (Quadro Resumo 7.3)', exemplo: 'contratos@exemplo.com' },
   { grupo: 'Empreendimento', chave: 'empreendimento.prazo_obra', rotulo: 'Prazo de conclusão das obras', exemplo: '30/06/2030' },
 

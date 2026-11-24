@@ -123,7 +123,7 @@ export function ListaContratos() {
 }
 
 interface Proposta {
-  id: string; codigo: string; pasta_id: string; status: string; series: SerieContrato[]; resumo: { total?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number } | null;
+  id: string; codigo: string; pasta_id: string; status: string; series: SerieContrato[]; parte_sinal?: number | null; resumo: { total?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number } | null;
   unidades: { numero: string } | null;
 }
 interface PastaC {
@@ -134,6 +134,7 @@ interface PastaC {
 export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const { avisar, confirmar } = useDialogos();
   const [prop, setProp] = useState<Proposta | null>(null);
+  const [parteSinal, setParteSinal] = useState(0.7);
   const [pasta, setPasta] = useState<PastaC | null>(null);
   const [reg, setReg] = useState<Registro | null>(null);
   const [areas, setAreas] = useState<Areas | null | undefined>(undefined);
@@ -151,7 +152,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const dataContrato = dataHoje || !outraData ? hojeISO() : outraData;
 
   const carregar = useCallback(async () => {
-    const { data: p } = await supabase.from('propostas').select('id, codigo, pasta_id, status, series, resumo, unidades(numero)').eq('id', id).maybeSingle();
+    const { data: p } = await supabase.from('propostas').select('id, codigo, pasta_id, status, series, resumo, parte_sinal, unidades(numero)').eq('id', id).maybeSingle();
     if (!p || (p as unknown as Proposta).status !== 'aprovada') { setErro('Proposta não encontrada ou não aprovada.'); return; }
     const pr = p as unknown as Proposta;
     setProp(pr);
@@ -161,7 +162,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       supabase.from('unidade_areas').select('*').eq('numero', pr.unidades?.numero ?? '').maybeSingle(),
       supabase.from('empreendimento_contrato').select('dados').maybeSingle(),
       supabase.from('contratos').select('*').eq('pasta_id', pr.pasta_id).order('numero', { ascending: false }),
-      supabase.from('comercial').select('coordenacao_comercial, coordenacao_documento').eq('id', 1).maybeSingle(),
+      supabase.from('comercial').select('coordenacao_comercial, coordenacao_documento, parte_sinal').eq('id', 1).maybeSingle(),
     ]);
     const { data: ms } = await supabase.from('modelos_contrato').select('documento, caminho').eq('ativo', true);
     setModelos(Object.fromEntries(((ms as { documento: TipoDocumento; caminho: string }[]) ?? []).map((m) => [m.documento, m.caminho])));
@@ -180,9 +181,9 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     const ativos = new Set(((c as Emitido[]) ?? []).filter((x) => !x.cancelado_em).map((x) => x.documento));
     if (ativos.size) { setEscolha({ quadro_resumo: !ativos.has('quadro_resumo'), normas: !ativos.has('normas') }); setComCarta(!ativos.has('carta_proposta')); }
     // padrão: imobiliária da proposta + coordenação de vendas (paga pelo comprador com o sinal; item 9.3 do Quadro Resumo)
-    const coord = cm as { coordenacao_comercial: string | null; coordenacao_documento: string | null } | null;
-    const parcelasSinal = (pr.series ?? []).filter((x) => x.periodicidade === 'Sinal').reduce((t, x) => t + Number(x.qtd), 0);
-    const forma = parcelasSinal > 1 ? 'A prazo (parcelas do sinal)' : 'À vista (sinal)';
+    const coord = cm as { coordenacao_comercial: string | null; coordenacao_documento: string | null; parte_sinal: number | null } | null;
+    setParteSinal(Number(pr.parte_sinal ?? coord?.parte_sinal ?? 0.7));
+    const forma = 'Conforme contrato de intermediação';
     const vImob = pr.resumo?.comissao_imobiliaria ?? pr.resumo?.comissao;
     const vCoord = pr.resumo?.comissao_coordenacao ?? 0;
     setComissao((rg?.comissao?.length ? rg.comissao : [
@@ -223,7 +224,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       campos: emp, tipoPessoa: pasta.tipo_pessoa, empresa: d.empresa ?? null, comprador: d.comprador ?? {}, conjuge: temConj ? d.conjuge ?? null : null,
       representante2: pasta.tipo_pessoa === 'pj' ? d.representante2 ?? null : null,
       unidade: prop.unidades?.numero ?? '', areas: areas ?? null, series, comissao: reg?.comissao ?? [],
-      data: dataContrato, referencia: `${pasta.codigo} · ${prop.codigo}`,
+      data: dataContrato, referencia: `${pasta.codigo} · ${prop.codigo}`, parteSinal,
     };
   };
 

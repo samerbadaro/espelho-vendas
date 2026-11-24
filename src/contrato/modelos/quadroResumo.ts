@@ -25,6 +25,8 @@ export const QUADRO_RESUMO = `= COMPROMISSO DE VENDA E COMPRA DE UNIDADE AUTÔNO
 
 @unidade_quadro
 
+3.1 – A unidade autônoma objeto deste contrato não possui vaga de garagem vinculada, nem área privativa de garagem. Caberá à referida unidade o direito de uso de 01 (uma) vaga de garagem indeterminada e rotativa, na garagem coletiva do empreendimento, para a guarda de 01 (um) veículo de passeio, sem demarcação ou localização fixa, a ser utilizada conforme a disponibilidade e as regras de uso, ordem e rodízio estabelecidas na Convenção de Condomínio e no Regimento Interno. Esse direito é acessório à unidade autônoma, não constitui unidade autônoma nem área privativa ou acessória, não será objeto de matrícula própria e não poderá ser alienado, locado ou cedido separadamente da unidade, nem a pessoas estranhas ao condomínio, nos termos do art. 1.331, § 1º, do Código Civil.
+
 == 4 - PREÇO
 
 @pagamento_quadro
@@ -43,7 +45,7 @@ export const QUADRO_RESUMO = `= COMPROMISSO DE VENDA E COMPRA DE UNIDADE AUTÔNO
 
 4.3.3 – As parcelas dos itens “b” e “c” do item 4.1, serão corrigidas monetariamente na forma prevista no item 4.3.1 acima.
 
-4.3.4 - A data base para efeito de correção das parcelas é {{empreendimento.data_base_correcao}}, independente da data de assinatura deste instrumento.
+4.3.4 - A data base para efeito de correção das parcelas é {{contrato.data_base}}, independente da data de assinatura deste instrumento.
 
 4.3.5 – O COMPRADOR terá livre escolha para obtenção do financiamento bancário na instituição financeira de sua preferência, porém está ciente que algumas instituições financeiras vinculam a liberação de recursos para a quitação da unidade autônoma somente após a averbação da construção do empreendimento junto ao Cartório de Registro de Imóveis competente, que poderá ocorrer em até 180 (cento e oitenta) dias após a expedição do habite-se do empreendimento. Nesta hipótese, incidirá sobre o saldo devedor do contrato a correção monetária e incidência de juros de 1% (um por cento) ao mês, calculados pela Tabela Price, até a data da efetiva liberação dos recursos necessários para a quitação do saldo devedor junto a VENDEDORA.
 

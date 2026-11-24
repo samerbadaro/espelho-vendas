@@ -52,7 +52,10 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
     itens: [
       'A comissão passa a ter duas partes: imobiliária (5%) e coordenação de vendas (0,5%), pagas com 70% de cada parcela do sinal. A coordenação recebe primeiro, em 2 parcelas (0,25% + 0,25%); a equipe pode mudar para 1 ou 3 parcelas na proposta.',
       'O sinal mínimo para cobrir a comissão passa a ser 7,86% do valor.',
-      'Quadro Resumo e Normas Contratuais seguem a minuta final do Duo Haus, com a qualificação do comprador em quadro e a comissão com as duas partes no item 9.3.',
+      'Quadro Resumo e Normas Contratuais seguem a minuta final do Duo Haus, com a qualificação do comprador em quadro e a comissão com as duas partes no item 9.3 (forma: conforme contrato de intermediação).',
+      'No contrato, o sinal sai líquido para a vendedora (já sem a comissão, que o comprador paga direto aos intermediários) e o preço do item 4 também é líquido.',
+      'A data base da correção (item 4.3.4) é sempre o dia 01 do mês da data do contrato. Para uma exceção, baixe o Word e ajuste.',
+      'O item 3 traz unidade, área total e área privativa; o 3.1 descreve o direito de uso de uma vaga rotativa na garagem coletiva.',
     ],
   },
   {
@@ -552,7 +555,7 @@ export const CAPITULOS: Capitulo[] = [
         titulo: '2. Unidade e 3. Pagamento',
         itens: [
           'A unidade usa o quadro de áreas importado pelo administrador (área privativa, comum, fração ideal, vagas e escaninho).',
-          'Confira as séries do fluxo aprovado e os beneficiários da comissão (nome, documento, valor e forma), e marque o fluxo como conferido. A comissão já vem com duas linhas: a imobiliária da proposta (5%) e a coordenação de vendas (0,5%). Elas saem no item 9.3 do Quadro Resumo como pagas diretamente pelo comprador.',
+          'Confira as séries do fluxo aprovado e os beneficiários da comissão (nome, documento, valor e forma), e marque o fluxo como conferido. A comissão já vem com duas linhas: a imobiliária da proposta (5%) e a coordenação de vendas (0,5%). Elas saem no item 9.3 do Quadro Resumo como pagas diretamente pelo comprador. Por isso o sinal do contrato (item 4.1, alínea a) e o preço já saem sem a comissão: de cada parcela de sinal sai até 70% para a comissão, na ordem, e o restante é o que fica no contrato. A data base da correção (4.3.4) é o dia 01 do mês da data do contrato.',
         ],
       },
       {
