@@ -49,6 +49,7 @@ export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
   { grupo: 'Assinaturas', chave: 'assinatura.cofre', rotulo: 'Cofre na D4Sign (nome)', exemplo: 'Duo Haus – Contratos', soAssinatura: true },
   { grupo: 'Coordenação de vendas', chave: 'coordenacao.razao_social', rotulo: 'Razão social da coordenação de vendas (comissão, item 9.3)', exemplo: 'COORDENAÇÃO EXEMPLO LTDA', soAssinatura: true },
   { grupo: 'Coordenação de vendas', chave: 'coordenacao.cnpj', rotulo: 'CNPJ da coordenação de vendas', exemplo: '44.555.666/0001-81', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.creci', rotulo: 'CRECI jurídico da coordenação de vendas', exemplo: 'J-00.000', soAssinatura: true },
   { grupo: 'Coordenação de vendas', chave: 'coordenacao.signatario_nome', rotulo: 'Quem assina pela coordenação — nome', exemplo: 'SÓCIO EXEMPLO', soAssinatura: true },
   { grupo: 'Coordenação de vendas', chave: 'coordenacao.signatario_email', rotulo: 'Quem assina pela coordenação — e-mail (entra no envelope para assinar a intermediação)', exemplo: 'coordenacao@exemplo.com', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'vendedora.signatario_nome', rotulo: 'Quem assina pela incorporadora — nome', exemplo: 'REPRESENTANTE EXEMPLO', soAssinatura: true },
