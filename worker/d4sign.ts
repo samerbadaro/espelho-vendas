@@ -333,6 +333,12 @@ async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { n
   const ids = e.documentos.filter((d) => d.tipo === 'contrato' && d.d4sign_uuid).map((d) => d.id);
   if (!ids.length) return [];
   const { data } = await adm.from('contratos').select('id, dados').in('id', ids);
+  // a linha da VENDEDORA traz o nome da empresa (SPE), não o de quem assina por ela: casa pelo papel
+  const { data: ec } = await adm.from('empreendimento_contrato').select('dados').eq('id', 1).maybeSingle();
+  const emp = ((ec as { dados?: Record<string, string> } | null)?.dados ?? {});
+  const daVendedora = [emp['vendedora.assinante'], emp['vendedora.razao_social'], emp['incorporadora.razao_social'], 'VENDEDORA']
+    .filter(Boolean).map((x) => normal(String(x)));
+  const daCoordenacao = [emp['coordenacao.razao_social']].filter(Boolean).map((x) => normal(String(x)));
   const pinos: Record<string, string>[] = [];
   for (const c of (data ?? []) as { id: string; dados: { assinaturas?: { pagina: number; x: number; y: number; largura: number; nomes: string[] }[] } | null }[]) {
     const doc = e.documentos.find((d) => d.id === c.id);
@@ -341,15 +347,16 @@ async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { n
       const quem = assinantes.find((a) => {
         const n = normal(a.nome || '');
         return n.length >= 3 && nomes.some((x) => x === n || x.includes(n) || (x.length >= 8 && n.includes(x)));
-      });
+      }) ?? (nomes.some((x) => daVendedora.includes(x)) ? assinantes.find((a) => /incorporadora|vendedora/i.test(a.papel)) : undefined)
+        ?? (nomes.some((x) => daCoordenacao.includes(x)) ? assinantes.find((a) => /coordena/i.test(a.papel)) : undefined);
       if (!quem || !doc?.d4sign_uuid) continue;
       // A D4Sign desenha o carimbo com tamanho fixo (cerca de 150 × 78 na escala da página que recebe).
       // Mandamos a página na escala de pixels de um A4 (794 × 1123) para o carimbo ficar com ~40 × 21 mm,
-      // centralizado na linha. O traço da assinatura fica na parte de baixo do carimbo, então o carimbo
-      // desce ~5 mm abaixo da linha para a assinatura "sentar" nela (como numa assinatura à mão).
+      // centralizado na linha, com a base do carimbo ~1 mm abaixo dela: a assinatura fica logo acima
+      // da linha sem cobrir o nome impresso embaixo (ajuste de 23/11 à noite).
       // No teste de 23/11 a D4Sign espalhou as posições ~5% a partir do centro da página na horizontal;
       // compensamos aproximando o centro do carimbo do meio da folha.
-      const PX = 794 / 210, PY = 1123 / 297, LARG_MM = 40, ACIMA_MM = 16, ESPALHA = 1.05;
+      const PX = 794 / 210, PY = 1123 / 297, LARG_MM = 40, ACIMA_MM = 20, ESPALHA = 1.05;
       const centro = 105 + (p.x + p.largura / 2 - 105) / ESPALHA;
       const xMm = Math.max(0, centro - LARG_MM / 2), yMm = Math.max(0, p.y - ACIMA_MM);
       pinos.push({
@@ -364,9 +371,20 @@ async function pinosDoEnvelope(adm: SupabaseClient, e: Envelope, assinantes: { n
 /** POST /api/d4sign/webhook — chamado pela D4Sign quando alguém assina, finaliza ou cancela. */
 export async function webhookD4Sign(req: Request, env: EnvD4): Promise<Response> {
   if (req.method !== 'POST' || !env.SUPABASE_SECRET_KEY || !env.D4SIGN_TOKEN) return new Response('ok');
-  const bruto = await req.text();
-  let uuid = '';
-  try { uuid = String((JSON.parse(bruto) as { uuid?: string }).uuid ?? ''); } catch { uuid = new URLSearchParams(bruto).get('uuid') ?? ''; }
+  // A D4Sign manda o aviso em FORM-DATA (multipart): uuid, type_post, message. Aceita também JSON e urlencoded.
+  const tipoConteudo = req.headers.get('content-type') || '';
+  let uuid = '', tipoPost = '';
+  if (/multipart\/form-data|x-www-form-urlencoded/i.test(tipoConteudo)) {
+    const f = await req.formData().catch(() => null);
+    uuid = String(f?.get('uuid') ?? ''); tipoPost = String(f?.get('type_post') ?? '');
+  } else {
+    const bruto = await req.text();
+    try { const j = JSON.parse(bruto) as { uuid?: string; type_post?: string }; uuid = String(j.uuid ?? ''); tipoPost = String(j.type_post ?? ''); }
+    catch { const q = new URLSearchParams(bruto); uuid = q.get('uuid') ?? ''; tipoPost = q.get('type_post') ?? ''; }
+    // último recurso: o primeiro UUID que aparecer no corpo
+    if (!uuid) uuid = bruto.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? '';
+  }
+  uuid = uuid.trim();
   if (!/^[0-9a-f-]{36}$/i.test(uuid)) return new Response('ok');
   if (env.D4SIGN_HMAC) {
     const recebido = (req.headers.get('content-hmac') || '').replace(/^sha256=/i, '').toLowerCase();
@@ -375,7 +393,7 @@ export async function webhookD4Sign(req: Request, env: EnvD4): Promise<Response>
   const adm = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: e } = await adm.from('envelopes').select('*').eq('d4sign_uuid', uuid).maybeSingle<Envelope>();
   if (e) {
-    const tipo = (() => { try { return String((JSON.parse(bruto) as { type_post?: string }).type_post ?? ''); } catch { return new URLSearchParams(bruto).get('type_post') ?? ''; } })();
+    const tipo = tipoPost;
     const falha = await sincronizar(env, adm, e, 'D4Sign').then(() => null, (x: unknown) => (x instanceof Error ? x.message : String(x)));
     await historico(adm, e.pasta_id, falha ? 'Aviso da D4Sign recebido, mas não foi possível atualizar' : 'Aviso da D4Sign recebido',
       falha ? { tipo, erro: falha } : { tipo }, 'D4Sign').catch(() => null);

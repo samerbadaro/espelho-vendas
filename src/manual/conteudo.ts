@@ -52,6 +52,8 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
     itens: [
       'Cliente com mais de uma unidade na mesma pasta: cada unidade tem sua própria situação, conferência do fluxo de pagamento e comissão, documentos e envelope de assinatura. A conferência das partes (comprador e cônjuge) vale para todas as unidades da pasta.',
       'Dá para emitir com dados do empreendimento pendentes: eles saem em branco no documento, para completar no Word.',
+      'Carta Proposta como o contrato: o sinal aparece líquido para a vendedora e a intermediação vem separada, com preço do imóvel + intermediação = total da proposta.',
+      'Envelope: a assinatura da VENDEDORA cai na linha da SPE, e as assinaturas ficam logo acima da linha, sem cobrir o nome impresso.',
     ],
   },
   {

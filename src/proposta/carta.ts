@@ -149,18 +149,26 @@ function conteudo(d: DadosCarta, simples: boolean): Bloco[] {
     ];
   };
   const ordenar = (l: Serie[]) => [...l].sort((a, z) => a.vencimento.localeCompare(z.vencimento));
-  const direto = ordenar(d.series.filter((s) => s.periodicidade !== 'Financiamento'));
+  // Como no contrato: o sinal aparece líquido (o que fica para a vendedora). A intermediação sai do sinal
+  // e vem separada logo abaixo; preço do imóvel + intermediação = total da proposta.
+  const destacada = d.resultado.comissao.destacada;
+  const sinalLiquido = d.resultado.comissao.linhas.filter((l) => l.incorporador > 0.004)
+    .map((l): RowInput => ['Sinal', '1', fmtData(l.data), fmtReal(l.incorporador), fmtReal(l.incorporador), 'Fixa', c.forma_sinal]);
+  const somaSinal = d.resultado.comissao.linhas.reduce((t, l) => t + l.incorporador, 0);
+  const direto = ordenar(d.series.filter((s) => s.periodicidade !== 'Financiamento' && s.periodicidade !== 'Sinal'));
   const fin = ordenar(d.series.filter((s) => s.periodicidade === 'Financiamento'));
   const soma = (l: Serie[]) => l.reduce((t, s) => t + s.valor * s.qtd, 0);
+  const precoImovel = d.resultado.proposta.total - destacada;
   b.push({
     k: 'tabela',
     head: ['Série', 'Parc.', 'Vencimentos', 'Valor da parcela', 'Total da série', 'Correção', 'Pagamento'],
     body: [
+      ...sinalLiquido,
       ...direto.map(linhaSerie),
-      totalLinha('Total até as chaves', fmtReal(soma(direto)), 7, 4),
+      totalLinha('Total até as chaves', fmtReal(somaSinal + soma(direto)), 7, 4),
       ...fin.map(linhaSerie),
       ...(fin.length ? [totalLinha('Total pós-chaves / financiamento', fmtReal(soma(fin)), 7, 4)] : []),
-      totalLinha('Total da proposta nesta data', fmtReal(d.resultado.proposta.total), 7, 4, true),
+      totalLinha(destacada > 0 ? 'Preço do imóvel (sem a intermediação)' : 'Total da proposta nesta data', fmtReal(precoImovel), 7, 4, true),
     ],
     colunas: { 1: { halign: 'right', cellWidth: 11 }, 3: { halign: 'right' }, 4: { halign: 'right' } },
   });
@@ -174,14 +182,16 @@ function conteudo(d: DadosCarta, simples: boolean): Bloco[] {
   ]);
   if (!simples || linhasCom.length) {
     b.push({ k: 'secao', t: 'Intermediação imobiliária', minimo: 50 });
-    b.push({ k: 'texto', t: 'Paga com o sinal de negócio e destacada do valor da proposta.', tam: 8.5, cinza: true });
+    b.push({ k: 'texto', t: 'Paga pelo proponente diretamente aos intermediários, com as parcelas do sinal; não integra o preço do imóvel.', tam: 8.5, cinza: true });
     const total = d.resultado.proposta.total;
     b.push({
       k: 'tabela',
       head: ['Intermediador', 'Função', '%', 'Valor', 'Vencimento'],
       body: [
         ...linhasIntermed.map((l): RowInput => [l.quem, l.funcao, total > 0 ? pct(l.valor / total) : '—', fmtReal(l.valor), fmtData(l.data)]),
-        totalLinha('Total da intermediação', fmtReal(d.resultado.comissao.destacada), 5, 3),
+        totalLinha('Total da intermediação', fmtReal(destacada), 5, 3),
+        totalLinha('Preço do imóvel', fmtReal(precoImovel), 5, 3),
+        totalLinha('Total da proposta (imóvel + intermediação)', fmtReal(d.resultado.proposta.total), 5, 3, true),
       ],
       colunas: { 2: { halign: 'right' }, 3: { halign: 'right' } },
     });
