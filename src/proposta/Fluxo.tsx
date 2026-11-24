@@ -11,7 +11,7 @@ import { FileSpreadsheet } from 'lucide-react';
 import './proposta.css';
 
 interface Linha {
-  id: string; codigo: string; data_proposta: string; series: Omit<Serie, 'id'>[]; comissao_pct: number | null; parte_sinal: number | null;
+  id: string; codigo: string; data_proposta: string; series: Omit<Serie, 'id'>[]; comissao_pct: number | null; parte_sinal: number | null; coordenacao_pct: number | null; coordenacao_parcelas: number | null;
   unidade_id: string; unidades: { numero: string; tipo_preco: string | null; area_privativa: number | null } | null;
   pastas: { comprador_nome: string | null; status: string } | null; imobiliarias: { nome: string } | null;
 }
@@ -33,7 +33,8 @@ function calcularVenda(l: Linha, ctx: Contexto): Venda {
   const ps: Parcela[] = parcelas(cfg, series);
   const caixa = ps.filter((p) => p.periodicidade !== 'Permuta');
   const vgv = total(ps);
-  const com = comissao(ps, vgv, l.comissao_pct ?? cfg.comissao.percentual, l.parte_sinal ?? cfg.comissao.parteDoSinal);
+  const com = comissao(ps, vgv, l.comissao_pct ?? cfg.comissao.percentual, l.parte_sinal ?? cfg.comissao.parteDoSinal,
+    l.coordenacao_pct ?? cfg.comissao.coordenacao ?? 0, l.coordenacao_parcelas ?? cfg.comissao.coordenacaoParcelas ?? 2);
   const mensal = new Map<string, { bruto: number; comissao: number; chaves: boolean }>();
   // comissão: a parte coberta sai do sinal; o que o sinal não cobre sai das parcelas seguintes, em ordem
   const doSinal = com.linhas.map((x) => x.comissao);
@@ -72,7 +73,7 @@ export function FluxoConsolidado() {
       if ('erro' in c) { setErro(c.erro); return; }
       setCtx(c);
       const { data, error } = await supabase.from('propostas')
-        .select('id, codigo, data_proposta, series, comissao_pct, parte_sinal, unidade_id, atualizada_em, unidades(numero, tipo_preco, area_privativa), pastas(comprador_nome, status), imobiliarias(nome)')
+        .select('id, codigo, data_proposta, series, comissao_pct, parte_sinal, coordenacao_pct, coordenacao_parcelas, unidade_id, atualizada_em, unidades(numero, tipo_preco, area_privativa), pastas(comprador_nome, status), imobiliarias(nome)')
         .eq('status', 'aprovada').order('atualizada_em', { ascending: false });
       if (error) { setErro(error.message); return; }
       // uma proposta por unidade (a aprovada mais recente) e sem clientes que desistiram

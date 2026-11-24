@@ -48,6 +48,18 @@ export const REVISAO_MANUAL = '23/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '23/11/2026', titulo: 'Comissão com coordenação de vendas e contrato na minuta final',
+    itens: [
+      'A comissão passa a ter duas partes: imobiliária (5%) e coordenação de vendas (0,5%), pagas com 70% de cada parcela do sinal. A coordenação recebe primeiro, em 2 parcelas (0,25% + 0,25%); a equipe pode mudar para 1 ou 3 parcelas na proposta.',
+      'O sinal mínimo para cobrir a comissão passa a ser 7,86% do valor.',
+      'Quadro Resumo e Normas Contratuais seguem a minuta final do Duo Haus, com a qualificação do comprador em quadro e a comissão com as duas partes no item 9.3 (forma: conforme contrato de intermediação).',
+      'No contrato, o sinal sai líquido para a vendedora (já sem a comissão, que o comprador paga direto aos intermediários) e o preço do item 4 também é líquido.',
+      'A data base da correção (item 4.3.4) é sempre o dia 01 do mês da data do contrato. Para uma exceção, baixe o Word e ajuste.',
+      'O item 3 traz unidade, área total e área privativa; o 3.1 descreve o direito de uso de uma vaga rotativa na garagem coletiva.',
+      'Coordenação de vendas em Dados para contrato (razão social, CNPJ e quem assina): a empresa entra na linha da comissão do item 9.3 e quem assina entra sozinho no envelope, como “Coordenação de vendas”, para assinar a intermediação.',
+    ],
+  },
+  {
     data: '23/11/2026', titulo: 'Espelho acompanha o envelope de assinatura', papeis: EQUIPE,
     itens: [
       'Ao enviar o envelope, a unidade passa sozinha para “Contrato em assinatura” no espelho; quando todos assinam, vira “Vendida”; se o envelope for cancelado, volta para “Proposta recebida”.',
@@ -435,7 +447,9 @@ export const CAPITULOS: Capitulo[] = [
           'Em “Ajustar para”, escolha “Zerar PV” (o valor presente fica igual ao da tabela) ou “Zerar nominal” (o valor total fica igual ao da tabela; o PV pode ficar abaixo). Depois clique em “⟲ ajustar” na série que vai absorver a diferença.',
           'Acompanhe o comparativo tabela × proposta: valor total, PV (valor presente), preço do m² e captação até as chaves, cada um com a variação em % e a diferença em R$. Logo abaixo aparecem o desconto nominal e o desconto em valor presente, em R$.',
           'A tabela “Captação acumulada” mostra o % recebido em cada marco (3, 6, 12... meses e até a entrega).',
-          'Confira a comissão e a parte do sinal que vai para a imobiliária. Se o sinal não cobre a comissão, use “Aumentar o ato para cobrir a comissão”.',
+          'Confira a comissão. Ela sai das parcelas do sinal: de cada parcela, 70% vai para a comissão e 30% para o incorporador. Dentro da comissão, a coordenação de vendas (0,5%) recebe primeiro, dividida em 2 parcelas (0,25% + 0,25%), e o restante vai para a imobiliária (5%), até completar 5,5%. A tabela mostra quanto vai para cada um em cada parcela.',
+          'Se o sinal cobre a comissão inteira numa parcela só, a coordenação recebe os 0,5% nela. A equipe pode mudar, numa proposta, em quantas parcelas a coordenação recebe (1, 2 ou 3).',
+          'O sinal precisa ser de pelo menos 7,86% do valor (5,5% ÷ 70%). Se não cobrir, use “Aumentar o ato para cobrir a comissão”.',
           'Vincule a pasta do comprador (só pastas da sua imobiliária) e escreva as observações (saem na carta).',
           'Clique em “Salvar rascunho” ou “Enviar para análise”.',
         ],
@@ -481,7 +495,7 @@ export const CAPITULOS: Capitulo[] = [
           'Devolver para ajuste: escreva o que o corretor deve mudar.',
           'Recusar ou cancelar: o motivo é obrigatório.',
         ],
-        dica: 'Com o módulo desligado, só o administrador vê Propostas (para testar). Tabela, taxa e comissão são configuradas pela Launch; dias de vencimento e alçadas, pelo administrador em “Parâmetros da proposta”.',
+        dica: 'Com o módulo desligado, só o administrador vê Propostas (para testar). Tabela e taxa são configuradas pela Launch; dias de vencimento, alçadas, comissão da imobiliária, coordenação de vendas (percentual e em quantas parcelas) e a parte do sinal para a comissão, pelo administrador em “Parâmetros da proposta”.',
       },
     ],
   },
@@ -542,7 +556,7 @@ export const CAPITULOS: Capitulo[] = [
         titulo: '2. Unidade e 3. Pagamento',
         itens: [
           'A unidade usa o quadro de áreas importado pelo administrador (área privativa, comum, fração ideal, vagas e escaninho).',
-          'Confira as séries do fluxo aprovado e os beneficiários da comissão (nome, documento, valor e forma), e marque o fluxo como conferido.',
+          'Confira as séries do fluxo aprovado e os beneficiários da comissão (nome, documento, valor e forma), e marque o fluxo como conferido. A comissão já vem com duas linhas: a imobiliária da proposta (5%) e a coordenação de vendas (0,5%). Elas saem no item 9.3 do Quadro Resumo como pagas diretamente pelo comprador. Por isso o sinal do contrato (item 4.1, alínea a) e o preço já saem sem a comissão: de cada parcela de sinal sai até 70% para a comissão, na ordem, e o restante é o que fica no contrato. A data base da correção (4.3.4) é o dia 01 do mês da data do contrato.',
         ],
       },
       {

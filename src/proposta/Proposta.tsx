@@ -34,14 +34,15 @@ function CelulaNumero({ valor, casas = 2, aoMudar, rotulo }: { valor: number; ca
   );
 }
 
-export interface EstadoEditor { series: Serie[]; comissaoPct: number; parteSinal: number; resultado: Resultado }
+export interface EstadoEditor { series: Serie[]; comissaoPct: number; parteSinal: number; coordenacaoPct: number; coordenacaoParcelas: number; resultado: Resultado }
 
 export function EditorProposta({
-  cfg, unidade, hoje, dataMinima, dias, seriesIniciais, comissaoInicial, parteInicial,
+  cfg, unidade, hoje, dataMinima, dias, seriesIniciais, comissaoInicial, parteInicial, coordPctInicial, coordParcelasInicial, nomeCoordenacao,
   somenteLeitura = false, podeEditarComissao = false, aoMudar, observacoes,
 }: {
   cfg: ConfigEmpreendimento; unidade: Unidade; hoje: string; dataMinima: string; dias: number[];
   seriesIniciais?: Serie[]; comissaoInicial?: number | null; parteInicial?: number | null;
+  coordPctInicial?: number | null; coordParcelasInicial?: number | null; nomeCoordenacao?: string | null;
   somenteLeitura?: boolean; podeEditarComissao?: boolean; aoMudar?: (e: EstadoEditor) => void;
   /** Texto das observações da proposta (a permuta exige descrição). */
   observacoes?: string;
@@ -53,16 +54,22 @@ export function EditorProposta({
   const [series, setSeries] = useState<Serie[]>(() => seriesIniciais ?? aplicarModelo(CFG, unidade, 'tabela', { dia, hoje }));
   const [comissaoPct, setComissaoPct] = useState(comissaoInicial ?? CFG.comissao.percentual);
   const [parteSinal, setParteSinal] = useState(parteInicial ?? CFG.comissao.parteDoSinal);
+  // coordenação de vendas: percentual fixo do parâmetro (o da proposta salva, se houver); parcelas de 1 a 3 (exceção por proposta)
+  const nomeCoord = nomeCoordenacao?.trim() || 'Coordenação';
+  const coordPct = coordPctInicial != null ? Number(coordPctInicial) : (CFG.comissao.coordenacao ?? 0);
+  const [coordParcelas, setCoordParcelas] = useState(Number(coordParcelasInicial ?? CFG.comissao.coordenacaoParcelas ?? 2));
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [verFluxo, setVerFluxo] = useState(false);
   // "⟲ ajustar": iguala o PV (valor presente) ou o valor nominal ao da tabela
   const [meta, setMeta] = useState<'pv' | 'nominal'>('pv');
 
   const r = useMemo(
-    () => calcular(CFG, unidade, series, { dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal, diasVencimento: dias, observacoes }),
-    [CFG, unidade, series, dataMinima, comissaoPct, parteSinal, dias, observacoes],
+    () => calcular(CFG, unidade, series, {
+      dataMinima, comissaoPercentual: comissaoPct, parteDoSinal: parteSinal, coordenacao: coordPct, coordenacaoParcelas: coordParcelas, diasVencimento: dias, observacoes,
+    }),
+    [CFG, unidade, series, dataMinima, comissaoPct, parteSinal, coordPct, coordParcelas, dias, observacoes],
   );
-  useEffect(() => { aoMudar?.({ series, comissaoPct, parteSinal, resultado: r }); }, [r]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { aoMudar?.({ series, comissaoPct, parteSinal, coordenacaoPct: coordPct, coordenacaoParcelas: coordParcelas, resultado: r }); }, [r]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const modelo = (m: Modelo) => {
     setSeries(aplicarModelo(CFG, unidade, m, { dia, hoje, preChaves: preChaves ?? preChavesTabela }));
@@ -262,27 +269,34 @@ export function EditorProposta({
           <div className="params">
             {podeEditarComissao && !ro ? (
               <>
-                <label>Comissão <span className="pct"><CelulaNumero rotulo="Percentual de comissão" valor={comissaoPct * 100} aoMudar={(n) => setComissaoPct(Math.max(0, n) / 100)} /><em>%</em></span></label>
-                <label>Do sinal para a imobiliária <span className="pct"><CelulaNumero rotulo="Parte do sinal para comissão" valor={parteSinal * 100} casas={0} aoMudar={(n) => setParteSinal(Math.min(100, Math.max(0, n)) / 100)} /><em>%</em></span></label>
+                <label>Imobiliária <span className="pct"><CelulaNumero rotulo="Comissão da imobiliária" valor={comissaoPct * 100} aoMudar={(n) => setComissaoPct(Math.max(0, n) / 100)} /><em>%</em></span></label>
+                {coordPct > 0 && (
+                  <label>{nomeCoord} {fmtPct(coordPct, 2)} em
+                    <select value={coordParcelas} onChange={(e) => setCoordParcelas(Number(e.target.value))} aria-label="Parcelas da coordenação">
+                      <option value={1}>1 parcela</option><option value={2}>2 parcelas</option><option value={3}>3 parcelas</option>
+                    </select>
+                  </label>
+                )}
+                <label>Do sinal para a comissão <span className="pct"><CelulaNumero rotulo="Parte do sinal para comissão" valor={parteSinal * 100} casas={0} aoMudar={(n) => setParteSinal(Math.min(100, Math.max(0, n)) / 100)} /><em>%</em></span></label>
               </>
             ) : (
-              <span>{fmtPct(comissaoPct, 2)} · {fmtPct(parteSinal, 0)} do sinal para a imobiliária</span>
+              <span>Imobiliária {fmtPct(comissaoPct, 2)}{coordPct > 0 ? ` · ${nomeCoord} ${fmtPct(coordPct, 2)} em ${coordParcelas} parcela${coordParcelas > 1 ? 's' : ''}` : ''} · {fmtPct(parteSinal, 0)} do sinal para a comissão</span>
             )}
           </div>
         </div>
         {r.comissao.naoCoberta > 0.005 && (
           <div className="comissao-falta">
-            <strong>Sinal insuficiente para destacar {fmtPct(comissaoPct, 2)} de comissão.</strong>
+            <strong>Sinal insuficiente para destacar {fmtPct(comissaoPct + coordPct, 2)} de comissão.</strong>
             <span>
-              Com sinal de {fmtPct(r.comissao.sinalPct, 2)} ({fmtReal(r.comissao.sinal)}) e {fmtPct(parteSinal, 0)} para a imobiliária,
+              Com sinal de {fmtPct(r.comissao.sinalPct, 2)} ({fmtReal(r.comissao.sinal)}) e {fmtPct(parteSinal, 0)} para a comissão,
               {' '}o máximo destacável é <strong>{fmtPct(r.comissao.maximoPct, 2)}</strong> ({fmtReal(r.comissao.destacada)}).
-              {' '}Para destacar {fmtPct(comissaoPct, 2)}, o sinal precisa ser de pelo menos <strong>{fmtPct(r.comissao.sinalNecessarioPct, 2)}</strong> ({fmtReal(r.comissao.sinalNecessario)}):
+              {' '}Para destacar {fmtPct(comissaoPct + coordPct, 2)}, o sinal precisa ser de pelo menos <strong>{fmtPct(r.comissao.sinalNecessarioPct, 2)}</strong> ({fmtReal(r.comissao.sinalNecessario)}):
               {' '}aumente o sinal em <strong>{fmtReal(r.comissao.faltaSinal)}</strong> e reduza outra série.
             </span>
             {!ro && (
               <button className="mini" onClick={() => {
                 // aumenta o ato o bastante para cobrir a comissão mesmo com o valor total subindo junto
-                const T = r.proposta.total, S = r.comissao.sinal, c = comissaoPct, p = parteSinal;
+                const T = r.proposta.total, S = r.comissao.sinal, c = comissaoPct + coordPct, p = parteSinal;
                 const extra = p > c ? Math.max(0, (c * T - p * S) / (p - c)) : r.comissao.faltaSinal;
                 setSeries((l) => aumentarSinal(l, extra));
                 setMensagem('Sinal aumentado. Use "⟲ ajustar" em outra série (mensais, semestrais...) para voltar o PV e o valor total.');
@@ -292,15 +306,16 @@ export function EditorProposta({
         )}
         <p className="dica">
           Sinal de <strong>{fmtPct(r.comissao.sinalPct, 2)}</strong> ({fmtReal(r.comissao.sinal)}) · máximo destacável {fmtPct(r.comissao.maximoPct, 2)}.
-          {' '}Comissão de <strong>{fmtReal(r.comissao.devida)}</strong> sobre o valor total, paga com {fmtPct(parteSinal, 0)} de cada parcela de sinal até completar.
+          {' '}Comissão de <strong>{fmtReal(r.comissao.devida)}</strong> sobre o valor total
+          {coordPct > 0 && <> (imobiliária {fmtReal(r.comissao.devidaImob)} + {nomeCoord} {fmtReal(r.comissao.devidaCoord)})</>}, paga com {fmtPct(parteSinal, 0)} de cada parcela de sinal até completar.
           {' '}Para o incorporador no sinal: <strong>{fmtReal(r.comissao.linhas.reduce((s, l) => s + l.incorporador, 0))}</strong>.
         </p>
         <div className="tabela-rolagem">
           <table className="comp">
-            <thead><tr><th>Vencimento</th><th className="dir">Parcela de sinal</th><th className="dir">Comissão</th><th className="dir">Incorporador</th></tr></thead>
+            <thead><tr><th>Vencimento</th><th className="dir">Parcela de sinal</th>{coordPct > 0 && <th className="dir">{nomeCoord}</th>}<th className="dir">Imobiliária</th><th className="dir">Incorporador</th></tr></thead>
             <tbody>
               {r.comissao.linhas.map((l, i) => (
-                <tr key={i}><td className="mono">{fmtData(l.data)}</td><td className="dir mono">{fmtNum(l.parcela)}</td><td className="dir mono destaque">{fmtNum(l.comissao)}</td><td className="dir mono">{fmtNum(l.incorporador)}</td></tr>
+                <tr key={i}><td className="mono">{fmtData(l.data)}</td><td className="dir mono">{fmtNum(l.parcela)}</td>{coordPct > 0 && <td className="dir mono destaque">{fmtNum(l.coordenacao)}</td>}<td className="dir mono destaque">{fmtNum(l.imobiliaria)}</td><td className="dir mono">{fmtNum(l.incorporador)}</td></tr>
               ))}
             </tbody>
           </table>

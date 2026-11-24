@@ -43,7 +43,8 @@ export interface ConfigEmpreendimento {
   precoM2PorTipo: Record<string, number>;
   tabelas: Record<string, SerieTabela[]>;
   unidades: Unidade[];
-  comissao: { percentual: number; parteDoSinal: number };
+  /** percentual = imobiliária; coordenacao = coordenação de vendas (ex.: Kavaná), paga em até 3 parcelas do sinal */
+  comissao: { percentual: number; parteDoSinal: number; coordenacao?: number; coordenacaoParcelas?: number };
   limiteVariacaoCaptacao: number; // ex.: -0.15
 }
 
@@ -179,26 +180,45 @@ export function captacao(cfg: ConfigEmpreendimento, tab: Parcela[], prop: Parcel
 
 // ---------------------------------------------------------------------
 // Comissão: sai do sinal. De cada parcela de sinal, "parteDoSinal" (ex.: 70%)
-// vai para a imobiliária até completar a comissão; o resto é do incorporador.
+// vai para a comissão até completá-la; o resto é do incorporador.
+// A comissão tem duas partes: imobiliária (ex.: 5%) e coordenação de vendas
+// (ex.: 0,5%). Dentro da parte de cada parcela, a coordenação recebe primeiro
+// até coordenação ÷ N do valor total (N = 1 a 3 parcelas; padrão 2: 0,25% + 0,25%)
+// e o restante vai para a imobiliária. Se o sinal cobre a comissão inteira, a
+// última parcela de sinal completa o que faltar da coordenação (ex.: sinal numa
+// parcela só leva os 0,5% de uma vez).
 // ---------------------------------------------------------------------
-export interface LinhaComissao { data: string; parcela: number; comissao: number; incorporador: number }
+export interface LinhaComissao { data: string; parcela: number; comissao: number; imobiliaria: number; coordenacao: number; incorporador: number }
 
-export function comissao(prop: Parcela[], valorTotal: number, percentual: number, parteDoSinal: number) {
-  const devida = centavos(valorTotal * percentual);
-  let falta = devida;
-  const linhas: LinhaComissao[] = prop
-    .filter((p) => p.periodicidade === 'Sinal')
-    .map((p) => {
-      const c = centavos(Math.min(falta, p.valor * parteDoSinal));
-      falta = centavos(falta - c);
-      return { data: p.data, parcela: p.valor, comissao: c, incorporador: centavos(p.valor - c) };
-    });
+export function comissao(prop: Parcela[], valorTotal: number, percentual: number, parteDoSinal: number, coordenacao = 0, coordenacaoParcelas = 2) {
+  const devidaImob = centavos(valorTotal * percentual);
+  const devidaCoord = centavos(valorTotal * Math.max(0, coordenacao));
+  const devida = centavos(devidaImob + devidaCoord);
+  const n = Math.min(3, Math.max(1, Math.round(coordenacaoParcelas || 2)));
+  const porParcela = centavos(devidaCoord / n);
+  const sinais = prop.filter((p) => p.periodicidade === 'Sinal');
+  const capacidade = sinais.reduce((t, p) => t + centavos(p.valor * parteDoSinal), 0);
+  const cobre = capacidade + 0.005 >= devida;
+  let faltaI = devidaImob, faltaC = devidaCoord;
+  const linhas: LinhaComissao[] = sinais.map((p, i) => {
+    const fatia = centavos(Math.min(faltaI + faltaC, p.valor * parteDoSinal));
+    const ultima = i === sinais.length - 1;
+    // a última parcela de cada "rodada" de N completa a sobra de arredondamento
+    const teto = cobre && ultima ? faltaC : Math.min(faltaC, i === n - 1 ? faltaC : porParcela);
+    const c = centavos(Math.min(teto, fatia));
+    const im = centavos(Math.min(faltaI, fatia - c));
+    faltaC = centavos(faltaC - c); faltaI = centavos(faltaI - im);
+    const tot = centavos(c + im);
+    return { data: p.data, parcela: p.valor, comissao: tot, imobiliaria: im, coordenacao: c, incorporador: centavos(p.valor - tot) };
+  });
+  const falta = centavos(faltaI + faltaC);
   const sinal = centavos(linhas.reduce((t, l) => t + l.parcela, 0));
-  // sinal mínimo para destacar a comissão inteira: comissão ÷ parte do sinal (ex.: 5,25% ÷ 70% = 7,5%)
+  // sinal mínimo para destacar a comissão inteira: comissão ÷ parte do sinal (ex.: 5,5% ÷ 70% = 7,86%)
   const sinalNecessario = parteDoSinal > 0 ? centavosAcima(devida / parteDoSinal) : Infinity;
   return {
-    devida, linhas, naoCoberta: Math.max(0, falta),
+    devida, devidaImob, devidaCoord, linhas, naoCoberta: Math.max(0, falta),
     destacada: centavos(devida - Math.max(0, falta)),
+    destacadaImob: centavos(devidaImob - faltaI), destacadaCoord: centavos(devidaCoord - faltaC),
     sinal,
     sinalPct: valorTotal > 0 ? sinal / valorTotal : 0,
     /** % máximo do valor que dá para destacar com o sinal atual */
@@ -231,6 +251,9 @@ export interface Opcoes {
   dataMinima: string;
   comissaoPercentual?: number;
   parteDoSinal?: number;
+  /** coordenação de vendas: percentual e em quantas parcelas do sinal (1 a 3) */
+  coordenacao?: number;
+  coordenacaoParcelas?: number;
   /** Dias de vencimento permitidos (ex.: 5, 10, 15, 20). O ato que vence na data da proposta fica de fora. */
   diasVencimento?: number[];
   /** Observações da proposta: obrigatórias quando há permuta. */
@@ -244,7 +267,8 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
   const t = { parcelas: pt, total: total(pt), vpl: vpl(cfg, pt), m2: total(pt) / u.area };
   const p = { parcelas: pp, total: total(pp), vpl: vpl(cfg, pp), m2: total(pp) / u.area };
   const marcos = captacao(cfg, pt, pp);
-  const com = comissao(pp, p.total, op.comissaoPercentual ?? cfg.comissao.percentual, op.parteDoSinal ?? cfg.comissao.parteDoSinal);
+  const com = comissao(pp, p.total, op.comissaoPercentual ?? cfg.comissao.percentual, op.parteDoSinal ?? cfg.comissao.parteDoSinal,
+    op.coordenacao ?? cfg.comissao.coordenacao ?? 0, op.coordenacaoParcelas ?? cfg.comissao.coordenacaoParcelas ?? 2);
   const diferencaVPL = p.vpl - t.vpl;
 
   const avisos: Aviso[] = [];

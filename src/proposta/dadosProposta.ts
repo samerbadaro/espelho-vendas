@@ -9,6 +9,7 @@ export interface Comercial {
   cidade_carta: string | null; forma_sinal: string; forma_parcelas: string; validade_dias: number;
   texto_abertura: string; texto_condicoes: string;
   vaga?: string; escaninho?: string; coordenacao_comercial?: string | null;
+  coordenacao_pct?: number; coordenacao_parcelas?: number; coordenacao_documento?: string | null;
   alcada_automatica?: boolean; alcada_auto_pv?: number; alcada_vendas_pv?: number;
 }
 
@@ -51,7 +52,10 @@ export async function carregarContexto(): Promise<Contexto | { erro: string }> {
     precoM2PorTipo,
     tabelas,
     unidades,
-    comissao: { percentual: Number(comercial.comissao_pct), parteDoSinal: Number(comercial.parte_sinal) },
+    comissao: {
+      percentual: Number(comercial.comissao_pct), parteDoSinal: Number(comercial.parte_sinal),
+      coordenacao: Number(comercial.coordenacao_pct ?? 0), coordenacaoParcelas: Number(comercial.coordenacao_parcelas ?? 2),
+    },
     limiteVariacaoCaptacao: Number(comercial.limite_captacao),
   };
   return { cfg, comercial, unidades, nome, logoUrl: marca?.logo_url ?? null, corDestaque: marca?.cor_destaque ?? '#94874A' };
@@ -72,6 +76,7 @@ export interface PropostaSalva {
   id: string; codigo: string; unidade_id: string; pasta_id: string | null; imobiliaria_id: string | null;
   criado_por_id: string | null; criado_por: string | null; criado_por_nome?: string | null; data_proposta: string; status: StatusProposta;
   series: Omit<Serie, 'id'>[]; resumo: Resumo; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
+  coordenacao_pct?: number | null; coordenacao_parcelas?: number | null;
   motivo_analise: string | null; analisada_por: string | null; analisada_em: string | null; enviada_em: string | null;
   versao: number; criada_em: string; atualizada_em: string; alcada?: Alcada | null;
 }
@@ -88,7 +93,7 @@ export function alcadaPrevista(c: Comercial, pvPct: number, comissaoCoberta: boo
 
 export interface Resumo {
   total?: number; preco_tabela?: number; vpl_tabela?: number; vpl_proposta?: number; pv_pct?: number;
-  diferenca_vpl?: number; comissao?: number; avisos?: string[];
+  diferenca_vpl?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number; avisos?: string[];
 }
 
 export function resumoDe(r: Resultado): Resumo {
@@ -96,7 +101,7 @@ export function resumoDe(r: Resultado): Resumo {
   return {
     total: c2(r.proposta.total), preco_tabela: c2(r.preco), vpl_tabela: c2(r.tabela.vpl), vpl_proposta: c2(r.proposta.vpl),
     pv_pct: Math.round((r.proposta.vpl / r.tabela.vpl) * 10000) / 100, diferenca_vpl: c2(r.diferencaVPL),
-    comissao: r.comissao.devida, avisos: r.avisos.map((a) => a.texto),
+    comissao: r.comissao.devida, comissao_imobiliaria: r.comissao.devidaImob, comissao_coordenacao: r.comissao.devidaCoord, avisos: r.avisos.map((a) => a.texto),
   };
 }
 

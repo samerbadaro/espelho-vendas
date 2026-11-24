@@ -159,6 +159,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
       unidade_id: unidadeId, pasta_id: pastaId || null, observacoes: obs.trim() || null,
       series: paraBanco(estado.series), resumo: resumoDe(estado.resultado),
       comissao_pct: estado.comissaoPct, parte_sinal: estado.parteSinal,
+      coordenacao_pct: estado.coordenacaoPct, coordenacao_parcelas: estado.coordenacaoParcelas,
     };
     const r = proposta
       ? await supabase.from('propostas').update(campos).eq('id', proposta.id).select('id').single()
@@ -313,6 +314,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
         dias={ctx.comercial.dias_vencimento}
         seriesIniciais={seriesIniciais ?? aplicarModelo(ctx.cfg, unidade, 'tabela', { dia: 10, hoje })}
         comissaoInicial={proposta?.comissao_pct} parteInicial={proposta?.parte_sinal}
+        coordParcelasInicial={proposta?.coordenacao_parcelas ?? undefined} nomeCoordenacao={ctx.comercial.coordenacao_comercial} coordPctInicial={proposta?.coordenacao_pct ?? undefined}
         somenteLeitura={!editavel} podeEditarComissao={equipe}
         aoMudar={setEstado}
         observacoes={obs}
@@ -349,16 +351,23 @@ function ParametrosProposta({ aoFechar }: { aoFechar: () => void }) {
   const [auto, setAuto] = useState(true);
   const [autoPv, setAutoPv] = useState('100');
   const [vendasPv, setVendasPv] = useState('98');
+  const [imobPct, setImobPct] = useState('5');
+  const [coordPct, setCoordPct] = useState('0,5');
+  const [coordParc, setCoordParc] = useState(2);
+  const [parteSinal, setParteSinal] = useState('70');
   const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    supabase.from('comercial').select('dias_vencimento, alcada_automatica, alcada_auto_pv, alcada_vendas_pv').eq('id', 1).maybeSingle().then(({ data, error }) => {
+    supabase.from('comercial').select('dias_vencimento, alcada_automatica, alcada_auto_pv, alcada_vendas_pv, comissao_pct, coordenacao_pct, coordenacao_parcelas, parte_sinal').eq('id', 1).maybeSingle().then(({ data, error }) => {
       if (error || !data) { setMsg({ ok: false, t: error?.message ?? 'Parâmetros comerciais não encontrados.' }); return; }
       setDias([...(data.dias_vencimento as number[])].sort((a, b) => a - b));
       setAuto(data.alcada_automatica !== false);
       setAutoPv(String(data.alcada_auto_pv ?? 100).replace('.', ','));
       setVendasPv(String(data.alcada_vendas_pv ?? 98).replace('.', ','));
+      const pct = (v: unknown, casas = 2) => String(Math.round(Number(v ?? 0) * 100 * 10 ** casas) / 10 ** casas).replace('.', ',');
+      setImobPct(pct(data.comissao_pct)); setCoordPct(pct(data.coordenacao_pct));
+      setCoordParc(Number(data.coordenacao_parcelas ?? 2)); setParteSinal(pct(data.parte_sinal, 0));
     });
   }, []);
 
@@ -371,8 +380,14 @@ function ParametrosProposta({ aoFechar }: { aoFechar: () => void }) {
     const a = num(autoPv), v = num(vendasPv);
     if (!(a > 0 && a <= 200) || !(v > 0 && v <= 200)) { setMsg({ ok: false, t: 'Informe os percentuais de PV entre 0 e 200.' }); return; }
     if (v > a) { setMsg({ ok: false, t: 'O PV da Secretaria de Vendas não pode ser maior que o da aprovação automática.' }); return; }
+    const ci = num(imobPct), cc = num(coordPct), ps = num(parteSinal);
+    if (!(ci >= 0 && ci < 20) || !(cc >= 0 && cc < 5)) { setMsg({ ok: false, t: 'Informe as comissões em %, por exemplo 5 e 0,5.' }); return; }
+    if (!(ps > 0 && ps <= 100)) { setMsg({ ok: false, t: 'A parte do sinal para a comissão deve ficar entre 1% e 100%.' }); return; }
     setSalvando(true);
-    const { error } = await supabase.from('comercial').update({ dias_vencimento: dias, alcada_automatica: auto, alcada_auto_pv: a, alcada_vendas_pv: v }).eq('id', 1);
+    const { error } = await supabase.from('comercial').update({
+      dias_vencimento: dias, alcada_automatica: auto, alcada_auto_pv: a, alcada_vendas_pv: v,
+      comissao_pct: ci / 100, coordenacao_pct: cc / 100, coordenacao_parcelas: coordParc, parte_sinal: ps / 100,
+    }).eq('id', 1);
     setSalvando(false);
     setMsg(error ? { ok: false, t: error.message } : { ok: true, t: 'Parâmetros salvos. Valem para as próximas propostas abertas.' });
   };
@@ -395,6 +410,17 @@ function ParametrosProposta({ aoFechar }: { aoFechar: () => void }) {
             <label>Secretaria de Vendas aprova a partir de (%)<input inputMode="decimal" value={vendasPv} onChange={(e) => setVendasPv(e.target.value)} /></label>
           </div>
           <p className="dica">Abaixo do percentual da Secretaria de Vendas, só o administrador aprova.</p>
+          <p className="dica">Comissão (sai das parcelas do sinal). De cada parcela, a parte do sinal vai para a comissão: primeiro a coordenação de vendas, dividida no número de parcelas escolhido; o resto para a imobiliária, até completar. O que sobra da parcela é do incorporador.</p>
+          <div className="grade-campos">
+            <label>Comissão da imobiliária (%)<input inputMode="decimal" value={imobPct} onChange={(e) => setImobPct(e.target.value)} /></label>
+            <label>Coordenação de vendas (%)<input inputMode="decimal" value={coordPct} onChange={(e) => setCoordPct(e.target.value)} /></label>
+            <label>Coordenação dividida em
+              <select value={coordParc} onChange={(e) => setCoordParc(Number(e.target.value))}>
+                <option value={1}>1 parcela do sinal</option><option value={2}>2 parcelas do sinal</option><option value={3}>3 parcelas do sinal</option>
+              </select>
+            </label>
+            <label>Parte de cada parcela do sinal para a comissão (%)<input inputMode="decimal" value={parteSinal} onChange={(e) => setParteSinal(e.target.value)} /></label>
+          </div>
           <div className="botoes"><button className="botao principal" disabled={salvando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar parâmetros'}</button></div>
           {msg && <p className={msg.ok ? 'ok' : 'erro'}>{msg.t}</p>}
         </>

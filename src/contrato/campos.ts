@@ -11,6 +11,10 @@ export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
   { grupo: 'Vendedora', chave: 'vendedora.registro_data', rotulo: 'Data do registro', exemplo: '02/01/2025' },
   { grupo: 'Vendedora', chave: 'vendedora.assinante', rotulo: 'Nome na assinatura da vendedora', exemplo: 'INCORPORADORA EXEMPLO SPE LTDA' },
 
+  { grupo: 'Incorporadora', chave: 'incorporadora.razao_social', rotulo: 'Razão social da incorporadora (item 1 do Quadro Resumo)', exemplo: 'CONSTRUTORA EXEMPLO LTDA' },
+  { grupo: 'Incorporadora', chave: 'incorporadora.cnpj', rotulo: 'CNPJ da incorporadora', exemplo: '44.555.666/0001-81' },
+  { grupo: 'Incorporadora', chave: 'incorporadora.endereco', rotulo: 'Endereço da sede da incorporadora', longo: true, exemplo: 'Rua Modelo, nº 200, Sala 2, Centro, nesta cidade' },
+
   { grupo: 'Empreendimento', chave: 'empreendimento.nome', rotulo: 'Nome do empreendimento', exemplo: 'RESIDENCIAL MODELO' },
   { grupo: 'Empreendimento', chave: 'empreendimento.endereco', rotulo: 'Localização', longo: true, exemplo: 'Avenida Exemplo, nº 1.000, Quadra 1, Lote 1, Setor Modelo, Rio Verde – Goiás' },
   { grupo: 'Empreendimento', chave: 'empreendimento.descricao', rotulo: 'Descrição curta (item 2.1)', longo: true, exemplo: 'formado por 01 (uma) torre residencial com 173 (cento e setenta e três) unidades autônomas do tipo studio' },
@@ -18,6 +22,7 @@ export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
   { grupo: 'Empreendimento', chave: 'empreendimento.cidade', rotulo: 'Cidade', exemplo: 'Rio Verde' },
   { grupo: 'Empreendimento', chave: 'empreendimento.cidade_uf', rotulo: 'Cidade – UF', exemplo: 'Rio Verde – Goiás' },
   { grupo: 'Empreendimento', chave: 'empreendimento.foro', rotulo: 'Foro (comarca)', exemplo: 'Rio Verde – Goiás' },
+  { grupo: 'Empreendimento', chave: 'empreendimento.email_arrependimento', rotulo: 'E-mail para o direito de arrependimento (Quadro Resumo 7.3)', exemplo: 'contratos@exemplo.com' },
   { grupo: 'Empreendimento', chave: 'empreendimento.prazo_obra', rotulo: 'Prazo de conclusão das obras', exemplo: '30/06/2030' },
 
   { grupo: 'Registros', chave: 'empreendimento.cartorio', rotulo: 'Cartório de registro de imóveis', exemplo: 'Cartório de Registro de Imóveis de Rio Verde – Goiás' },
@@ -42,6 +47,11 @@ export const CAMPOS_EMPREENDIMENTO: CampoEmp[] = [
 
   { grupo: 'Assinaturas', chave: 'assinatura.plataforma', rotulo: 'Plataforma de assinatura eletrônica', exemplo: 'D4Sign' },
   { grupo: 'Assinaturas', chave: 'assinatura.cofre', rotulo: 'Cofre na D4Sign (nome)', exemplo: 'Duo Haus – Contratos', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.razao_social', rotulo: 'Razão social da coordenação de vendas (comissão, item 9.3)', exemplo: 'COORDENAÇÃO EXEMPLO LTDA', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.cnpj', rotulo: 'CNPJ da coordenação de vendas', exemplo: '44.555.666/0001-81', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.creci', rotulo: 'CRECI jurídico da coordenação de vendas', exemplo: 'J-00.000', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.signatario_nome', rotulo: 'Quem assina pela coordenação — nome', exemplo: 'SÓCIO EXEMPLO', soAssinatura: true },
+  { grupo: 'Coordenação de vendas', chave: 'coordenacao.signatario_email', rotulo: 'Quem assina pela coordenação — e-mail (entra no envelope para assinar a intermediação)', exemplo: 'coordenacao@exemplo.com', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'vendedora.signatario_nome', rotulo: 'Quem assina pela incorporadora — nome', exemplo: 'REPRESENTANTE EXEMPLO', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'vendedora.signatario_email', rotulo: 'Quem assina pela incorporadora — e-mail', exemplo: 'incorporadora@exemplo.com', soAssinatura: true },
   { grupo: 'Assinaturas', chave: 'testemunha1.nome', rotulo: 'Testemunha 1 — nome', exemplo: 'TESTEMUNHA EXEMPLO UM' },

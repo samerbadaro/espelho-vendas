@@ -23,11 +23,12 @@ export function partesDaLeitura(d: DadosContrato, comConjuge: boolean, pj: boole
 
 export async function cartaDaProposta(propostaId: string, partes?: PartesCarta | null, emp: Record<string, string> = {}, o: { data?: string; formato?: 'pdf' | 'docx'; aoAssinaturas?: OpcoesCarta['aoAssinaturas'] } = {}): Promise<Blob> {
   const { data: p } = await supabase.from('propostas')
-    .select('codigo, data_proposta, unidade_id, pasta_id, imobiliaria_id, criado_por, series, observacoes, comissao_pct, parte_sinal')
+    .select('codigo, data_proposta, unidade_id, pasta_id, imobiliaria_id, criado_por, series, observacoes, comissao_pct, parte_sinal, coordenacao_pct, coordenacao_parcelas')
     .eq('id', propostaId).maybeSingle();
   if (!p) throw new Error('Proposta não encontrada.');
   const pr = p as { codigo: string; data_proposta: string; unidade_id: string; pasta_id: string | null; imobiliaria_id: string | null; criado_por: string | null;
-    series: Omit<Serie, 'id'>[]; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null };
+    series: Omit<Serie, 'id'>[]; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
+    coordenacao_pct: number | null; coordenacao_parcelas: number | null };
   const ctx = await carregarContexto();
   if ('erro' in ctx) throw new Error(ctx.erro);
   const unidade = ctx.unidades.find((u) => u.id === pr.unidade_id);
@@ -43,6 +44,8 @@ export async function cartaDaProposta(propostaId: string, partes?: PartesCarta |
     dataMinima: pr.data_proposta,
     comissaoPercentual: pr.comissao_pct != null ? Number(pr.comissao_pct) : undefined,
     parteDoSinal: pr.parte_sinal != null ? Number(pr.parte_sinal) : undefined,
+    coordenacao: pr.coordenacao_pct != null ? Number(pr.coordenacao_pct) : undefined,
+    coordenacaoParcelas: pr.coordenacao_parcelas != null ? Number(pr.coordenacao_parcelas) : undefined,
     diasVencimento: ctx.comercial.dias_vencimento, observacoes: pr.observacoes,
   });
   const blob = await (o.formato === 'docx' ? gerarCartaWord : gerarCarta)({
