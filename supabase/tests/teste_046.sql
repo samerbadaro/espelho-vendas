@@ -13,7 +13,7 @@ do $$ declare c contratos; begin
 end $$;
 reset role;
 -- envelope ativo (o servidor grava com a chave secreta)
-insert into envelopes (pasta_id, documentos) select pasta, jsonb_build_array(jsonb_build_object('tipo', 'contrato', 'id', (select id from contratos where documento = 'carta_proposta' limit 1))) from _e;
+insert into envelopes (pasta_id, proposta_id, documentos) select pasta, proposta, jsonb_build_array(jsonb_build_object('tipo', 'contrato', 'id', (select id from contratos where documento = 'carta_proposta' limit 1))) from _e;
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false) \g /dev/null
 do $$ declare id_ uuid := (select id from contratos where documento = 'carta_proposta' limit 1); begin
@@ -24,8 +24,8 @@ do $$ declare id_ uuid := (select id from contratos where documento = 'carta_pro
 end $$;
 reset role;
 do $$ begin
-  begin insert into envelopes (pasta_id) select pasta from _e; raise notice 'FALHOU  dois envelopes ativos';
-  exception when unique_violation then raise notice 'OK      Só um envelope ativo por pasta'; end;
+  begin insert into envelopes (pasta_id, proposta_id) select pasta, proposta from _e; raise notice 'FALHOU  dois envelopes ativos';
+  exception when unique_violation then raise notice 'OK      Só um envelope ativo por unidade'; end;
   update envelopes set status = 'cancelado';
   raise notice '%  Envelope cancelado libera o documento', case when not em_envelope_ativo((select id from contratos where documento = 'carta_proposta' limit 1)) then 'OK    ' else 'FALHOU' end;
 end $$;

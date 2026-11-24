@@ -225,9 +225,13 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
       const falhaAviso = await d4(env, `/documents/${principal.uuid}/webhooks`, { method: 'POST', body: JSON.stringify({ url: `${origem}/api/d4sign/webhook` }) })
         .then(() => null, (x: unknown) => (x instanceof Error ? x.message : String(x)));
       const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }));
-      const { data: env_ } = await adm.from('envelopes').insert({
+      const { data: env_, error: errEnv } = await adm.from('envelopes').insert({
         pasta_id: pasta, proposta_id: proposta, d4sign_uuid: principal.uuid, documentos: limpos, criado_por: email,
       }).select('id').single();
+      if (errEnv || !env_) {
+        await historico(adm, pasta, 'Envelope não registrado no sistema', { erro: errEnv?.message ?? 'sem retorno', d4sign: principal.uuid }, email).catch(() => null);
+        return erro(`O arquivo subiu para a D4Sign, mas o sistema não conseguiu registrar o envelope (${errEnv?.message ?? 'sem retorno'}). Cancele o documento "${principal.uuid}" no cofre da D4Sign e avise o suporte.`, 500);
+      }
       await adm.from('contratos').update({ assinatura: 'preparado' }).in('id', idsC);
       await historico(adm, pasta, 'Envelope montado na D4Sign', { documentos: limpos.map((d) => d.nome) }, email);
       if (falhaAviso) await historico(adm, pasta, 'Aviso automático de assinaturas não registrado na D4Sign', { erro: falhaAviso }, email);
