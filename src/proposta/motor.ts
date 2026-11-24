@@ -312,7 +312,7 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
 // Redistribuir ("atingir meta"): calcula o valor da parcela de uma série
 // para que o VPL da proposta fique igual ao da tabela (PV zero).
 // ---------------------------------------------------------------------
-export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], serieId: string, meta: 'pv' | 'nominal' = 'pv'): Serie[] | { erro: string } {
+export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], serieId: string, meta: 'pv' | 'nominal' = 'pv'): Serie[] | { erro: string } | { series: Serie[]; aviso: string } {
   const alvo = series.find((s) => s.id === serieId);
   if (!alvo) return { erro: 'Série não encontrada.' };
   if (meta === 'nominal') {
@@ -331,6 +331,18 @@ export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Seri
   if (!(unitario > 0)) return { erro: 'A série precisa ter vencimento e número de parcelas.' };
   const valor = Math.ceil(((vplTabela - outras) / unitario) * 100) / 100; // arredonda para cima: PV nunca fica negativo
   if (valor <= 0) return { erro: 'As outras séries já cobrem o PV da tabela; não sobra valor para esta série.' };
+  // Trava: o preço (valor nominal) da proposta nunca passa do preço de tabela. Se zerar o PV exigir isso,
+  // a série fica no valor que leva o total ao preço de tabela e o PV continua negativo.
+  const totalTabela = total(parcelas(cfg, seriesDaTabela(cfg, u)));
+  const outrasNominal = series.filter((s) => s.id !== serieId).reduce((t, s) => t + s.valor * s.qtd, 0);
+  if (outrasNominal + valor * alvo.qtd > totalTabela + 0.005) {
+    const teto = Math.floor(((totalTabela - outrasNominal) / alvo.qtd) * 100) / 100;
+    if (teto <= 0) return { erro: 'As outras séries já somam o preço de tabela. Com esta condição não é possível chegar ao PV 0 sem passar do preço de tabela.' };
+    return {
+      series: series.map((s) => (s.id === serieId ? { ...s, valor: teto } : s)),
+      aviso: 'Ajustado até o preço de tabela. Com esta condição de pagamento não é possível chegar ao PV 0 sem o preço passar do preço de tabela: antecipe parcelas (mais sinal ou parcelas mais cedo) para melhorar o PV.',
+    };
+  }
   return series.map((s) => (s.id === serieId ? { ...s, valor } : s));
 }
 
@@ -419,7 +431,7 @@ export function aplicarModelo(cfg: ConfigEmpreendimento, u: Unidade, modelo: Mod
       vencimento: fin?.vencimento ?? dataNoMes(somarMeses(cfg.mesEntrega, 1), op.dia), valor: centavosAcima(restoFin),
     });
   const pvZero = redistribuir(cfg, u, lista, principal.id);
-  return 'erro' in pvZero ? lista : pvZero;
+  return 'erro' in pvZero ? lista : 'aviso' in pvZero ? pvZero.series : pvZero;
 }
 
 // ---------------------------------------------------------------------

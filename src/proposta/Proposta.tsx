@@ -85,6 +85,7 @@ export function EditorProposta({
   const pvZero = (id: string) => {
     const res = redistribuir(CFG, unidade, series, id, meta);
     if ('erro' in res) setMensagem(res.erro);
+    else if ('aviso' in res) { setSeries(res.series); setMensagem(res.aviso); }
     else { setSeries(res); setMensagem(null); }
   };
 
