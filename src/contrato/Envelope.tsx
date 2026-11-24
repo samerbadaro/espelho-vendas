@@ -31,8 +31,8 @@ const SITUACAO: Record<string, [string, string]> = {
 const ORDEM_DOC: Record<string, number> = { carta_proposta: 0, intermediacao: 1, quadro_resumo: 2, normas: 3 };
 const NOME_ESPERADO: Record<string, string> = { quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais', carta_proposta: 'Carta Proposta' };
 
-export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj, emp, imobiliariaId, aoMudar }: {
-  pastaId: string; documentos: DocEmitido[]; dados: Dados; temConjuge: boolean; pj: boolean; emp: Record<string, string>; imobiliariaId: string | null; aoMudar: () => void;
+export function EnvelopeAssinatura({ pastaId, propostaId, documentos, dados, temConjuge, pj, emp, imobiliariaId, aoMudar }: {
+  pastaId: string; propostaId: string; documentos: DocEmitido[]; dados: Dados; temConjuge: boolean; pj: boolean; emp: Record<string, string>; imobiliariaId: string | null; aoMudar: () => void;
 }) {
   const { avisar, confirmar } = useDialogos();
   const [sit, setSit] = useState<{ configurado: boolean; ambiente?: string } | null>(null);
@@ -55,7 +55,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
 
   const carregar = useCallback(async () => {
     const [{ data: e }, { data: f }] = await Promise.all([
-      supabase.from('envelopes').select('*').eq('pasta_id', pastaId).order('criado_em', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('envelopes').select('*').eq('proposta_id', propostaId).order('criado_em', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('contrato_anexos_fixos').select('id, nome, arquivo, ordem').eq('ativo', true).order('ordem'),
     ]);
     const envelope = (e as EnvelopeRow) ?? null;
@@ -66,7 +66,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
       const { data } = await supabase.from('envelope_assinantes').select('*').eq('envelope_id', envelope.id).order('ordem').order('id');
       setLista(((data as Assinante[]) ?? []).map((a) => ({ ...a, whatsapp: a.whatsapp ?? '' })));
     }
-  }, [pastaId]);
+  }, [propostaId]);
   useEffect(() => { carregar(); }, [carregar]);
 
   // sugestão de assinantes ao montar o envelope
@@ -119,7 +119,7 @@ export function EnvelopeAssinatura({ pastaId, documentos, dados, temConjuge, pj,
   const montar = async () => {
     const fx = fixos.filter((f) => usarFixo[f.id]);
     if (!(await confirmar({ titulo: 'Montar o envelope na D4Sign?', texto: `${incluidos.length + fx.length} documento(s) sobem num único envelope, nesta ordem: ${[...incluidos.map((d) => d.nome), ...fx.map((f) => f.nome)].join(' · ')}. Enquanto o envelope estiver ativo, os documentos ficam travados.`, confirmar: 'Montar envelope' }))) return;
-    await executar('Subindo os documentos…', { acao: 'criar', pasta: pastaId, contratos: incluidos.map((d) => d.id), fixos: fx.map((f) => f.id) }, 'Envelope montado. Confira a prévia.');
+    await executar('Subindo os documentos…', { acao: 'criar', pasta: pastaId, proposta: propostaId, contratos: incluidos.map((d) => d.id), fixos: fx.map((f) => f.id) }, 'Envelope montado. Confira a prévia.');
   };
 
   const enviar = async () => {

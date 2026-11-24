@@ -82,8 +82,9 @@ export function PainelAssinaturas() {
       const vistos = new Set<string>();
       const lista = ((e ?? []) as unknown as Envelope[]).filter((x) => {
         if (x.status === 'cancelado') return true;
-        if (vistos.has(x.pasta_id)) return false;
-        vistos.add(x.pasta_id); return true;
+        const chave = x.proposta_id ?? x.pasta_id; // um cartão por unidade
+        if (vistos.has(chave)) return false;
+        vistos.add(chave); return true;
       });
       setEnvs(lista); setAss((a as Assinante[]) ?? []);
     })();

@@ -34,7 +34,7 @@ do $$ declare c contratos; begin
   begin perform registrar_contrato((select pasta from _c), (select proposta from _c), 'quadro_resumo', 'QR', (select pasta from _c)::text || '/a.pdf', '{}');
     raise notice 'FALHOU  emitiu sem pagamento conferido';
   exception when others then raise notice '%  Sem fluxo conferido não emite (%)', case when sqlerrm = 'PAGAMENTO_NAO_CONFERIDO' then 'OK    ' else 'FALHOU' end, sqlerrm; end;
-  perform conferir_pagamento((select pasta from _c), '[{"nome":"Imob","documento":"11222333000181","valor":1000}]', true);
+  perform conferir_pagamento((select proposta from _c), '[{"nome":"Imob","documento":"11222333000181","valor":1000}]', true);
   c := registrar_contrato((select pasta from _c), (select proposta from _c), 'quadro_resumo', 'Quadro Resumo', (select pasta from _c)::text || '/a.pdf', '{}');
   raise notice '%  Emitido nº % aguardando validação', case when c.numero >= 1001 and c.validacao = 'aguardando' then 'OK    ' else 'FALHOU' end, c.numero;
   c := validar_contrato(c.id);
