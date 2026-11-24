@@ -154,14 +154,17 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
     // ---- montar o envelope: principal + anexos ----
     if (acao === 'criar') {
       const pasta = String(corpo.pasta || '');
+      const proposta = String(corpo.proposta || '');
       const idsC = (Array.isArray(corpo.contratos) ? corpo.contratos : []).map(String);
       const idsF = (Array.isArray(corpo.fixos) ? corpo.fixos : []).map(String);
       if (!idsC.length) return erro('Escolha os documentos do envelope.');
-      const { data: ativo } = await adm.from('envelopes').select('id').eq('pasta_id', pasta).in('status', ['preparado', 'enviado']).maybeSingle();
-      if (ativo) return erro('Esta pasta já tem um envelope em andamento.');
+      if (!proposta) return erro('Atualize a página e tente de novo (falta a proposta do envelope).');
+      // um envelope em andamento por unidade (proposta): o mesmo cliente pode ter outra unidade em assinatura
+      const { data: ativo } = await adm.from('envelopes').select('id').eq('proposta_id', proposta).in('status', ['preparado', 'enviado']).maybeSingle();
+      if (ativo) return erro('Esta unidade já tem um envelope em andamento.');
       const { data: cs } = await adm.from('contratos').select('*').in('id', idsC);
       const contratos = (cs ?? []) as { id: string; numero: number; pasta_id: string; proposta_id: string | null; documento: string; nome: string; caminho: string | null; caminho_docx: string | null; versao: number; validacao: string; cancelado_em: string | null; assinatura: string }[];
-      if (contratos.length !== idsC.length || contratos.some((c) => c.pasta_id !== pasta || c.cancelado_em)) return erro('Documento inválido para este envelope.');
+      if (contratos.length !== idsC.length || contratos.some((c) => c.pasta_id !== pasta || c.proposta_id !== proposta || c.cancelado_em)) return erro('Documento inválido para este envelope.');
       if (contratos.some((c) => c.validacao !== 'validado')) return erro('Valide todos os documentos antes de montar o envelope.');
       if (contratos.some((c) => c.assinatura === 'assinado')) return erro('Há documento já assinado na seleção.');
       const { data: fs } = idsF.length ? await adm.from('contrato_anexos_fixos').select('*').in('id', idsF).eq('ativo', true) : { data: [] };
@@ -223,7 +226,7 @@ export async function apiD4Sign(req: Request, env: EnvD4): Promise<Response> {
         .then(() => null, (x: unknown) => (x instanceof Error ? x.message : String(x)));
       const limpos = docs.map(({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }) => ({ tipo, id, nome, versao, arquivo, d4sign_uuid, pagina_inicial }));
       const { data: env_ } = await adm.from('envelopes').insert({
-        pasta_id: pasta, proposta_id: contratos[0].proposta_id, d4sign_uuid: principal.uuid, documentos: limpos, criado_por: email,
+        pasta_id: pasta, proposta_id: proposta, d4sign_uuid: principal.uuid, documentos: limpos, criado_por: email,
       }).select('id').single();
       await adm.from('contratos').update({ assinatura: 'preparado' }).in('id', idsC);
       await historico(adm, pasta, 'Envelope montado na D4Sign', { documentos: limpos.map((d) => d.nome) }, email);

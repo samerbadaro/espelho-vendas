@@ -38,7 +38,8 @@ const nomeCliente = (p: Linha['pastas']) => p?.empresa_razao_social || p?.compra
 
 export function ListaContratos() {
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
-  const [regs, setRegs] = useState<Record<string, Registro>>({});
+  const [regs, setRegs] = useState<Record<string, string>>({});
+  const [pagos, setPagos] = useState<Record<string, boolean>>({});
   const [emitidos, setEmitidos] = useState<Record<string, number>>({});
   const [envelopes, setEnvelopes] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState('');
@@ -50,18 +51,22 @@ export function ListaContratos() {
         .eq('status', 'aprovada').not('pasta_id', 'is', null).order('analisada_em', { ascending: false });
       const ls = ((data as unknown as Linha[]) ?? []).filter((l) => l.pastas?.status === 'aprovada');
       setLinhas(ls);
+      // uma linha por unidade (proposta): cada unidade do mesmo cliente anda no seu ritmo
       const ids = ls.map((l) => l.pasta_id);
+      const props = ls.map((l) => l.id);
       if (!ids.length) return;
-      const [{ data: r }, { data: c }, { data: ev }] = await Promise.all([
-        supabase.from('dados_contrato').select('pasta_id, status, pagamento_conferido_em').in('pasta_id', ids),
-        supabase.from('contratos').select('pasta_id').in('pasta_id', ids).is('cancelado_em', null),
-        supabase.from('envelopes').select('pasta_id, status, criado_em').in('pasta_id', ids).neq('status', 'cancelado').order('criado_em'),
+      const [{ data: r }, { data: pg }, { data: c }, { data: ev }] = await Promise.all([
+        supabase.from('dados_contrato').select('pasta_id, status').in('pasta_id', ids),
+        supabase.from('pagamento_contrato').select('proposta_id, conferido_em').in('proposta_id', props),
+        supabase.from('contratos').select('proposta_id').in('proposta_id', props).is('cancelado_em', null),
+        supabase.from('envelopes').select('proposta_id, status, criado_em').in('proposta_id', props).neq('status', 'cancelado').order('criado_em'),
       ]);
-      // situação do envelope mais recente de cada pasta (preparado, enviado ou assinado)
-      setEnvelopes(Object.fromEntries(((ev as { pasta_id: string; status: string }[]) ?? []).map((x) => [x.pasta_id, x.status])));
-      setRegs(Object.fromEntries(((r as Registro[]) ?? []).map((x) => [x.pasta_id, x])));
+      // situação do envelope mais recente de cada unidade (preparado, enviado ou assinado)
+      setEnvelopes(Object.fromEntries(((ev as { proposta_id: string; status: string }[]) ?? []).map((x) => [x.proposta_id, x.status])));
+      setRegs(Object.fromEntries(((r as { pasta_id: string; status: string }[]) ?? []).map((x) => [x.pasta_id, x.status])));
+      setPagos(Object.fromEntries(((pg as { proposta_id: string; conferido_em: string | null }[]) ?? []).map((x) => [x.proposta_id, !!x.conferido_em])));
       const n: Record<string, number> = {};
-      ((c as { pasta_id: string }[]) ?? []).forEach((x) => { n[x.pasta_id] = (n[x.pasta_id] ?? 0) + 1; });
+      ((c as { proposta_id: string }[]) ?? []).forEach((x) => { n[x.proposta_id] = (n[x.proposta_id] ?? 0) + 1; });
       setEmitidos(n);
     })();
   }, []);
@@ -74,13 +79,13 @@ export function ListaContratos() {
 
   const etapa = (l: Linha) => {
     const r = regs[l.pasta_id];
-    const e = envelopes[l.pasta_id];
+    const e = envelopes[l.id];
     if (e === 'assinado') return ['Contrato assinado', 'sp-aprovada'];
     if (e === 'enviado') return ['Contrato enviado', 'sp-aguardando_analise'];
     if (e === 'preparado') return ['Envelope montado', 'sp-pronta'];
-    if (emitidos[l.pasta_id]) return ['Emitido', 'sp-aprovada'];
-    if (r?.status === 'conferido' && r.pagamento_conferido_em) return ['Pronto para emitir', 'sp-pronta'];
-    if (r) return ['Em conferência', 'sp-em_analise'];
+    if (emitidos[l.id]) return ['Emitido', 'sp-aprovada'];
+    if (r === 'conferido' && pagos[l.id]) return ['Pronto para emitir', 'sp-pronta'];
+    if (r || pagos[l.id] !== undefined) return ['Em conferência', 'sp-em_analise'];
     return ['A iniciar', 'sp-incompleta'];
   };
 
@@ -156,19 +161,23 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     if (!p || (p as unknown as Proposta).status !== 'aprovada') { setErro('Proposta não encontrada ou não aprovada.'); return; }
     const pr = p as unknown as Proposta;
     setProp(pr);
-    const [{ data: pa }, { data: r }, { data: ar }, { data: e }, { data: c }, { data: cm }] = await Promise.all([
+    const [{ data: pa }, { data: r0 }, { data: pg }, { data: ar }, { data: e }, { data: c }, { data: cm }] = await Promise.all([
       supabase.from('pastas').select('id, codigo, status, tipo_pessoa, estado_civil, regime_bens, conjuge_participa, comprador_nome, empresa_razao_social, imobiliaria_id, imobiliarias(nome, cnpj)').eq('id', pr.pasta_id).maybeSingle(),
-      supabase.from('dados_contrato').select('pasta_id, status, dados, comissao, pagamento_conferido_em, pagamento_conferido_por').eq('pasta_id', pr.pasta_id).maybeSingle(),
+      supabase.from('dados_contrato').select('pasta_id, status, dados').eq('pasta_id', pr.pasta_id).maybeSingle(),
+      supabase.from('pagamento_contrato').select('comissao, conferido_em, conferido_por').eq('proposta_id', pr.id).maybeSingle(),
       supabase.from('unidade_areas').select('*').eq('numero', pr.unidades?.numero ?? '').maybeSingle(),
       supabase.from('empreendimento_contrato').select('dados').maybeSingle(),
-      supabase.from('contratos').select('*').eq('pasta_id', pr.pasta_id).order('numero', { ascending: false }),
+      supabase.from('contratos').select('*').eq('proposta_id', pr.id).order('numero', { ascending: false }),
       supabase.from('comercial').select('coordenacao_comercial, coordenacao_documento, parte_sinal').eq('id', 1).maybeSingle(),
     ]);
     const { data: ms } = await supabase.from('modelos_contrato').select('documento, caminho').eq('ativo', true);
     setModelos(Object.fromEntries(((ms as { documento: TipoDocumento; caminho: string }[]) ?? []).map((m) => [m.documento, m.caminho])));
     const pc = pa as unknown as PastaC;
     setPasta(pc);
-    const rg = (r as Registro) ?? null;
+    // partes conferidas: da pasta (mesmo comprador); fluxo de pagamento e comissão: desta unidade (053)
+    const p0 = pg as { comissao: Comissao[]; conferido_em: string | null; conferido_por: string | null } | null;
+    const rg = r0 || p0 ? ({ ...((r0 as Registro) ?? { pasta_id: pr.pasta_id, status: '', dados: {} }),
+      comissao: p0?.comissao ?? [], pagamento_conferido_em: p0?.conferido_em ?? null, pagamento_conferido_por: p0?.conferido_por ?? null } as Registro) : null;
     setReg(rg);
     setAreas((ar as Areas) ?? null);
     const empDados = (e?.dados as Record<string, string>) ?? {};
@@ -209,12 +218,12 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     pagamento: !!reg?.pagamento_conferido_em,
     empreendimento: camposVazios.length === 0,
   };
-  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && ok.empreendimento && (escolha.quadro_resumo || escolha.normas || comCarta);
+  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && (escolha.quadro_resumo || escolha.normas || comCarta);
 
   const salvarComissao = async (conferido: boolean) => {
     if (conferido && comissao.some((c) => !c.nome.trim() || !(doTxt(c.valor) > 0))) { avisar('Preencha nome e valor de cada beneficiário da comissão.', 'erro'); return; }
     const lim = comissao.map((c) => ({ ...c, nome: c.nome.trim(), documento: soDigitos(c.documento), valor: Math.round(doTxt(c.valor) * 100) / 100 }));
-    const { error } = await supabase.rpc('conferir_pagamento', { p_pasta: pasta.id, p_comissao: lim, p_conferido: conferido });
+    const { error } = await supabase.rpc('conferir_pagamento', { p_proposta: prop.id, p_comissao: lim, p_conferido: conferido });
     if (error) { avisar('Não foi possível salvar.', 'erro'); return; }
     avisar(conferido ? 'Fluxo de pagamento conferido.' : 'Comissão salva.'); carregar();
   };
@@ -438,7 +447,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
           {!ok.partes && <li>Conferir as partes do contrato (leitura com IA → Marcar como conferido).</li>}
           {!ok.unidade && <li>Unidade sem quadro de áreas.</li>}
           {!ok.pagamento && <li>Conferir o fluxo de pagamento e a comissão.</li>}
-          {!ok.empreendimento && <li>Faltam {camposVazios.length} dado(s) da incorporação em Empreendimento → Dados para contrato ({camposVazios.slice(0, 3).map((c) => c.rotulo).join(', ')}{camposVazios.length > 3 ? '…' : ''}).</li>}
+          {!ok.empreendimento && <li>Faltam {camposVazios.length} dado(s) em Empreendimento → Dados para contrato ({camposVazios.map((c) => c.rotulo).join('; ')}). Dá para emitir assim: esses pontos saem em branco (____) no documento, para completar no Word ou emitir de novo depois de preencher.</li>}
         </ul>
         <div className="ct-escolha">
           {(Object.keys(NOME_DOCUMENTO) as TipoDocumento[]).map((t) => (
@@ -501,7 +510,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       </div>
 
       {emit.some((c) => !c.cancelado_em) && (
-        <EnvelopeAssinatura pastaId={pasta.id} documentos={emit} dados={padronizar(reg?.dados ?? {})} temConjuge={temConj} pj={pj} emp={emp} imobiliariaId={pasta.imobiliaria_id} aoMudar={carregar} />
+        <EnvelopeAssinatura pastaId={pasta.id} propostaId={prop.id} documentos={emit} dados={padronizar(reg?.dados ?? {})} temConjuge={temConj} pj={pj} emp={emp} imobiliariaId={pasta.imobiliaria_id} aoMudar={carregar} />
       )}
     </section>
   );

@@ -48,6 +48,13 @@ export const REVISAO_MANUAL = '23/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '23/11/2026', titulo: 'Contrato por unidade', papeis: EQUIPE,
+    itens: [
+      'Cliente com mais de uma unidade na mesma pasta: cada unidade tem sua própria situação, conferência do fluxo de pagamento e comissão, documentos e envelope de assinatura. A conferência das partes (comprador e cônjuge) vale para todas as unidades da pasta.',
+      'Dá para emitir com dados do empreendimento pendentes: eles saem em branco no documento, para completar no Word.',
+    ],
+  },
+  {
     data: '23/11/2026', titulo: 'Comissão com coordenação de vendas e contrato na minuta final',
     itens: [
       'A comissão passa a ter duas partes: imobiliária (5%) e coordenação de vendas (0,5%), pagas com 70% de cada parcela do sinal. A coordenação recebe primeiro, em 2 parcelas (0,25% + 0,25%); a equipe pode mudar para 1 ou 3 parcelas na proposta.',
