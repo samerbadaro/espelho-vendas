@@ -1129,3 +1129,19 @@ small.bloco { display: block; color: var(--tinta-2); }
 .as-progresso span { margin-left: 6px; font-variant-numeric: tabular-nums; color: var(--tinta-2); }
 .as-tempo { font-size: 0.75rem; color: var(--tinta-2); }
 .as-tempo.atrasado { color: #B4451F; font-weight: 600; }
+
+/* ---------- espelho 3D ---------- */
+.espelho-vista { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--fundo-suave, #eee9df); margin: 0 0 12px; }
+.espelho-vista button { border: 0; background: transparent; padding: 6px 16px; border-radius: 999px; font: inherit; font-weight: 600; color: inherit; cursor: pointer; }
+.espelho-vista button.ativo { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.espelho3d { position: relative; border-radius: 12px; overflow: hidden; background: #0e1626; }
+.espelho3d-tela { width: 100%; height: min(72vh, 680px); min-height: 380px; touch-action: none; }
+.espelho3d-dica { position: absolute; pointer-events: none; display: grid; gap: 3px; padding: 8px 10px; border-radius: 8px; background: rgba(14,22,38,.92); color: #fff; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.35); max-width: 240px; }
+.espelho3d-dica .etiqueta { justify-self: start; }
+.espelho3d-botoes { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+.espelho3d-legenda { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; max-width: 70%; }
+.espelho3d-item { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,.18); background: rgba(14,22,38,.75); color: #fff; padding: 4px 10px; border-radius: 999px; font: inherit; font-size: 12px; cursor: pointer; }
+.espelho3d-item i { width: 10px; height: 10px; border-radius: 3px; background: var(--cor); }
+.espelho3d-item.ativo { border-color: #fff; background: rgba(255,255,255,.18); }
+.espelho3d-ajuda { position: absolute; left: 0; right: 0; bottom: 8px; margin: 0; text-align: center; color: rgba(255,255,255,.7); font-size: 12px; pointer-events: none; }
+@media (max-width: 640px) { .espelho3d-legenda { max-width: 100%; right: 10px; top: 48px; } .espelho3d-tela { height: 62vh; } }

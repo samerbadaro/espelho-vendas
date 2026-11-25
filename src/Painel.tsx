@@ -12,6 +12,8 @@ import {
   type Unidade, type Status,
 } from './dados';
 import { Predio, Resumo } from './Predio';
+import { lazy, Suspense } from 'react';
+const Espelho3D = lazy(() => import('./Espelho3D'));
 import { Aviso, StatusConexao, useTitulo } from './Publico';
 import { ListaPastas, DetalhePasta } from './Pastas';
 import { Imobiliarias, Corretores } from './Imobiliarias';
@@ -489,6 +491,23 @@ function Casca({ perfil }: { perfil: Perfil }) {
 /** Imobiliária e corretor veem só disponível ou vendida, como na TV. O andamento fica no funil. */
 const paraParceiro = (u: Unidade): Unidade => (u.status === 'disponivel' ? u : { ...u, status: 'vendida' });
 
+/** Alterna o espelho entre a tabela (fachada) e o prédio em 3D; a escolha fica neste navegador. */
+function VistaEspelho({ unidades, recentes, aoSelecionar }: { unidades: Unidade[]; recentes: Record<string, number>; aoSelecionar?: (u: Unidade) => void }) {
+  const [vista, setVista] = useState<'tabela' | '3d'>(() => { try { return localStorage.getItem('espelho.vista') === '3d' ? '3d' : 'tabela'; } catch { return 'tabela'; } });
+  const trocar = (v: 'tabela' | '3d') => { setVista(v); try { localStorage.setItem('espelho.vista', v); } catch { /* sem armazenamento */ } };
+  return (
+    <>
+      <div className="espelho-vista" role="tablist" aria-label="Forma de ver o espelho">
+        <button type="button" role="tab" aria-selected={vista === 'tabela'} className={vista === 'tabela' ? 'ativo' : ''} onClick={() => trocar('tabela')}>Fachada</button>
+        <button type="button" role="tab" aria-selected={vista === '3d'} className={vista === '3d' ? 'ativo' : ''} onClick={() => trocar('3d')}>3D</button>
+      </div>
+      {vista === '3d'
+        ? <Suspense fallback={<p className="vazio">Carregando o prédio em 3D…</p>}><Espelho3D unidades={unidades} recentes={recentes} aoSelecionar={aoSelecionar} /></Suspense>
+        : <Predio unidades={unidades} recentes={recentes} aoSelecionar={aoSelecionar} />}
+    </>
+  );
+}
+
 function EspelhoSomenteLeitura() {
   const real = useEspelho();
   const unidades = useMemo(() => real.unidades.map(paraParceiro), [real.unidades]);
@@ -513,7 +532,7 @@ function EspelhoSomenteLeitura() {
       </div>
       <div className="cartao espelho-cartao">
         <Resumo unidades={esp.unidades} apenas={['disponivel', 'vendida']} />
-        <Predio unidades={esp.unidades} recentes={esp.recentes} />
+        <VistaEspelho unidades={esp.unidades} recentes={esp.recentes} />
       </div>
     </section>
   );
@@ -545,7 +564,7 @@ function EspelhoEquipe({ perfil, comPropostas = false }: { perfil: Perfil; comPr
       <div className="painel-corpo">
         <div className="cartao espelho-cartao">
           <Resumo unidades={esp.unidades} />
-          <Predio unidades={esp.unidades} recentes={esp.recentes} aoSelecionar={setSelecionada} />
+          <VistaEspelho unidades={esp.unidades} recentes={esp.recentes} aoSelecionar={setSelecionada} />
         </div>
 
         <aside className="painel-lateral">

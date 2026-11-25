@@ -48,6 +48,13 @@ export const REVISAO_MANUAL = '25/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '25/11/2026', titulo: 'Espelho em 3D',
+    itens: [
+      'No Espelho, o botão “3D” mostra o prédio em três dimensões, com cada apartamento na cor do status, em tempo real. Arraste para girar, use a roda (ou dois dedos) para aproximar, passe o mouse para ver os dados e clique para abrir a unidade. “Fachada” volta para a visão de antes; o navegador lembra a escolha.',
+      'Na legenda, clique num status para destacar só essas unidades.',
+    ],
+  },
+  {
     data: '25/11/2026', titulo: 'Contrato na minuta r02 do jurídico', papeis: EQUIPE,
     itens: [
       'Quadro Resumo e Normas Contratuais seguem a revisão r02: cláusulas novas (índices, tributação, LGPD, assinatura eletrônica, declarações do comprador), vaga rotativa no item 3 e aceites do comprador depois das cláusulas 6, 7 e 10.6 do Quadro Resumo e da cláusula 3 das Normas, com as assinaturas da D4Sign nas linhas.',
