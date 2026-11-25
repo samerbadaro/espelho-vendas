@@ -44,9 +44,15 @@ const PARCEIROS: PapelManual[] = ['imobiliaria', 'corretor'];
 const TODOS: PapelManual[] = ['admin', 'vendas', 'imobiliaria', 'corretor'];
 
 /** Atualizado a cada entrega (data da última revisão do manual). */
-export const REVISAO_MANUAL = '23/11/2026';
+export const REVISAO_MANUAL = '25/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
+  {
+    data: '25/11/2026', titulo: 'Contrato na minuta r02 do jurídico', papeis: EQUIPE,
+    itens: [
+      'Quadro Resumo e Normas Contratuais seguem a revisão r02: cláusulas novas (índices, tributação, LGPD, assinatura eletrônica, declarações do comprador), vaga rotativa no item 3 e aceites do comprador depois das cláusulas 6, 7 e 10.6 do Quadro Resumo e da cláusula 3 das Normas, com as assinaturas da D4Sign nas linhas.',
+    ],
+  },
   {
     data: '23/11/2026', titulo: 'Contrato por unidade', papeis: EQUIPE,
     itens: [
