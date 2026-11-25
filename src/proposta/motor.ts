@@ -151,6 +151,9 @@ export function parcelas(cfg: ConfigEmpreendimento, series: Serie[]): Parcela[] 
   return lista.sort((a, b) => a.data.localeCompare(b.data));
 }
 
+/** Diferença de PV abaixo disto (centavos de arredondamento) conta como PV zerado. */
+export const TOLERANCIA_PV = 0.5;
+
 const fator = (taxa: number, mes: number) => Math.pow(1 + taxa, -mes);
 
 export function vpl(cfg: ConfigEmpreendimento, ps: Parcela[]) {
@@ -291,7 +294,9 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
   if (permuta && op.observacoes !== undefined && !(op.observacoes ?? '').trim())
     avisos.push({ nivel: 'erro', texto: 'Permuta: descreva nas observações o que entra na permuta (imóvel, carro, serviços...).', serieId: permuta.id });
   // PV abaixo da tabela não bloqueia: a proposta vai para a alçada de aprovação
-  if (diferencaVPL < -0.005) avisos.push({ nivel: 'alerta', texto: `PV negativo: faltam ${fmtReal(-diferencaVPL)} em valor presente. Precisa de aprovação.` });
+  if (p.total > t.total + 0.005)
+    avisos.push({ nivel: 'erro', texto: `Preço ${fmtReal(p.total - t.total)} acima da tabela. O preço da unidade não pode passar do preço de tabela: use "⟲ ajustar" numa série para voltar.` });
+  if (diferencaVPL < -TOLERANCIA_PV) avisos.push({ nivel: 'alerta', texto: `PV negativo: faltam ${fmtReal(-diferencaVPL)} em valor presente. Precisa de aprovação.` });
   for (const m of marcos)
     if (m.variacao !== null && m.variacao < cfg.limiteVariacaoCaptacao)
       avisos.push({ nivel: 'alerta', texto: `Captação em ${m.rotulo.toLowerCase()} ${fmtPct(m.variacao)} abaixo da tabela.` });
@@ -320,7 +325,7 @@ export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Seri
     const totalTabela = total(parcelas(cfg, seriesDaTabela(cfg, u)));
     const outras = series.filter((s) => s.id !== serieId).reduce((t, s) => t + s.valor * s.qtd, 0);
     if (!(alvo.qtd >= 1)) return { erro: 'A série precisa ter número de parcelas.' };
-    const valor = Math.ceil(((totalTabela - outras) / alvo.qtd) * 100) / 100;
+    const valor = Math.floor(((totalTabela - outras) / alvo.qtd) * 100) / 100; // para baixo: nunca acima da tabela
     if (valor <= 0) return { erro: 'As outras séries já somam o valor da tabela; não sobra valor para esta série.' };
     return series.map((s) => (s.id === serieId ? { ...s, valor } : s));
   }
@@ -344,6 +349,19 @@ export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Seri
     };
   }
   return series.map((s) => (s.id === serieId ? { ...s, valor } : s));
+}
+
+/** Preço nunca acima da tabela: se o arredondamento das parcelas (para cima) passar do preço de tabela,
+ *  tira o excedente da última série (financiamento, se houver). A diferença no PV fica em centavos. */
+export function limitarAoPreco(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[]): Serie[] {
+  const tabela = total(parcelas(cfg, seriesDaTabela(cfg, u)));
+  const excesso = series.reduce((t, s) => t + s.valor * s.qtd, 0) - tabela;
+  if (excesso <= 0.005) return series;
+  const alvo = series.find((s) => s.periodicidade === 'Financiamento' && s.qtd >= 1) ?? [...series].reverse().find((s) => s.qtd >= 1);
+  if (!alvo) return series;
+  const corte = Math.ceil((excesso / alvo.qtd) * 100) / 100;
+  if (corte >= alvo.valor) return series;
+  return series.map((s) => (s.id === alvo.id ? { ...s, valor: centavos(s.valor - corte) } : s));
 }
 
 /** Soma ao ato (primeira série de sinal) o que falta para o sinal cobrir a comissão inteira. */
@@ -397,7 +415,7 @@ export function aplicarModelo(cfg: ConfigEmpreendimento, u: Unidade, modelo: Mod
   }));
 
   const limpar = (l: (Serie & { _ref?: SerieTabela })[]): Serie[] => l.map(({ _ref, ...s }) => s);
-  if (modelo === 'tabela') return limpar(daTabela);
+  if (modelo === 'tabela') return limitarAoPreco(cfg, u, limpar(daTabela));
 
   const sinais = daTabela.filter((s) => s._ref.periodicidade === 'Sinal');
   const totalSinal = sinais.reduce((s, x) => s + x.valor * x.qtd, 0);
@@ -431,7 +449,7 @@ export function aplicarModelo(cfg: ConfigEmpreendimento, u: Unidade, modelo: Mod
       vencimento: fin?.vencimento ?? dataNoMes(somarMeses(cfg.mesEntrega, 1), op.dia), valor: centavosAcima(restoFin),
     });
   const pvZero = redistribuir(cfg, u, lista, principal.id);
-  return 'erro' in pvZero ? lista : 'aviso' in pvZero ? pvZero.series : pvZero;
+  return limitarAoPreco(cfg, u, 'erro' in pvZero ? lista : 'aviso' in pvZero ? pvZero.series : pvZero);
 }
 
 // ---------------------------------------------------------------------

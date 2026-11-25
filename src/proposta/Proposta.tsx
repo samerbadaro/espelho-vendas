@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   aplicarModelo, calcular, dataDaParcela, fmtData, fmtMes, fmtNum, fmtPct, fmtReal, mesesEntre, novoId,
-  PERIODICIDADES, aumentarSinal, redistribuir, somarMeses, type ConfigEmpreendimento, type Modelo, type Periodicidade, type Resultado,
+  PERIODICIDADES, TOLERANCIA_PV, aumentarSinal, redistribuir, somarMeses, type ConfigEmpreendimento, type Modelo, type Periodicidade, type Resultado,
   type Serie, type Unidade,
 } from './motor';
 import './proposta.css';
@@ -95,7 +95,7 @@ export function EditorProposta({
   const chaves = r.marcos.find((m) => m.rotulo === 'Até a entrega');
   const capDif = chaves ? chaves.proposta * r.proposta.total - chaves.tabela * r.tabela.total : 0;
   const avisosGerais = r.avisos.filter((a) => !a.serieId);
-  const positivo = r.diferencaVPL >= -0.005;
+  const positivo = r.diferencaVPL >= -TOLERANCIA_PV;
   const outrosErros = r.avisos.some((a) => a.nivel === 'erro');
   const estado = !positivo ? 'ruim' : outrosErros ? 'pendente' : 'bom';
   const ro = somenteLeitura;
