@@ -44,9 +44,17 @@ const PARCEIROS: PapelManual[] = ['imobiliaria', 'corretor'];
 const TODOS: PapelManual[] = ['admin', 'vendas', 'imobiliaria', 'corretor'];
 
 /** Atualizado a cada entrega (data da última revisão do manual). */
-export const REVISAO_MANUAL = '25/11/2026';
+export const REVISAO_MANUAL = '26/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
+  {
+    data: '26/11/2026', titulo: 'Proposta conjunta: várias unidades numa simulação só',
+    itens: [
+      'Na proposta, “Adicionar unidade” junta mais unidades para o mesmo cliente: a simulação é feita sobre o total.',
+      'Ao salvar, cada unidade vira a sua proposta, com as parcelas divididas pelo preço de tabela de cada uma.',
+      'As propostas do conjunto são enviadas e analisadas juntas; as abas mostram a visão conjunta ou cada unidade sozinha.',
+    ],
+  },
   {
     data: '25/11/2026', titulo: 'Espelho em 3D',
     itens: [
@@ -486,6 +494,27 @@ export const CAPITULOS: Capitulo[] = [
           'A tela mostra antes do envio quem vai aprovar a proposta.',
           'A proposta pode ser enviada mesmo com PV abaixo da tabela: ela não é aprovada sozinha e fica “Enviada, aguardando” a Sec. Vendas ou o Administrador, conforme o desconto. Vale para propostas feitas por corretor, imobiliária ou gerente.',
           'O que bloqueia o envio são só os erros da grade (vencimento, parcelas, valor) e a permuta sem descrição.',
+        ],
+      },
+      {
+        titulo: 'Proposta conjunta (várias unidades para o mesmo cliente)', papeis: TODOS,
+        passos: [
+          'Na proposta, depois de escolher a primeira unidade, clique em “Adicionar unidade” para cada unidade a mais. Para tirar uma, clique no “×” ao lado dela.',
+          'A simulação passa a ser do conjunto: área, preço de tabela e fluxo da tabela somados. Monte o fluxo sobre 100% do total, como numa proposta comum (modelos, “⟲ ajustar”, comissão).',
+          'Abaixo das unidades aparece a divisão: o peso de cada uma é o preço de tabela dela dividido pela soma. Ex.: unidades de R$ 400 mil, R$ 400 mil e R$ 200 mil ficam com 40%, 40% e 20%.',
+          'Ao clicar em “Salvar rascunho” ou “Enviar para análise”, cada unidade vira uma proposta própria, com as mesmas datas e quantidades e cada parcela dividida pelo peso. Os centavos do arredondamento ficam na última unidade, para a soma bater com a simulação.',
+          'Na proposta salva, use as abas no topo: “Conjunta” mostra tudo junto (e é onde se edita); cada aba com código e unidade mostra a proposta daquela unidade sozinha.',
+          'O “Resumo da proposta” sai do que está na tela: na aba “Conjunta”, com todas as unidades e o fluxo total; na aba de uma unidade, só com ela.',
+          'Na lista de Propostas, o conjunto aparece numa linha só, marcada “conjunta”, com as unidades, o valor somado e o PV do conjunto.',
+        ],
+        atencao: 'As propostas de um conjunto são enviadas e analisadas juntas: a alçada é calculada pelo PV do conjunto, e aprovar, devolver ou recusar vale para todas as unidades. Depois de aprovadas, cada unidade segue sozinha para contrato e assinatura.',
+      },
+      {
+        titulo: 'Analisar uma proposta conjunta', papeis: ['vendas', 'admin'],
+        passos: [
+          'Abra a proposta e fique na aba “Conjunta”. O quadro “Análise da proposta conjunta” vale para todas as unidades.',
+          'Clique em “Aprovar”, “Devolver para ajuste” ou “Recusar” (com o motivo). Se uma unidade não puder ser aprovada (por exemplo, já negociada no espelho), nenhuma é aprovada e o sistema avisa o motivo.',
+          'Para cancelar uma unidade só depois da aprovação (desistência de uma delas), abra a aba da unidade e clique em “Cancelar só esta unidade”. “Cancelar a proposta conjunta”, na aba “Conjunta”, cancela todas.',
         ],
       },
       {

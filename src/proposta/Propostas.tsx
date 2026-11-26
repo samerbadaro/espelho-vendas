@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, FileDown, Plus, Send } from 'lucide-react';
+import { ArrowLeft, FileDown, Plus, Send, X } from 'lucide-react';
 import { supabase } from '../dados';
 import { ir, type Perfil } from '../util';
 import { useDialogos } from '../ui';
@@ -9,7 +9,7 @@ import {
   type Contexto, type PropostaSalva, type StatusProposta,
 } from './dadosProposta';
 import { gerarCarta, gerarCartaWord, type DadosCarta, type DadosPasta } from './carta';
-import { aplicarModelo, fmtData, fmtReal, hojeISO, precoUnidade } from './motor';
+import { aplicarModelo, calcular, distribuir, fmtData, fmtPct, fmtReal, hojeISO, pesosPorPreco, precoUnidade, somarSeries, unidadeConjunta } from './motor';
 
 const CLASSE: Record<StatusProposta, string> = {
   rascunho: 'spr-rascunho', enviada: 'spr-enviada', devolvida: 'spr-devolvida', aprovada: 'spr-aprovada', recusada: 'spr-recusada', cancelada: 'spr-cancelada',
@@ -31,7 +31,7 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     let q = supabase.from('propostas')
-      .select('id, codigo, status, alcada, analisada_por, data_proposta, resumo, criado_por, criado_por_nome, atualizada_em, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
+      .select('id, codigo, status, alcada, analisada_por, data_proposta, resumo, criado_por, criado_por_nome, atualizada_em, grupo_id, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
       .order('atualizada_em', { ascending: false }).limit(300);
     if (filtro) q = q.eq('status', filtro);
     q.then(({ data, error }) => {
@@ -42,7 +42,29 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
   // busca sem acento e sem diferenciar maiúsculas, em unidade, cliente, imobiliária, corretor e código
   const sem = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const termo = sem(busca.trim());
-  const visiveis = (lista ?? []).filter((p) => !termo || sem([p.codigo, p.unidades?.numero, p.pastas?.comprador_nome, p.imobiliarias?.nome, p.criado_por, p.criado_por_nome].filter(Boolean).join(' ')).includes(termo));
+  const filtradas = (lista ?? []).filter((p) => !termo || sem([p.codigo, p.unidades?.numero, p.pastas?.comprador_nome, p.imobiliarias?.nome, p.criado_por, p.criado_por_nome].filter(Boolean).join(' ')).includes(termo));
+  // proposta conjunta: uma linha só para as propostas do mesmo grupo (e mesma situação)
+  const visiveis = useMemo(() => {
+    const linhas: { p: (typeof filtradas)[number]; codigos: string[]; numeros: string[]; total: number | null; pv: number | null }[] = [];
+    const porGrupo = new Map<string, (typeof linhas)[number]>();
+    const membros = new Map<string, (typeof filtradas)>();
+    for (const p of filtradas) {
+      if (!p.grupo_id) { linhas.push({ p, codigos: [p.codigo], numeros: [p.unidades?.numero ?? ''], total: p.resumo.total ?? null, pv: p.resumo.pv_pct ?? null }); continue; }
+      const k = `${p.grupo_id}|${p.status}`;
+      if (!porGrupo.has(k)) { const l = { p, codigos: [], numeros: [], total: 0, pv: null }; porGrupo.set(k, l); linhas.push(l); membros.set(k, []); }
+      membros.get(k)!.push(p);
+    }
+    for (const [k, l] of porGrupo) {
+      const ms = membros.get(k)!.sort((a, b) => a.codigo.localeCompare(b.codigo));
+      l.p = ms[0];
+      l.codigos = ms.map((m) => m.codigo);
+      l.numeros = ms.map((m) => m.unidades?.numero ?? '');
+      l.total = ms.reduce((t, m) => t + (m.resumo.total ?? 0), 0);
+      const vt = ms.reduce((t, m) => t + (m.resumo.vpl_tabela ?? 0), 0), vp = ms.reduce((t, m) => t + (m.resumo.vpl_proposta ?? 0), 0);
+      l.pv = vt > 0 ? Math.round((vp / vt) * 10000) / 100 : ms[0].resumo.pv_pct_grupo ?? ms[0].resumo.pv_pct ?? null;
+    }
+    return linhas;
+  }, [filtradas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section className="secao">
@@ -72,15 +94,15 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
           <table className="tabela">
             <thead><tr><th>Código</th><th>Unidade</th><th>Comprador</th>{equipe && <th>Imobiliária</th>}<th>Corretor</th><th className="dir">Valor</th><th className="dir">PV</th><th>Status</th><th>Atualizada</th></tr></thead>
             <tbody>
-              {visiveis.map((p) => (
-                <tr key={p.id} tabIndex={0} onClick={() => ir(`/painel/propostas/${p.id}`)} onKeyDown={(e) => e.key === 'Enter' && ir(`/painel/propostas/${p.id}`)}>
-                  <td className="mono">{p.codigo}</td>
-                  <td className="mono">{p.unidades?.numero}</td>
+              {visiveis.map(({ p, codigos, numeros, total, pv }) => (
+                <tr key={`${p.id}-${codigos.length}`} tabIndex={0} onClick={() => ir(`/painel/propostas/${p.id}`)} onKeyDown={(e) => e.key === 'Enter' && ir(`/painel/propostas/${p.id}`)}>
+                  <td className="mono">{codigos.join(', ')}{codigos.length > 1 && <small className="dica nowrap"> conjunta</small>}</td>
+                  <td className="mono">{numeros.join(', ')}</td>
                   <td>{p.pastas?.comprador_nome ?? <span className="dica">sem pasta</span>}</td>
                   {equipe && <td>{p.imobiliarias?.nome ?? 'Direto'}</td>}
                   <td>{p.criado_por}</td>
-                  <td className="dir mono">{p.resumo.total != null ? fmtReal(p.resumo.total) : '—'}</td>
-                  <td className={`dir mono ${(p.resumo.pv_pct ?? 100) < 100 ? 'texto-ruim' : ''}`}>{p.resumo.pv_pct != null ? `${p.resumo.pv_pct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%` : '—'}</td>
+                  <td className="dir mono">{total != null ? fmtReal(total) : '—'}</td>
+                  <td className={`dir mono ${(pv ?? 100) < 100 ? 'texto-ruim' : ''}`}>{pv != null ? `${pv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%` : '—'}</td>
                   <td><Selo s={p.status} />{p.status === 'enviada' && p.alcada && <small className="dica nowrap"> {ROTULO_ALCADA[p.alcada]}</small>}
                     {p.status === 'aprovada' && p.analisada_por?.startsWith('Aprovação automática') && <small className="dica nowrap"> automática</small>}</td>
                   <td className="nowrap">{fmtData(p.atualizada_em.slice(0, 10))}</td>
@@ -96,6 +118,8 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
 
 // =====================================================================
 // Nova proposta / proposta salva
+// Proposta conjunta: várias unidades numa simulação só; ao salvar, cada unidade
+// vira uma proposta, com as parcelas divididas pelo preço de tabela de cada uma.
 // =====================================================================
 export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Perfil }) {
   const { avisar, confirmar } = useDialogos();
@@ -103,15 +127,19 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   const hoje = hojeISO();
   const [ctx, setCtx] = useState<Contexto | null>(null);
   const [proposta, setProposta] = useState<PropostaSalva | null>(null);
+  /** Propostas do grupo (sem as canceladas), quando a proposta é conjunta. */
+  const [membros, setMembros] = useState<PropostaSalva[]>([]);
+  /** null = visão conjunta; id = uma proposta do grupo, sozinha */
+  const [vista, setVista] = useState<string | null>(null);
   const [pastas, setPastas] = useState<PastaResumo[]>([]);
   const [historico, setHistorico] = useState<{ acao: string; usuario_email: string | null; criado_em: string; detalhes: { motivo?: string } | null }[]>([]);
   const [erro, setErro] = useState('');
-  const [unidadeId, setUnidadeId] = useState('');
+  const [unidadeIds, setUnidadeIds] = useState<string[]>([]);
   const [pastaId, setPastaId] = useState('');
   const [obs, setObs] = useState('');
   const [estado, setEstado] = useState<EstadoEditor | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [analise, setAnalise] = useState<null | 'devolvida' | 'recusada' | 'cancelada'>(null);
+  const [analise, setAnalise] = useState<null | 'devolvida' | 'recusada' | 'cancelada' | 'cancelar-unidade'>(null);
   const [motivo, setMotivo] = useState('');
   const [chaveEditor, setChaveEditor] = useState(0);
 
@@ -124,26 +152,59 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     if (id === 'nova') {
       const q = new URLSearchParams(window.location.search);
       const un = q.get('unidade');
-      setUnidadeId(c.unidades.find((u) => u.numero === un || u.id === un)?.id ?? c.unidades.find((u) => u.status === 'disponivel')?.id ?? c.unidades[0].id);
+      setUnidadeIds([c.unidades.find((u) => u.numero === un || u.id === un)?.id ?? c.unidades.find((u) => u.status === 'disponivel')?.id ?? c.unidades[0].id]);
       setPastaId(q.get('pasta') ?? '');
       return;
     }
     const { data, error } = await supabase.from('propostas').select('*').eq('id', id).maybeSingle();
     if (error || !data) { setErro(error ? traduzirErro(error.message) : 'Proposta não encontrada.'); return; }
     const p = data as PropostaSalva;
-    setProposta(p); setUnidadeId(p.unidade_id); setPastaId(p.pasta_id ?? ''); setObs(p.observacoes ?? '');
+    let grupo: PropostaSalva[] = [];
+    if (p.grupo_id) {
+      const { data: gs } = await supabase.from('propostas').select('*').eq('grupo_id', p.grupo_id).neq('status', 'cancelada').order('codigo');
+      grupo = (gs ?? []) as PropostaSalva[];
+    }
+    setProposta(p); setMembros(grupo); setPastaId(p.pasta_id ?? ''); setObs(p.observacoes ?? '');
+    const conjunta = grupo.length > 0 && p.status !== 'cancelada';
+    setUnidadeIds(conjunta ? grupo.map((m) => m.unidade_id) : [p.unidade_id]);
+    // a proposta cancelada de um grupo abre sozinha; o resto abre na visão conjunta (que também serve para uma unidade só)
+    setVista(p.grupo_id && !conjunta ? p.id : null);
     setChaveEditor((k) => k + 1);
     const { data: h } = await supabase.from('historico_propostas').select('acao, usuario_email, criado_em, detalhes').eq('proposta_id', id).order('criado_em', { ascending: false });
     setHistorico((h ?? []) as never);
   }, [id]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  const unidade = useMemo(() => ctx?.unidades.find((u) => u.id === unidadeId), [ctx, unidadeId]);
-  const editavel = !proposta || proposta.status === 'rascunho' || proposta.status === 'devolvida';
-  const seriesIniciais = useMemo(() => (proposta && proposta.unidade_id === unidadeId ? doBanco(proposta.series) : undefined), [proposta, unidadeId]);
+  const grupoId = proposta?.grupo_id ?? null;
+  const conjunta = vista === null; // simulação/visão de todas as unidades juntas
+  const propostaVista = vista ? (membros.find((m) => m.id === vista) ?? proposta) : proposta;
+  const unidadesSel = useMemo(() => (ctx ? unidadeIds.map((x) => ctx.unidades.find((u) => u.id === x)).filter((u): u is NonNullable<typeof u> => !!u) : []), [ctx, unidadeIds]);
+  const unidadeVista = useMemo(() => (ctx && propostaVista && vista ? ctx.unidades.find((u) => u.id === propostaVista.unidade_id) : undefined), [ctx, propostaVista, vista]);
+
+  // o que o editor mostra: uma unidade, ou a unidade conjunta (soma das escolhidas)
+  const alvo = useMemo(() => {
+    if (!ctx) return null;
+    if (!conjunta && unidadeVista) return { cfg: ctx.cfg, unidade: unidadeVista };
+    if (unidadesSel.length > 1) return unidadeConjunta(ctx.cfg, unidadesSel);
+    return unidadesSel[0] ? { cfg: ctx.cfg, unidade: unidadesSel[0] } : null;
+  }, [ctx, conjunta, unidadeVista, unidadesSel]);
+
+  const statusAtual = propostaVista?.status;
+  const editavel = (!proposta || ((statusAtual === 'rascunho' || statusAtual === 'devolvida') && (!grupoId || conjunta)));
+  const ehGrupo = unidadesSel.length > 1 || (!!grupoId && conjunta);
+
+  // séries iniciais: as salvas (somadas, na visão conjunta) quando as unidades são as mesmas; senão, o modelo da tabela
+  const seriesIniciais = useMemo(() => {
+    if (!proposta) return undefined;
+    if (!conjunta) return propostaVista ? doBanco(propostaVista.series) : undefined;
+    const salvas = membros.length ? membros : [proposta];
+    const mesmas = salvas.length === unidadeIds.length && salvas.every((m) => unidadeIds.includes(m.unidade_id));
+    if (!mesmas) return undefined;
+    return salvas.length > 1 ? somarSeries(salvas.map((m) => doBanco(m.series))) : doBanco(salvas[0].series);
+  }, [proposta, propostaVista, membros, unidadeIds, conjunta]);
 
   if (erro) return <section className="secao"><p className="erro">{erro}</p><button className="botao" onClick={() => ir('/painel/propostas')}>Voltar</button></section>;
-  if (!ctx || !unidade) return <section className="secao"><p className="vazio">Carregando…</p></section>;
+  if (!ctx || !alvo) return <section className="secao"><p className="vazio">Carregando…</p></section>;
 
   const pasta = pastas.find((p) => p.id === pastaId);
   const temErro = estado?.resultado.avisos.some((a) => a.nivel === 'erro') ?? true;
@@ -151,58 +212,114 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   const pvPct = estado ? Math.round((estado.resultado.proposta.vpl / estado.resultado.tabela.vpl) * 10000) / 100 : 0;
   const alcada = alcadaPrevista(ctx.comercial, pvPct, (estado?.resultado.comissao.naoCoberta ?? 1) <= 0.005);
   const faltaPermuta = temPermuta && !obs.trim();
+  const pesos = unidadesSel.length > 1 ? pesosPorPreco(ctx.cfg, unidadesSel) : [1];
+  const codigos = membros.length > 1 ? membros.map((m) => m.codigo).join(' + ') : proposta?.codigo ?? '';
 
-  const salvar = async (): Promise<string | null> => {
+  /** Grava a proposta (ou as propostas do grupo). Devolve o id para abrir e o grupo, se houver. */
+  const salvar = async (): Promise<{ id: string; grupo: string | null } | null> => {
     if (!estado) return null;
     setSalvando(true);
-    const campos = {
-      unidade_id: unidadeId, pasta_id: pastaId || null, observacoes: obs.trim() || null,
-      series: paraBanco(estado.series), resumo: resumoDe(estado.resultado),
-      comissao_pct: estado.comissaoPct, parte_sinal: estado.parteSinal,
-      coordenacao_pct: estado.coordenacaoPct, coordenacao_parcelas: estado.coordenacaoParcelas,
-    };
-    const r = proposta
-      ? await supabase.from('propostas').update(campos).eq('id', proposta.id).select('id').single()
-      : await supabase.from('propostas').insert(campos).select('id').single();
-    setSalvando(false);
-    if (r.error) { avisar(traduzirErro(r.error.message), 'erro'); return null; }
-    return (r.data as { id: string }).id;
+    try {
+      const base = {
+        pasta_id: pastaId || null, observacoes: obs.trim() || null,
+        comissao_pct: estado.comissaoPct, parte_sinal: estado.parteSinal,
+        coordenacao_pct: estado.coordenacaoPct, coordenacao_parcelas: estado.coordenacaoParcelas,
+      };
+      if (!ehGrupo) {
+        const campos = { ...base, unidade_id: unidadesSel[0].id, series: paraBanco(estado.series), resumo: resumoDe(estado.resultado) };
+        const r = proposta
+          ? await supabase.from('propostas').update(campos).eq('id', proposta.id).select('id').single()
+          : await supabase.from('propostas').insert(campos).select('id').single();
+        if (r.error) { avisar(traduzirErro(r.error.message), 'erro'); return null; }
+        return { id: (r.data as { id: string }).id, grupo: null };
+      }
+      // grupo: divide as séries pelo preço de tabela de cada unidade
+      const grupo = grupoId ?? crypto.randomUUID();
+      const partes = distribuir(estado.series, pesos);
+      // propostas que já existem: primeiro as da mesma unidade; as que sobrarem trocam de unidade; o resto é retirado
+      const existentes = membros.length ? [...membros] : proposta ? [proposta] : [];
+      const usadas = new Set<string>();
+      const destino = unidadesSel.map((u) => {
+        const m = existentes.find((x) => x.unidade_id === u.id && !usadas.has(x.id));
+        if (m) usadas.add(m.id);
+        return m ?? null;
+      });
+      for (let i = 0; i < destino.length; i++) {
+        if (destino[i]) continue;
+        const livre = existentes.find((x) => !usadas.has(x.id));
+        if (livre) { usadas.add(livre.id); destino[i] = livre; }
+      }
+      let primeiro: string | null = null;
+      for (let i = 0; i < unidadesSel.length; i++) {
+        const u = unidadesSel[i];
+        const r = calcular(ctx.cfg, u, partes[i], {
+          dataMinima: proposta?.data_proposta ?? hoje, comissaoPercentual: estado.comissaoPct, parteDoSinal: estado.parteSinal,
+          coordenacao: estado.coordenacaoPct, coordenacaoParcelas: estado.coordenacaoParcelas, diasVencimento: ctx.comercial.dias_vencimento, observacoes: obs,
+        });
+        const campos = { ...base, grupo_id: grupo, unidade_id: u.id, series: paraBanco(partes[i]), resumo: resumoDe(r) };
+        const d = destino[i];
+        const res = d
+          ? await supabase.from('propostas').update(campos).eq('id', d.id).select('id').single()
+          : await supabase.from('propostas').insert(campos).select('id').single();
+        if (res.error) { avisar(`Unidade ${u.numero}: ${traduzirErro(res.error.message)}`, 'erro'); return null; }
+        primeiro ??= (res.data as { id: string }).id;
+      }
+      for (const x of existentes.filter((x) => !usadas.has(x.id))) {
+        const { error } = await supabase.rpc('retirar_do_grupo', { p_id: x.id });
+        if (error) { avisar(traduzirErro(error.message), 'erro'); return null; }
+      }
+      const fica = proposta && usadas.has(proposta.id) ? proposta.id : primeiro!;
+      return { id: fica, grupo };
+    } finally { setSalvando(false); }
   };
 
   const aoSalvar = async () => {
-    const novoId = await salvar();
-    if (!novoId) return;
-    avisar('Proposta salva.');
-    if (!proposta) ir(`/painel/propostas/${novoId}`); else carregar();
+    const r = await salvar();
+    if (!r) return;
+    avisar(ehGrupo ? `Proposta conjunta salva: ${unidadesSel.length} propostas, uma por unidade.` : 'Proposta salva.');
+    if (!proposta || r.id !== proposta.id) ir(`/painel/propostas/${r.id}`); else carregar();
   };
 
   const enviar = async () => {
     if (faltaPermuta) { avisar('Descreva a permuta nas observações antes de enviar.', 'erro'); return; }
     if (temErro) { avisar('Corrija os erros da grade (vencimentos, parcelas) antes de enviar.', 'erro'); return; }
     if (!pastaId) { avisar('Vincule a pasta do comprador antes de enviar.', 'erro'); return; }
-    const textoAlcada = alcada === 'automatica' ? 'PV dentro da tabela e sinal cobrindo a comissão: a proposta será aprovada na hora e a unidade irá para "Proposta recebida".'
-      : `PV de ${pvPct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%: a aprovação fica com ${alcada === 'vendas' ? 'a Sec. Vendas' : 'o administrador'}.`;
-    if (!(await confirmar({ titulo: 'Enviar proposta?', texto: `${textoAlcada} Depois de enviada, ela só volta a ser editada se for devolvida para ajuste.`, confirmar: 'Enviar proposta' }))) return;
-    const novoId = await salvar();
-    if (!novoId) return;
-    const { data: enviada, error } = await supabase.rpc('enviar_proposta', { p_id: novoId });
-    if (error) { avisar(traduzirErro(error.message), 'erro'); if (!proposta) ir(`/painel/propostas/${novoId}`); return; }
-    const e = enviada as PropostaSalva | null;
-    avisar(e?.status === 'aprovada' ? 'Proposta aprovada automaticamente. A unidade foi para "Proposta recebida".'
-      : `Proposta enviada. Aprovação: ${e?.alcada ? ROTULO_ALCADA[e.alcada] : 'equipe'}.`);
-    if (!proposta) ir(`/painel/propostas/${novoId}`); else carregar();
+    const deQuem = ehGrupo ? `as ${unidadesSel.length} propostas serão aprovadas juntas` : 'a proposta será aprovada na hora';
+    const textoAlcada = alcada === 'automatica' ? `PV dentro da tabela e sinal cobrindo a comissão: ${deQuem} e ${ehGrupo ? 'as unidades irão' : 'a unidade irá'} para "Proposta recebida".`
+      : `PV de ${pvPct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%${ehGrupo ? ' no conjunto' : ''}: a aprovação fica com ${alcada === 'vendas' ? 'a Sec. Vendas' : 'o administrador'}.`;
+    if (!(await confirmar({ titulo: ehGrupo ? 'Enviar a proposta conjunta?' : 'Enviar proposta?', texto: `${textoAlcada} Depois de enviada, ela só volta a ser editada se for devolvida para ajuste.`, confirmar: 'Enviar proposta' }))) return;
+    const s = await salvar();
+    if (!s) return;
+    if (s.grupo) {
+      const { data, error } = await supabase.rpc('enviar_grupo', { p_grupo: s.grupo });
+      if (error) { avisar(traduzirErro(error.message), 'erro'); ir(`/painel/propostas/${s.id}`); carregar(); return; }
+      const lista = (data ?? []) as PropostaSalva[];
+      const e = lista.find((x) => x.status !== 'cancelada');
+      avisar(e?.status === 'aprovada' ? 'Proposta conjunta aprovada automaticamente. As unidades foram para "Proposta recebida".'
+        : `Proposta conjunta enviada. Aprovação: ${e?.alcada ? ROTULO_ALCADA[e.alcada] : 'equipe'}.`);
+    } else {
+      const { data: enviada, error } = await supabase.rpc('enviar_proposta', { p_id: s.id });
+      if (error) { avisar(traduzirErro(error.message), 'erro'); if (!proposta) ir(`/painel/propostas/${s.id}`); return; }
+      const e = enviada as PropostaSalva | null;
+      avisar(e?.status === 'aprovada' ? 'Proposta aprovada automaticamente. A unidade foi para "Proposta recebida".'
+        : `Proposta enviada. Aprovação: ${e?.alcada ? ROTULO_ALCADA[e.alcada] : 'equipe'}.`);
+    }
+    if (!proposta || s.id !== proposta.id) ir(`/painel/propostas/${s.id}`); else carregar();
   };
 
-  const analisar = async (decisao: 'aprovada' | 'devolvida' | 'recusada' | 'cancelada') => {
+  const analisar = async (decisao: 'aprovada' | 'devolvida' | 'recusada' | 'cancelada' | 'cancelar-unidade') => {
     if (!proposta) return;
-    if (decisao === 'aprovada' && !(await confirmar({ titulo: 'Aprovar proposta?', texto: `A unidade ${unidade.numero} vai para "Proposta recebida" no espelho, com o valor e o PV desta proposta.`, confirmar: 'Aprovar' }))) return;
+    const numeros = unidadesSel.map((u) => u.numero).join(', ');
+    if (decisao === 'aprovada' && !(await confirmar({ titulo: grupoId ? 'Aprovar a proposta conjunta?' : 'Aprovar proposta?', texto: grupoId ? `As unidades ${numeros} vão juntas para "Proposta recebida" no espelho, cada uma com o valor da sua proposta.` : `A unidade ${alvo.unidade.numero} vai para "Proposta recebida" no espelho, com o valor e o PV desta proposta.`, confirmar: 'Aprovar' }))) return;
     if (decisao !== 'aprovada' && !motivo.trim()) { avisar('Informe o motivo.', 'erro'); return; }
     setSalvando(true);
-    const { error } = await supabase.rpc('analisar_proposta', { p_id: proposta.id, p_decisao: decisao, p_motivo: motivo.trim() || null });
+    const { error } = grupoId && decisao !== 'cancelar-unidade'
+      ? await supabase.rpc('analisar_grupo', { p_grupo: grupoId, p_decisao: decisao, p_motivo: motivo.trim() || null })
+      : await supabase.rpc('analisar_proposta', { p_id: decisao === 'cancelar-unidade' ? propostaVista!.id : proposta.id, p_decisao: decisao === 'cancelar-unidade' ? 'cancelada' : decisao, p_motivo: motivo.trim() || null });
     setSalvando(false);
     if (error) { avisar(traduzirErro(error.message), 'erro'); return; }
     setAnalise(null); setMotivo('');
-    avisar(decisao === 'aprovada' ? 'Proposta aprovada. O espelho foi atualizado.' : 'Decisão registrada.');
+    avisar(decisao === 'aprovada' ? (grupoId ? 'Proposta conjunta aprovada. O espelho foi atualizado.' : 'Proposta aprovada. O espelho foi atualizado.') : 'Decisão registrada.');
     carregar();
   };
 
@@ -216,10 +333,14 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     }
     const imobId = proposta?.imobiliaria_id ?? pasta?.imobiliaria_id;
     const { data: im } = imobId ? await supabase.from('imobiliarias').select('nome').eq('id', imobId).maybeSingle() : { data: null };
+    const juntas = conjunta && unidadesSel.length > 1;
+    const uCarta = juntas
+      ? { numero: unidadesSel.map((u) => u.numero).join(', '), area: unidadesSel.reduce((t, u) => t + u.area, 0), andar: null }
+      : { numero: alvo.unidade.numero, area: alvo.unidade.area, andar: (unidadeVista ?? unidadesSel[0])?.andar ?? null };
     try {
       const dados: DadosCarta = {
-        codigo: proposta?.codigo ?? 'SIMULAÇÃO', dataProposta: proposta?.data_proposta ?? hoje, empreendimento: ctx.nome, comercial: ctx.comercial,
-        unidade: { numero: unidade.numero, area: unidade.area, andar: unidade.andar }, pasta: dadosPasta,
+        codigo: (juntas ? codigos : propostaVista?.codigo) || 'SIMULAÇÃO', dataProposta: proposta?.data_proposta ?? hoje, empreendimento: ctx.nome, comercial: ctx.comercial,
+        unidade: uCarta, pasta: dadosPasta,
         logoUrl: ctx.logoUrl, corDestaque: ctx.corDestaque,
         imobiliaria: (im as { nome: string } | null)?.nome ?? '', corretor: proposta ? proposta.criado_por_nome ?? proposta.criado_por ?? '' : perfil.nome || perfil.email,
         series: estado.series, resultado: estado.resultado, observacoes: obs,
@@ -228,23 +349,33 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     } catch { avisar('Não foi possível gerar a carta proposta.', 'erro'); }
   };
 
-  const trocarUnidade = (novo: string) => { setUnidadeId(novo); setChaveEditor((k) => k + 1); };
+  const recomecar = () => setChaveEditor((k) => k + 1);
+  const trocarUnidade = (i: number, novo: string) => { setUnidadeIds((l) => l.map((x, k) => (k === i ? novo : x))); recomecar(); };
+  const adicionarUnidade = () => {
+    const livre = ctx.unidades.find((u) => u.status === 'disponivel' && !unidadeIds.includes(u.id)) ?? ctx.unidades.find((u) => !unidadeIds.includes(u.id));
+    if (livre) { setUnidadeIds((l) => [...l, livre.id]); recomecar(); }
+  };
+  const removerUnidade = (i: number) => { setUnidadeIds((l) => l.filter((_, k) => k !== i)); recomecar(); };
   const statusEspelho = (s: string) => ({ disponivel: 'disponível', reservada: 'reservada', proposta: 'proposta recebida', contrato: 'contrato em assinatura', vendida: 'vendida', bloqueada: 'bloqueada', permutante: 'permutante' } as Record<string, string>)[s] ?? s;
+  const precoTotal = unidadesSel.reduce((t, u) => t + precoUnidade(ctx.cfg, u), 0);
+  const titulo = !proposta ? (unidadesSel.length > 1 ? 'Nova proposta conjunta' : 'Nova proposta')
+    : conjunta && membros.length > 1 ? `Proposta conjunta ${codigos}` : `Proposta ${propostaVista?.codigo ?? proposta.codigo}`;
+  const unidadesComAlerta = (conjunta ? unidadesSel : unidadeVista ? [unidadeVista] : []).filter((u) => u.status !== 'disponivel');
 
   return (
     <section className="secao prop-pagina">
       <div className="secao-topo">
         <div>
           <button className="link-voltar" onClick={() => ir('/painel/propostas')}><ArrowLeft size={15} /> Propostas</button>
-          <h2>{proposta ? `Proposta ${proposta.codigo}` : 'Nova proposta'} {proposta && <Selo s={proposta.status} />}</h2>
+          <h2>{titulo} {propostaVista && <Selo s={propostaVista.status} />}</h2>
           <p className="sub">
             {proposta ? `Criada em ${fmtData(proposta.data_proposta)} por ${proposta.criado_por_nome ?? proposta.criado_por ?? '—'}` : `Data da proposta: ${fmtData(hoje)}`}
-            {proposta?.analisada_por && ` · analisada por ${proposta.analisada_por} em ${fmtData(proposta.analisada_em!.slice(0, 10))}`}
+            {propostaVista?.analisada_por && ` · analisada por ${propostaVista.analisada_por} em ${fmtData(propostaVista.analisada_em!.slice(0, 10))}`}
           </p>
         </div>
         <div className="botoes-linha">
           {editavel && estado && <span className={`chip-alcada a-${alcada}`} title="Quem aprova esta proposta, pelo PV e pela comissão">Aprovação: {ROTULO_ALCADA[alcada]}</span>}
-          {!editavel && proposta?.alcada && proposta.status === 'enviada' && <span className={`chip-alcada a-${proposta.alcada}`}>Aguardando: {ROTULO_ALCADA[proposta.alcada]}</span>}
+          {!editavel && propostaVista?.alcada && propostaVista.status === 'enviada' && <span className={`chip-alcada a-${propostaVista.alcada}`}>Aguardando: {ROTULO_ALCADA[propostaVista.alcada]}</span>}
           <button className="botao" onClick={() => carta('pdf')} disabled={!estado} title="Resumo da proposta em PDF, sem campos em branco e sem assinaturas"><FileDown size={16} /> Resumo da proposta</button>
           <button className="botao" onClick={() => carta('docx')} disabled={!estado} title="O mesmo resumo em Word"><FileDown size={16} /> Word</button>
           {editavel && <button className="botao" onClick={aoSalvar} disabled={salvando || !estado}>Salvar rascunho</button>}
@@ -252,23 +383,41 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
         </div>
       </div>
 
-      {proposta?.motivo_analise && (proposta.status === 'devolvida' || proposta.status === 'recusada' || proposta.status === 'cancelada') && (
-        <div className={`cartao aviso-prop ${proposta.status}`}><strong>{rotuloProposta(proposta.status)}:</strong> {proposta.motivo_analise}</div>
+      {membros.length > 1 && proposta?.status !== 'cancelada' && (
+        <div className="prop-vistas" role="tablist" aria-label="Visão da proposta conjunta">
+          <button role="tab" aria-selected={conjunta} className={conjunta ? 'ativa' : ''} onClick={() => { setVista(null); recomecar(); }}>Conjunta ({membros.length} unidades)</button>
+          {membros.map((m) => (
+            <button key={m.id} role="tab" aria-selected={vista === m.id} className={vista === m.id ? 'ativa' : ''} onClick={() => { setVista(m.id); recomecar(); }}>
+              {m.codigo} · {ctx.unidades.find((u) => u.id === m.unidade_id)?.numero ?? '—'}
+            </button>
+          ))}
+        </div>
       )}
 
-      {equipe && proposta && proposta.status === 'enviada' && (
+      {propostaVista?.motivo_analise && (propostaVista.status === 'devolvida' || propostaVista.status === 'recusada' || propostaVista.status === 'cancelada') && (
+        <div className={`cartao aviso-prop ${propostaVista.status}`}><strong>{rotuloProposta(propostaVista.status)}:</strong> {propostaVista.motivo_analise}</div>
+      )}
+
+      {equipe && proposta && propostaVista?.status === 'enviada' && (conjunta || !grupoId) && (
         <div className="cartao analise-prop">
-          <strong>Análise da equipe</strong>
-          {proposta.alcada === 'admin' && perfil.papel !== 'admin' && <span className="dica">PV de {proposta.resumo.pv_pct?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%: abaixo da alçada da Sec. Vendas, só o administrador aprova.</span>}
+          <strong>{grupoId ? 'Análise da proposta conjunta (vale para todas as unidades)' : 'Análise da equipe'}</strong>
+          {propostaVista.alcada === 'admin' && perfil.papel !== 'admin' && <span className="dica">PV de {(propostaVista.resumo.pv_pct_grupo ?? propostaVista.resumo.pv_pct)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%: abaixo da alçada da Sec. Vendas, só o administrador aprova.</span>}
           <div className="botoes-linha">
-            {(proposta.alcada !== 'admin' || perfil.papel === 'admin') && <button className="botao ok" onClick={() => analisar('aprovada')} disabled={salvando}>Aprovar</button>}
+            {(propostaVista.alcada !== 'admin' || perfil.papel === 'admin') && <button className="botao ok" onClick={() => analisar('aprovada')} disabled={salvando}>Aprovar</button>}
             <button className="botao" onClick={() => setAnalise('devolvida')}>Devolver para ajuste</button>
             <button className="botao" onClick={() => setAnalise('recusada')}>Recusar</button>
           </div>
         </div>
       )}
-      {equipe && proposta && proposta.status !== 'cancelada' && proposta.status !== 'enviada' && (
-        <div className="botoes-linha direita"><button className="botao pequeno" onClick={() => setAnalise('cancelada')}>Cancelar proposta</button></div>
+      {equipe && grupoId && !conjunta && propostaVista?.status === 'enviada' && (
+        <p className="dica">Esta unidade faz parte de uma proposta conjunta: aprove, devolva ou recuse na aba “Conjunta”.</p>
+      )}
+      {equipe && proposta && propostaVista && propostaVista.status !== 'cancelada' && propostaVista.status !== 'enviada' && (
+        <div className="botoes-linha direita">
+          {grupoId && !conjunta
+            ? <button className="botao pequeno" onClick={() => setAnalise('cancelar-unidade')}>Cancelar só esta unidade</button>
+            : <button className="botao pequeno" onClick={() => setAnalise('cancelada')}>{grupoId ? 'Cancelar a proposta conjunta' : 'Cancelar proposta'}</button>}
+        </div>
       )}
       {analise && (
         <div className="cartao">
@@ -278,22 +427,32 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
           <div className="botoes-linha">
             <button className="botao" onClick={() => { setAnalise(null); setMotivo(''); }}>Voltar</button>
             <button className={`botao ${analise === 'devolvida' ? 'principal' : 'perigo'}`} onClick={() => analisar(analise)} disabled={salvando}>
-              {analise === 'devolvida' ? 'Devolver' : analise === 'recusada' ? 'Recusar' : 'Cancelar proposta'}
+              {analise === 'devolvida' ? 'Devolver' : analise === 'recusada' ? 'Recusar' : analise === 'cancelar-unidade' ? 'Cancelar esta unidade' : 'Cancelar proposta'}
             </button>
           </div>
         </div>
       )}
 
       <div className="prop-bloco prop-unidade">
-        <label>
-          <span>Unidade</span>
-          <select value={unidadeId} onChange={(e) => trocarUnidade(e.target.value)} disabled={!editavel}>
-            {ctx.unidades.map((u) => <option key={u.id} value={u.id}>{u.numero}{u.status !== 'disponivel' ? ` (${statusEspelho(u.status)})` : ''}</option>)}
-          </select>
-        </label>
-        <div><span>Área</span><strong>{unidade.area.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m²</strong></div>
-        <div><span>Tabela</span><strong>{unidade.tabela}</strong></div>
-        <div><span>Preço de tabela</span><strong>{fmtReal(precoUnidade(ctx.cfg, unidade))}</strong></div>
+        {(conjunta ? unidadeIds : [propostaVista?.unidade_id ?? '']).map((uid, i) => (
+          <label key={i}>
+            <span>{unidadeIds.length > 1 && conjunta ? `Unidade ${i + 1}` : 'Unidade'}</span>
+            <span className="prop-unidade-escolha">
+              <select value={uid} onChange={(e) => trocarUnidade(i, e.target.value)} disabled={!editavel || !conjunta}>
+                {ctx.unidades.filter((u) => u.id === uid || !unidadeIds.includes(u.id)).map((u) => <option key={u.id} value={u.id}>{u.numero}{u.status !== 'disponivel' ? ` (${statusEspelho(u.status)})` : ''}</option>)}
+              </select>
+              {editavel && conjunta && unidadeIds.length > 1 && (
+                <button type="button" className="botao-icone" onClick={() => removerUnidade(i)} aria-label={`Tirar a unidade ${ctx.unidades.find((u) => u.id === uid)?.numero ?? ''}`} title="Tirar esta unidade"><X size={14} /></button>
+              )}
+            </span>
+          </label>
+        ))}
+        {editavel && conjunta && (
+          <div className="prop-mais-unidade"><button type="button" className="botao pequeno" onClick={adicionarUnidade}><Plus size={14} /> Adicionar unidade</button></div>
+        )}
+        <div><span>Área{conjunta && unidadesSel.length > 1 ? ' (soma)' : ''}</span><strong>{alvo.unidade.area.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m²</strong></div>
+        <div><span>Tabela</span><strong>{conjunta && unidadesSel.length > 1 ? [...new Set(unidadesSel.map((u) => u.tabela))].join(', ') : alvo.unidade.tabela}</strong></div>
+        <div><span>Preço de tabela{conjunta && unidadesSel.length > 1 ? ' (soma)' : ''}</span><strong>{fmtReal(conjunta ? precoTotal : precoUnidade(alvo.cfg, alvo.unidade))}</strong></div>
         <div><span>Entrega</span><strong>{fmtData(ctx.comercial.mes_entrega).slice(3)}</strong></div>
         <label className="prop-pasta">
           <span>Pasta do comprador</span>
@@ -303,16 +462,22 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
           </select>
         </label>
       </div>
-      {unidade.status !== 'disponivel' && editavel && (
-        <p className="alerta">A unidade {unidade.numero} está {statusEspelho(unidade.status)} no espelho.</p>
+      {conjunta && unidadesSel.length > 1 && (
+        <p className="dica prop-divisao">
+          {editavel ? 'Simulação conjunta: monte o fluxo sobre o total. Ao salvar, cada unidade vira uma proposta, com as parcelas divididas pelo preço de tabela: ' : 'Divisão entre as unidades, pelo preço de tabela: '}
+          {unidadesSel.map((u, i) => `${u.numero} (${fmtPct(pesos[i], 2)})`).join(', ')}.
+        </p>
+      )}
+      {unidadesComAlerta.length > 0 && editavel && (
+        <p className="alerta">{unidadesComAlerta.map((u) => `A unidade ${u.numero} está ${statusEspelho(u.status)} no espelho.`).join(' ')}</p>
       )}
 
       <EditorProposta
-        key={`${unidadeId}-${chaveEditor}`}
-        cfg={ctx.cfg} unidade={unidade} hoje={hoje}
+        key={`${unidadeIds.join(',')}-${vista ?? 'conjunta'}-${chaveEditor}`}
+        cfg={alvo.cfg} unidade={alvo.unidade} hoje={hoje}
         dataMinima={proposta?.data_proposta ?? hoje}
         dias={ctx.comercial.dias_vencimento}
-        seriesIniciais={seriesIniciais ?? aplicarModelo(ctx.cfg, unidade, 'tabela', { dia: 10, hoje })}
+        seriesIniciais={seriesIniciais ?? aplicarModelo(alvo.cfg, alvo.unidade, 'tabela', { dia: 10, hoje })}
         comissaoInicial={proposta?.comissao_pct} parteInicial={proposta?.parte_sinal}
         coordParcelasInicial={proposta?.coordenacao_parcelas ?? undefined} nomeCoordenacao={ctx.comercial.coordenacao_comercial} coordPctInicial={proposta?.coordenacao_pct ?? undefined}
         somenteLeitura={!editavel} podeEditarComissao={equipe}

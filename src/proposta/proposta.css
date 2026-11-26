@@ -165,3 +165,13 @@ select.celula { cursor: pointer; }
 
 /* tabela da comissão: rótulos e valores centralizados na coluna */
 .comp.comp-centro th.dir, .comp.comp-centro td.dir { text-align: center; }
+
+/* Proposta conjunta */
+.prop-unidade .prop-unidade-escolha { display: flex; align-items: center; gap: 4px; font-size: inherit; color: inherit; margin: 0; }
+.prop-unidade .botao-icone { display: inline-grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--borda-forte); border-radius: var(--raio); background: var(--superficie); color: var(--tinta-2); cursor: pointer; }
+.prop-unidade .botao-icone:hover { color: var(--tinta); border-color: var(--tinta-2); }
+.prop-mais-unidade { align-self: flex-end; }
+.prop-divisao { margin: -4px 0 10px; }
+.prop-vistas { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--borda); }
+.prop-vistas button { border: 0; background: none; padding: 8px 12px; font: inherit; color: var(--tinta-2); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.prop-vistas button.ativa { color: var(--tinta); font-weight: 700; border-bottom-color: currentColor; }

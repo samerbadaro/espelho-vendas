@@ -78,7 +78,7 @@ export interface PropostaSalva {
   series: Omit<Serie, 'id'>[]; resumo: Resumo; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
   coordenacao_pct?: number | null; coordenacao_parcelas?: number | null;
   motivo_analise: string | null; analisada_por: string | null; analisada_em: string | null; enviada_em: string | null;
-  versao: number; criada_em: string; atualizada_em: string; alcada?: Alcada | null;
+  versao: number; criada_em: string; atualizada_em: string; alcada?: Alcada | null; grupo_id?: string | null;
 }
 
 export type Alcada = 'automatica' | 'vendas' | 'admin';
@@ -93,7 +93,7 @@ export function alcadaPrevista(c: Comercial, pvPct: number, comissaoCoberta: boo
 
 export interface Resumo {
   total?: number; preco_tabela?: number; vpl_tabela?: number; vpl_proposta?: number; pv_pct?: number;
-  diferenca_vpl?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number; avisos?: string[];
+  diferenca_vpl?: number; pv_pct_grupo?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number; avisos?: string[];
 }
 
 export function resumoDe(r: Resultado): Resumo {
@@ -131,6 +131,7 @@ const ERROS: Record<string, string> = {
   PASTA_FORA_DA_FILA: 'Esta pasta não está na fila de escolha.',
   LIMITE_DE_UNIDADES_DA_PASTA: 'Esta pasta já atingiu o limite de unidades reservadas.',
   INICIO_OBRIGATORIO: 'Informe a data e a hora de início da fila.',
+  PROPOSTA_EM_GRUPO: 'Esta proposta faz parte de uma proposta conjunta: envie e analise pela visão conjunta.',
   PERMUTA_SEM_OBSERVACAO: 'Descreva a permuta nas observações da proposta antes de enviar.',
 };
 export const traduzirErro = (msg: string) => ERROS[Object.keys(ERROS).find((k) => msg.includes(k)) ?? ''] ?? msg;

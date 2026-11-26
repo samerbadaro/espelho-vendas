@@ -463,3 +463,57 @@ export const fmtMes = (mes: string) => {
   const nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   return `${nomes[mesNum(mes) - 1]}/${mes.slice(0, 4)}`;
 };
+
+// ---------------------------------------------------------------------
+// Proposta conjunta (várias unidades numa simulação só)
+// ---------------------------------------------------------------------
+/**
+ * Junta as unidades numa "unidade conjunta" para o editor: preço = soma dos preços,
+ * área = soma das áreas e tabela = soma dos fluxos de tabela de cada uma.
+ */
+export function unidadeConjunta(cfg: ConfigEmpreendimento, us: Unidade[]): { cfg: ConfigEmpreendimento; unidade: Unidade } {
+  const precos = us.map((u) => precoUnidade(cfg, u));
+  const soma = precos.reduce((s, p) => s + p, 0);
+  const area = us.reduce((s, u) => s + u.area, 0);
+  const mesmaTabela = us.every((u) => u.tabela === us[0].tabela);
+  const tabela = mesmaTabela ? us[0].tabela : '__conjunta';
+  const tabelas = mesmaTabela ? cfg.tabelas : {
+    ...cfg.tabelas,
+    __conjunta: us.flatMap((u, i) => cfg.tabelas[u.tabela].map((s) => ({ ...s, percentual: (s.percentual * precos[i]) / soma }))),
+  };
+  const unidade: Unidade = { numero: us.map((u) => u.numero).join(' + '), area, tipo: '__conjunta', peso: 1, tabela };
+  return {
+    cfg: { ...cfg, tabelas, precoM2PorTipo: { ...cfg.precoM2PorTipo, __conjunta: soma / area }, unidades: [...cfg.unidades, unidade] },
+    unidade,
+  };
+}
+
+/** Peso de cada unidade no conjunto: o preço de tabela dela ÷ a soma dos preços. */
+export function pesosPorPreco(cfg: ConfigEmpreendimento, us: Unidade[]) {
+  const precos = us.map((u) => precoUnidade(cfg, u));
+  const soma = precos.reduce((s, p) => s + p, 0);
+  return precos.map((p) => p / soma);
+}
+
+/**
+ * Divide as séries da simulação conjunta entre as unidades, pelo peso de cada uma.
+ * Mesmas datas, quantidades e periodicidades; cada parcela arredondada em centavos,
+ * com a sobra do arredondamento na última unidade (a soma bate com a simulação).
+ */
+export function distribuir(series: Serie[], pesos: number[]): Serie[][] {
+  const c2 = (v: number) => Math.round(v * 100) / 100;
+  return pesos.map((w, i) => series.map((s) => {
+    const base = c2(s.valor);
+    const valor = i < pesos.length - 1 ? c2(base * w) : c2(base - pesos.slice(0, -1).reduce((t, x) => t + c2(base * x), 0));
+    return { ...s, id: novoId(), valor };
+  }));
+}
+
+/** Soma, parcela a parcela, as séries das propostas de um grupo (mesma estrutura em todas). */
+export function somarSeries(lista: Serie[][]): Serie[] {
+  const [primeira, ...resto] = lista;
+  if (!primeira) return [];
+  const iguais = resto.every((l) => l.length === primeira.length && l.every((s, i) => s.periodicidade === primeira[i].periodicidade && s.vencimento === primeira[i].vencimento && s.qtd === primeira[i].qtd));
+  if (!iguais) return primeira.map((s) => ({ ...s, id: novoId() }));
+  return primeira.map((s, i) => ({ ...s, id: novoId(), valor: Math.round(lista.reduce((t, l) => t + l[i].valor, 0) * 100) / 100 }));
+}
