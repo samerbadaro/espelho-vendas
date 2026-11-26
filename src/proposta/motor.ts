@@ -151,6 +151,9 @@ export function parcelas(cfg: ConfigEmpreendimento, series: Serie[]): Parcela[] 
   return lista.sort((a, b) => a.data.localeCompare(b.data));
 }
 
+/** Diferença de PV abaixo disto (centavos de arredondamento) conta como PV zerado. */
+export const TOLERANCIA_PV = 0.5;
+
 const fator = (taxa: number, mes: number) => Math.pow(1 + taxa, -mes);
 
 export function vpl(cfg: ConfigEmpreendimento, ps: Parcela[]) {
@@ -291,7 +294,9 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
   if (permuta && op.observacoes !== undefined && !(op.observacoes ?? '').trim())
     avisos.push({ nivel: 'erro', texto: 'Permuta: descreva nas observações o que entra na permuta (imóvel, carro, serviços...).', serieId: permuta.id });
   // PV abaixo da tabela não bloqueia: a proposta vai para a alçada de aprovação
-  if (diferencaVPL < -0.005) avisos.push({ nivel: 'alerta', texto: `PV negativo: faltam ${fmtReal(-diferencaVPL)} em valor presente. Precisa de aprovação.` });
+  if (p.total > t.total + 0.005)
+    avisos.push({ nivel: 'erro', texto: `Preço ${fmtReal(p.total - t.total)} acima da tabela. O preço da unidade não pode passar do preço de tabela: use "⟲ ajustar" numa série para voltar.` });
+  if (diferencaVPL < -TOLERANCIA_PV) avisos.push({ nivel: 'alerta', texto: `PV negativo: faltam ${fmtReal(-diferencaVPL)} em valor presente. Precisa de aprovação.` });
   for (const m of marcos)
     if (m.variacao !== null && m.variacao < cfg.limiteVariacaoCaptacao)
       avisos.push({ nivel: 'alerta', texto: `Captação em ${m.rotulo.toLowerCase()} ${fmtPct(m.variacao)} abaixo da tabela.` });
@@ -312,7 +317,7 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
 // Redistribuir ("atingir meta"): calcula o valor da parcela de uma série
 // para que o VPL da proposta fique igual ao da tabela (PV zero).
 // ---------------------------------------------------------------------
-export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], serieId: string, meta: 'pv' | 'nominal' = 'pv'): Serie[] | { erro: string } {
+export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[], serieId: string, meta: 'pv' | 'nominal' = 'pv'): Serie[] | { erro: string } | { series: Serie[]; aviso: string } {
   const alvo = series.find((s) => s.id === serieId);
   if (!alvo) return { erro: 'Série não encontrada.' };
   if (meta === 'nominal') {
@@ -320,7 +325,7 @@ export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Seri
     const totalTabela = total(parcelas(cfg, seriesDaTabela(cfg, u)));
     const outras = series.filter((s) => s.id !== serieId).reduce((t, s) => t + s.valor * s.qtd, 0);
     if (!(alvo.qtd >= 1)) return { erro: 'A série precisa ter número de parcelas.' };
-    const valor = Math.ceil(((totalTabela - outras) / alvo.qtd) * 100) / 100;
+    const valor = Math.floor(((totalTabela - outras) / alvo.qtd) * 100) / 100; // para baixo: nunca acima da tabela
     if (valor <= 0) return { erro: 'As outras séries já somam o valor da tabela; não sobra valor para esta série.' };
     return series.map((s) => (s.id === serieId ? { ...s, valor } : s));
   }
@@ -331,7 +336,32 @@ export function redistribuir(cfg: ConfigEmpreendimento, u: Unidade, series: Seri
   if (!(unitario > 0)) return { erro: 'A série precisa ter vencimento e número de parcelas.' };
   const valor = Math.ceil(((vplTabela - outras) / unitario) * 100) / 100; // arredonda para cima: PV nunca fica negativo
   if (valor <= 0) return { erro: 'As outras séries já cobrem o PV da tabela; não sobra valor para esta série.' };
+  // Trava: o preço (valor nominal) da proposta nunca passa do preço de tabela. Se zerar o PV exigir isso,
+  // a série fica no valor que leva o total ao preço de tabela e o PV continua negativo.
+  const totalTabela = total(parcelas(cfg, seriesDaTabela(cfg, u)));
+  const outrasNominal = series.filter((s) => s.id !== serieId).reduce((t, s) => t + s.valor * s.qtd, 0);
+  if (outrasNominal + valor * alvo.qtd > totalTabela + 0.005) {
+    const teto = Math.floor(((totalTabela - outrasNominal) / alvo.qtd) * 100) / 100;
+    if (teto <= 0) return { erro: 'As outras séries já somam o preço de tabela. Com esta condição não é possível chegar ao PV 0 sem passar do preço de tabela.' };
+    return {
+      series: series.map((s) => (s.id === serieId ? { ...s, valor: teto } : s)),
+      aviso: 'Ajustado até o preço de tabela. Com esta condição de pagamento não é possível chegar ao PV 0 sem o preço passar do preço de tabela: antecipe parcelas (mais sinal ou parcelas mais cedo) para melhorar o PV.',
+    };
+  }
   return series.map((s) => (s.id === serieId ? { ...s, valor } : s));
+}
+
+/** Preço nunca acima da tabela: se o arredondamento das parcelas (para cima) passar do preço de tabela,
+ *  tira o excedente da última série (financiamento, se houver). A diferença no PV fica em centavos. */
+export function limitarAoPreco(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[]): Serie[] {
+  const tabela = total(parcelas(cfg, seriesDaTabela(cfg, u)));
+  const excesso = series.reduce((t, s) => t + s.valor * s.qtd, 0) - tabela;
+  if (excesso <= 0.005) return series;
+  const alvo = series.find((s) => s.periodicidade === 'Financiamento' && s.qtd >= 1) ?? [...series].reverse().find((s) => s.qtd >= 1);
+  if (!alvo) return series;
+  const corte = Math.ceil((excesso / alvo.qtd) * 100) / 100;
+  if (corte >= alvo.valor) return series;
+  return series.map((s) => (s.id === alvo.id ? { ...s, valor: centavos(s.valor - corte) } : s));
 }
 
 /** Soma ao ato (primeira série de sinal) o que falta para o sinal cobrir a comissão inteira. */
@@ -385,7 +415,7 @@ export function aplicarModelo(cfg: ConfigEmpreendimento, u: Unidade, modelo: Mod
   }));
 
   const limpar = (l: (Serie & { _ref?: SerieTabela })[]): Serie[] => l.map(({ _ref, ...s }) => s);
-  if (modelo === 'tabela') return limpar(daTabela);
+  if (modelo === 'tabela') return limitarAoPreco(cfg, u, limpar(daTabela));
 
   const sinais = daTabela.filter((s) => s._ref.periodicidade === 'Sinal');
   const totalSinal = sinais.reduce((s, x) => s + x.valor * x.qtd, 0);
@@ -419,7 +449,7 @@ export function aplicarModelo(cfg: ConfigEmpreendimento, u: Unidade, modelo: Mod
       vencimento: fin?.vencimento ?? dataNoMes(somarMeses(cfg.mesEntrega, 1), op.dia), valor: centavosAcima(restoFin),
     });
   const pvZero = redistribuir(cfg, u, lista, principal.id);
-  return 'erro' in pvZero ? lista : pvZero;
+  return limitarAoPreco(cfg, u, 'erro' in pvZero ? lista : 'aviso' in pvZero ? pvZero.series : pvZero);
 }
 
 // ---------------------------------------------------------------------
@@ -433,3 +463,64 @@ export const fmtMes = (mes: string) => {
   const nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   return `${nomes[mesNum(mes) - 1]}/${mes.slice(0, 4)}`;
 };
+
+// ---------------------------------------------------------------------
+// Proposta conjunta (várias unidades numa simulação só)
+// ---------------------------------------------------------------------
+/**
+ * Junta as unidades numa "unidade conjunta" para o editor: preço = soma dos preços,
+ * área = soma das áreas e tabela = soma dos fluxos de tabela de cada uma.
+ */
+export function unidadeConjunta(cfg: ConfigEmpreendimento, us: Unidade[]): { cfg: ConfigEmpreendimento; unidade: Unidade } {
+  const precos = us.map((u) => precoUnidade(cfg, u));
+  const soma = precos.reduce((s, p) => s + p, 0);
+  const area = us.reduce((s, u) => s + u.area, 0);
+  const mesmaTabela = us.every((u) => u.tabela === us[0].tabela);
+  const tabela = mesmaTabela ? us[0].tabela : '__conjunta';
+  const tabelas = mesmaTabela ? cfg.tabelas : {
+    ...cfg.tabelas,
+    __conjunta: us.flatMap((u, i) => cfg.tabelas[u.tabela].map((s) => ({ ...s, percentual: (s.percentual * precos[i]) / soma }))),
+  };
+  const unidade: Unidade = { numero: us.map((u) => u.numero).join(' + '), area, tipo: '__conjunta', peso: 1, tabela };
+  return {
+    cfg: { ...cfg, tabelas, precoM2PorTipo: { ...cfg.precoM2PorTipo, __conjunta: soma / area }, unidades: [...cfg.unidades, unidade] },
+    unidade,
+  };
+}
+
+/** Peso de cada unidade no conjunto: o preço de tabela dela ÷ a soma dos preços. */
+export function pesosPorPreco(cfg: ConfigEmpreendimento, us: Unidade[]) {
+  const precos = us.map((u) => precoUnidade(cfg, u));
+  const soma = precos.reduce((s, p) => s + p, 0);
+  return precos.map((p) => p / soma);
+}
+
+/**
+ * Divide as séries da simulação conjunta entre as unidades, pelo peso de cada uma.
+ * Mesmas datas, quantidades e periodicidades; cada parcela arredondada em centavos,
+ * com a sobra do arredondamento na última unidade (a soma bate com a simulação).
+ */
+export function distribuir(series: Serie[], pesos: number[]): Serie[][] {
+  const c2 = (v: number) => Math.round(v * 100) / 100;
+  return pesos.map((w, i) => series.map((s) => {
+    const base = c2(s.valor);
+    const valor = i < pesos.length - 1 ? c2(base * w) : c2(base - pesos.slice(0, -1).reduce((t, x) => t + c2(base * x), 0));
+    return { ...s, id: novoId(), valor };
+  }));
+}
+
+/** Soma, parcela a parcela, as séries das propostas de um grupo (mesma estrutura em todas). */
+export function somarSeries(lista: Serie[][]): Serie[] {
+  const [primeira, ...resto] = lista;
+  if (!primeira) return [];
+  const iguais = resto.every((l) => l.length === primeira.length && l.every((s, i) => s.periodicidade === primeira[i].periodicidade && s.vencimento === primeira[i].vencimento && s.qtd === primeira[i].qtd));
+  if (!iguais) return primeira.map((s) => ({ ...s, id: novoId() }));
+  return primeira.map((s, i) => ({ ...s, id: novoId(), valor: Math.round(lista.reduce((t, l) => t + l[i].valor, 0) * 100) / 100 }));
+}
+
+export const rotuloPeriodicidade = (p: Periodicidade) => PERIODICIDADES.find((x) => x.valor === p)?.rotulo ?? p;
+
+/** Mesmas séries (estrutura e valores, ao centavo). */
+export function mesmasSeries(a: Serie[], b: Serie[]) {
+  return a.length === b.length && a.every((s, i) => s.qtd === b[i].qtd && s.periodicidade === b[i].periodicidade && s.vencimento === b[i].vencimento && Math.abs(s.valor - b[i].valor) < 0.005);
+}

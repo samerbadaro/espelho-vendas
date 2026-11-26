@@ -337,6 +337,7 @@ function blocoUnidadeQuadro(e: Escritor) {
     ['Unidade Autônoma', e.ctx.unidade],
     ['Área Total', m2('area_total')],
     ['Área Privativa', m2('area_privativa')],
+    ['Vaga de Garagem', '01 (uma) vaga de uso rotativo – vaga não exclusiva – dependente da ocupação'],
   ]);
 }
 
@@ -388,29 +389,30 @@ function blocoPagamentoQuadro(e: Escritor) {
   e.para('4.1 – FORMA DE PAGAMENTO DO PREÇO', { negrito: true, secao: true });
 
   if (parcSinal.length) {
-    e.para(`a) Sinal: (${pct(totalSinal)} do valor do contrato): O valor de ${valorExt(totalSinal)}, a ser pago da forma abaixo:`, { recuo: 8 });
-    parcSinal.forEach((p, i) => e.para(`a.${i + 1}) Parcela no valor de ${valorExt(p.valor)}, com vencimento na data de ${fmtData(p.venc)}.`, { recuo: 8 }));
-  } else e.para('a) Sinal: Sem efeito.', { recuo: 8 });
+    e.para(`a) Sinal (${pct(totalSinal)} do valor do contrato): o valor de ${valorExt(totalSinal)}, a ser pago da forma abaixo:`, { recuo: 8 });
+    parcSinal.forEach((p, i) => e.para(`a.${i + 1}) parcela no valor de ${valorExt(p.valor)}, com vencimento na data de ${fmtData(p.venc)}${i === parcSinal.length - 1 ? '.' : ';'}`, { recuo: 8 }));
+  } else e.para('a) Sinal: sem efeito.', { recuo: 8 });
 
   if (meio.length) {
-    e.para(`b) Parcelas Intermediárias: (${pct(soma(meio))} do valor do contrato): O valor de ${valorExt(soma(meio))}, a ser pago da forma abaixo:`, { recuo: 8 });
-    meio.forEach((x, i) => e.para(`b.${i + 1}) ${textoSerieIntermediaria(x)}`, { recuo: 8 }));
-  } else e.para('b) Parcelas Intermediárias: Sem efeito.', { recuo: 8 });
+    e.para(`b) Parcelas intermediárias (${pct(soma(meio))} do valor do contrato): o valor de ${valorExt(soma(meio))}, a ser pago da forma abaixo:`, { recuo: 8 });
+    meio.forEach((x, i) => { const t = textoSerieIntermediaria(x); e.para(`b.${i + 1}) ${i === meio.length - 1 ? t : t.replace(/\.$/, ';')}`, { recuo: 8 }); });
+  } else e.para('b) Parcelas intermediárias: sem efeito.', { recuo: 8 });
 
   const parcFin = fins.flatMap((x) => Array.from({ length: x.qtd }, (_, k) => ({ valor: x.valor, venc: dataDaParcela(x, k) })));
-  const fimHabite = 'ou no prazo de até 30 (trinta) dias após a expedição do habite-se do empreendimento, o que ocorrer por último. O pagamento poderá ser feito com recursos próprios ou, a critério do COMPRADOR, por meio de financiamento bancário.';
+  const fimHabite = 'ou no prazo de até 30 (trinta) dias após a expedição do habite-se do empreendimento, o que ocorrer por último. O pagamento poderá ser feito com recursos próprios ou por meio de financiamento bancário obtido pelo COMPRADOR, nos termos do item 2.5 das Normas Contratuais.';
   if (parcFin.length === 1)
-    e.para(`c) Parcela - Habite-se: (${pct(soma(fins))} do valor do contrato): O valor de ${valorExt(soma(fins))}, que deverá ser pago em 01 (uma) parcela única, devidamente acrescida da correção prevista no item 4.3.1 abaixo, com vencimento na data de ${fmtData(parcFin[0].venc)} ${fimHabite}`, { recuo: 8 });
+    e.para(`c) Parcela Habite-se – saldo do preço (${pct(soma(fins))} do valor do contrato): o valor de ${valorExt(soma(fins))}, que deverá ser pago em 01 (uma) parcela única, devidamente acrescida da correção prevista no item 4.3.1 abaixo, com vencimento na data de ${fmtData(parcFin[0].venc)} ${fimHabite}`, { recuo: 8 });
   else if (parcFin.length > 1) {
-    e.para(`c) Parcelas - Habite-se: (${pct(soma(fins))} do valor do contrato): O valor de ${valorExt(soma(fins))}, que deverá ser pago em ${qtdExtenso(parcFin.length)} parcelas, devidamente acrescidas da correção prevista no item 4.3.1 abaixo, da forma abaixo, ${fimHabite.replace('o que ocorrer', 'para cada parcela, o que ocorrer')}`, { recuo: 8 });
-    parcFin.forEach((p, i) => e.para(`c.${i + 1}) Parcela no valor de ${valorExt(p.valor)}, com vencimento na data de ${fmtData(p.venc)}.`, { recuo: 8 }));
-  } else e.para('c) Parcela - Habite-se: Sem efeito.', { recuo: 8 });
+    e.para(`c) Parcelas Habite-se – saldo do preço (${pct(soma(fins))} do valor do contrato): o valor de ${valorExt(soma(fins))}, que deverá ser pago em ${qtdExtenso(parcFin.length)} parcelas, devidamente acrescidas da correção prevista no item 4.3.1 abaixo, da forma abaixo, ${fimHabite.replace('o que ocorrer', 'para cada parcela, o que ocorrer')}`, { recuo: 8 });
+    parcFin.forEach((p, i) => e.para(`c.${i + 1}) parcela no valor de ${valorExt(p.valor)}, com vencimento na data de ${fmtData(p.venc)}${i === parcFin.length - 1 ? '.' : ';'}`, { recuo: 8 }));
+  } else e.para('c) Parcela Habite-se – saldo do preço: sem efeito.', { recuo: 8 });
 }
 
 /** Item 9.3: comissão paga diretamente pelo comprador (imobiliária e coordenação de vendas). */
 function blocoComissaoQuadro(e: Escritor) {
   const total = e.ctx.comissao.filter((c) => c.nome || c.valor).reduce((t, c) => t + Number(c.valor || 0), 0);
-  e.para(`9.3 – Em atendimento ao Art. 35-A, inciso III, da Lei nº 4.591/64, a comissão devida, no valor de ${valorExt(total)}, foi paga diretamente pelo COMPRADOR à empresa de venda de imóveis e/ou consultores imobiliários independentes responsáveis pelos serviços de intermediação do presente negócio, abaixo identificados, não tendo referido valor integrado o preço de aquisição da unidade autônoma objeto deste contrato:`);
+  e.para('9.3 – Em atendimento ao art. 35-A, inciso III, da Lei nº 4.591/64:');
+  e.para(`(X) a) A comissão devida, no valor de ${valorExt(total)}, foi paga diretamente pelo COMPRADOR à empresa de venda de imóveis e/ou aos consultores imobiliários independentes responsáveis pelos serviços de intermediação do presente negócio, abaixo identificados, não tendo o referido valor integrado o preço de aquisição da unidade autônoma objeto deste contrato:`, { recuo: 8 });
   blocoComissao(e);
 }
 

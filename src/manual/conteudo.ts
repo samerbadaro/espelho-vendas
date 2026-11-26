@@ -44,9 +44,37 @@ const PARCEIROS: PapelManual[] = ['imobiliaria', 'corretor'];
 const TODOS: PapelManual[] = ['admin', 'vendas', 'imobiliaria', 'corretor'];
 
 /** Atualizado a cada entrega (data da última revisão do manual). */
-export const REVISAO_MANUAL = '23/11/2026';
+export const REVISAO_MANUAL = '26/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
+  {
+    data: '26/11/2026', titulo: 'Contraproposta',
+    itens: [
+      'Na análise, “Devolver com contraproposta” libera a grade para a equipe alterar a proposta antes de devolver.',
+      'O corretor vê a proposta original e a contraproposta (abas e quadro “O que mudou”) e pode aceitar com um clique: a proposta é aprovada na hora.',
+    ],
+  },
+  {
+    data: '26/11/2026', titulo: 'Proposta conjunta: várias unidades numa simulação só',
+    itens: [
+      'Na proposta, “Adicionar unidade” junta mais unidades para o mesmo cliente: a simulação é feita sobre o total.',
+      'Ao salvar, cada unidade vira a sua proposta, com as parcelas divididas pelo preço de tabela de cada uma.',
+      'As propostas do conjunto são enviadas e analisadas juntas; as abas mostram a visão conjunta ou cada unidade sozinha.',
+    ],
+  },
+  {
+    data: '25/11/2026', titulo: 'Espelho em 3D',
+    itens: [
+      'No Espelho, o botão “3D” mostra o prédio em três dimensões — o modelo real da fachada do Duo Haus —, com cada apartamento na cor do status, em tempo real. Arraste para girar, use a roda (ou dois dedos) para aproximar, passe o mouse para ver os dados e clique para abrir a unidade. “Fachada” volta para a visão de antes; o navegador lembra a escolha.',
+      'Na legenda, clique num status para destacar só essas unidades.',
+    ],
+  },
+  {
+    data: '25/11/2026', titulo: 'Contrato na minuta r02 do jurídico', papeis: EQUIPE,
+    itens: [
+      'Quadro Resumo e Normas Contratuais seguem a revisão r02: cláusulas novas (índices, tributação, LGPD, assinatura eletrônica, declarações do comprador), vaga rotativa no item 3 e aceites do comprador depois das cláusulas 6, 7 e 10.6 do Quadro Resumo e da cláusula 3 das Normas, com as assinaturas da D4Sign nas linhas.',
+    ],
+  },
   {
     data: '23/11/2026', titulo: 'Contrato por unidade', papeis: EQUIPE,
     itens: [
@@ -442,7 +470,7 @@ export const CAPITULOS: Capitulo[] = [
     id: 'propostas', modulo: 'propostas', titulo: 'Propostas', papeis: TODOS,
     resumo: 'A proposta montada sobre a tabela de vendas, com PV, comissão, aprovação por alçada e resumo da proposta em PDF ou Word.',
     responsabilidades: {
-      corretor: ['Montar a proposta com o fluxo combinado com o cliente, vincular a pasta e enviar para análise.', 'Ajustar e reenviar as propostas devolvidas.'],
+      corretor: ['Montar a proposta com o fluxo combinado com o cliente, vincular a pasta e enviar para análise.', 'Ajustar e reenviar as propostas devolvidas; levar as contrapropostas ao cliente e aceitar só com o ok dele.'],
       imobiliaria: ['Acompanhar as propostas dos seus corretores e montar propostas quando necessário.'],
       vendas: ['Analisar as propostas na sua alçada: aprovar, devolver para ajuste ou recusar, sempre com o motivo.'],
       admin: ['Analisar as propostas abaixo da alçada da Sec. Vendas e acompanhar os descontos concedidos.', 'Manter os parâmetros da proposta: dias de vencimento e alçadas de aprovação.'],
@@ -453,7 +481,7 @@ export const CAPITULOS: Capitulo[] = [
         passos: [
           'Em Propostas, clique em “Nova proposta” e escolha a unidade.',
           'O fluxo da tabela já vem montado. Use “Modelo da tabela”, “Mensais até a entrega”, “Semestrais”, “Anuais” ou “Até as chaves” para trocar o modelo, ou edite as séries (quantidade, periodicidade, 1º vencimento e valor).',
-          'Em “Ajustar para”, escolha “Zerar PV” (o valor presente fica igual ao da tabela) ou “Zerar nominal” (o valor total fica igual ao da tabela; o PV pode ficar abaixo). Depois clique em “⟲ ajustar” na série que vai absorver a diferença.',
+          'Em “Ajustar para”, escolha “Zerar PV” (o valor presente fica igual ao da tabela) ou “Zerar nominal” (o valor total fica igual ao da tabela; o PV pode ficar abaixo). Depois clique em “⟲ ajustar” na série que vai absorver a diferença. O preço nunca passa do preço de tabela: se zerar o PV exigir isso, a série para no preço de tabela e o sistema avisa que, com essa condição, não dá para chegar ao PV 0 (antecipe parcelas para melhorar). Se por qualquer motivo o preço passar da tabela (por exemplo, depois de “Aumentar o ato”), a proposta mostra um erro e não pode ser enviada até voltar ao preço de tabela.',
           'Acompanhe o comparativo tabela × proposta: valor total, PV (valor presente), preço do m² e captação até as chaves, cada um com a variação em % e a diferença em R$. Logo abaixo aparecem o desconto nominal e o desconto em valor presente, em R$.',
           'A tabela “Captação acumulada” mostra o % recebido em cada marco (3, 6, 12... meses e até a entrega).',
           'Confira a comissão. Ela sai das parcelas do sinal: de cada parcela, 70% vai para a comissão e 30% para o incorporador. Dentro da comissão, a coordenação de vendas (0,5%) recebe primeiro, dividida em 2 parcelas (0,25% + 0,25%), e o restante vai para a imobiliária (5%), até completar 5,5%. A tabela mostra quanto vai para cada um em cada parcela.',
@@ -476,6 +504,27 @@ export const CAPITULOS: Capitulo[] = [
         ],
       },
       {
+        titulo: 'Proposta conjunta (várias unidades para o mesmo cliente)', papeis: TODOS,
+        passos: [
+          'Na proposta, depois de escolher a primeira unidade, clique em “Adicionar unidade” para cada unidade a mais. Para tirar uma, clique no “×” ao lado dela.',
+          'A simulação passa a ser do conjunto: área, preço de tabela e fluxo da tabela somados. Monte o fluxo sobre 100% do total, como numa proposta comum (modelos, “⟲ ajustar”, comissão).',
+          'Abaixo das unidades aparece a divisão: o peso de cada uma é o preço de tabela dela dividido pela soma. Ex.: unidades de R$ 400 mil, R$ 400 mil e R$ 200 mil ficam com 40%, 40% e 20%.',
+          'Ao clicar em “Salvar rascunho” ou “Enviar para análise”, cada unidade vira uma proposta própria, com as mesmas datas e quantidades e cada parcela dividida pelo peso. Os centavos do arredondamento ficam na última unidade, para a soma bater com a simulação.',
+          'Na proposta salva, use as abas no topo: “Conjunta” mostra tudo junto (e é onde se edita); cada aba com código e unidade mostra a proposta daquela unidade sozinha.',
+          'O “Resumo da proposta” sai do que está na tela: na aba “Conjunta”, com todas as unidades e o fluxo total; na aba de uma unidade, só com ela.',
+          'Na lista de Propostas, o conjunto aparece numa linha só, marcada “conjunta”, com as unidades, o valor somado e o PV do conjunto.',
+        ],
+        atencao: 'As propostas de um conjunto são enviadas e analisadas juntas: a alçada é calculada pelo PV do conjunto, e aprovar, devolver ou recusar vale para todas as unidades. Depois de aprovadas, cada unidade segue sozinha para contrato e assinatura.',
+      },
+      {
+        titulo: 'Analisar uma proposta conjunta', papeis: ['vendas', 'admin'],
+        passos: [
+          'Abra a proposta e fique na aba “Conjunta”. O quadro “Análise da proposta conjunta” vale para todas as unidades.',
+          'Clique em “Aprovar”, “Devolver com contraproposta” ou “Recusar” (com o motivo). A contraproposta é feita sobre o total, na aba “Conjunta”, e dividida entre as unidades pelo preço de tabela. Se uma unidade não puder ser aprovada (por exemplo, já negociada no espelho), nenhuma é aprovada e o sistema avisa o motivo.',
+          'Para cancelar uma unidade só depois da aprovação (desistência de uma delas), abra a aba da unidade e clique em “Cancelar só esta unidade”. “Cancelar a proposta conjunta”, na aba “Conjunta”, cancela todas.',
+        ],
+      },
+      {
         titulo: 'Buscar propostas', papeis: TODOS,
         texto: 'Na lista de Propostas, use o campo de busca para encontrar por unidade, nome do cliente, imobiliária, corretor ou código. A busca não diferencia acentos nem maiúsculas e funciona junto com o filtro de status.',
       },
@@ -493,6 +542,17 @@ export const CAPITULOS: Capitulo[] = [
         texto: 'A proposta devolvida volta a ser editável e mostra o motivo no topo: ajuste e envie de novo. Proposta recusada ou cancelada fica só para consulta.',
       },
       {
+        titulo: 'Contraproposta recebida', papeis: PARCEIROS,
+        passos: [
+          'Quando a equipe devolve com contraproposta, a proposta aparece como “Devolvida para ajuste” com a marca “com contraproposta” na lista.',
+          'No quadro “Contraproposta”, veja quem fez, quando e o motivo. A tabela “O que mudou” compara a proposta original com a contraproposta: valor total, PV sobre a tabela, sinal e comissão. Abaixo, as séries que saíram aparecem riscadas e as que entraram, em negrito.',
+          'Use as abas “Contraproposta” e “Proposta original” para ver cada versão completa na grade, com o comparativo e a captação.',
+          'Se o cliente aceitar, clique em “Aceitar contraproposta”: a proposta é aprovada na hora e a unidade vai para “Proposta recebida”. Vincule a pasta antes.',
+          'Se o cliente pedir outra condição, altere a grade e clique em “Enviar para análise”: ela volta para a equipe, com a alçada calculada de novo.',
+        ],
+        atencao: 'Depois de alterar a grade, o botão “Aceitar contraproposta” fica desligado: o que foi alterado precisa passar pela análise.',
+      },
+      {
         titulo: 'Resumo da proposta', papeis: TODOS,
         texto: 'O botão “Resumo da proposta” gera um PDF (e o botão “Word”, o mesmo em .docx) com o imóvel, os proponentes, o fluxo de pagamento, a intermediação e as condições gerais. É um resumo para o cliente conferir: sai só com os campos preenchidos e sem assinaturas. A carta para assinatura, com os dados conferidos pela IA, é emitida em Contratos.',
       },
@@ -501,7 +561,9 @@ export const CAPITULOS: Capitulo[] = [
         passos: [
           'Abra a proposta enviada. Confira o PV, o fluxo e a comissão (a equipe pode ajustar a comissão).',
           'Aprovar: a unidade vai para “Proposta recebida” no espelho, com valor e PV.',
-          'Devolver para ajuste: escreva o que o corretor deve mudar.',
+          'Devolver com contraproposta: a grade fica liberada para você. Altere séries, valores, vencimentos e, se precisar, a comissão; escreva o motivo e clique em “Devolver com contraproposta”. O corretor verá a original e a sua versão lado a lado, e pode aceitar com um clique (aprovação na hora).',
+          'Se você não alterar a grade, o botão só devolve a proposta para ajuste, com o motivo. “Desistir” descarta as alterações.',
+          'A Sec. Vendas só faz contraproposta dentro da sua alçada (PV a partir do limite dela); abaixo disso, só o administrador.',
           'Recusar ou cancelar: o motivo é obrigatório.',
         ],
         dica: 'Com o módulo desligado, só o administrador vê Propostas (para testar). Tabela e taxa são configuradas pela Launch; dias de vencimento, alçadas, comissão da imobiliária, coordenação de vendas (percentual e em quantas parcelas) e a parte do sinal para a comissão, pelo administrador em “Parâmetros da proposta”.',
