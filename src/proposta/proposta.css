@@ -175,3 +175,19 @@ select.celula { cursor: pointer; }
 .prop-vistas { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--borda); }
 .prop-vistas button { border: 0; background: none; padding: 8px 12px; font: inherit; color: var(--tinta-2); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
 .prop-vistas button.ativa { color: var(--tinta); font-weight: 700; border-bottom-color: currentColor; }
+
+/* Contraproposta */
+.contra-prop { display: grid; gap: 10px; border-left: 3px solid var(--proposta, #c58a1b); }
+.contra-prop .contra-topo { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: flex-start; }
+.contra-prop .contra-topo p { margin: 4px 0 0; }
+.prop-vistas.pequenas { margin: 0; border-bottom: 0; }
+.prop-vistas.pequenas button { padding: 4px 10px; }
+.o-que-mudou { display: grid; gap: 12px; }
+.o-que-mudou table { width: 100%; max-width: 720px; }
+.o-que-mudou tr.mudou td { font-weight: 700; }
+.series-comp { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 24px; }
+.series-comp span { font-size: 0.75rem; color: var(--tinta-2); }
+.series-comp ul { margin: 4px 0 0; padding-left: 18px; }
+.series-comp li { margin: 2px 0; font-variant-numeric: tabular-nums; }
+.series-comp li.saiu { text-decoration: line-through; color: var(--tinta-2); }
+.series-comp li.entrou { font-weight: 700; }

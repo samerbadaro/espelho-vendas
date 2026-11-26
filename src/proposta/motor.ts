@@ -517,3 +517,10 @@ export function somarSeries(lista: Serie[][]): Serie[] {
   if (!iguais) return primeira.map((s) => ({ ...s, id: novoId() }));
   return primeira.map((s, i) => ({ ...s, id: novoId(), valor: Math.round(lista.reduce((t, l) => t + l[i].valor, 0) * 100) / 100 }));
 }
+
+export const rotuloPeriodicidade = (p: Periodicidade) => PERIODICIDADES.find((x) => x.valor === p)?.rotulo ?? p;
+
+/** Mesmas séries (estrutura e valores, ao centavo). */
+export function mesmasSeries(a: Serie[], b: Serie[]) {
+  return a.length === b.length && a.every((s, i) => s.qtd === b[i].qtd && s.periodicidade === b[i].periodicidade && s.vencimento === b[i].vencimento && Math.abs(s.valor - b[i].valor) < 0.005);
+}

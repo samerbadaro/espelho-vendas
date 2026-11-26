@@ -48,6 +48,13 @@ export const REVISAO_MANUAL = '26/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '26/11/2026', titulo: 'Contraproposta',
+    itens: [
+      'Na análise, “Devolver com contraproposta” libera a grade para a equipe alterar a proposta antes de devolver.',
+      'O corretor vê a proposta original e a contraproposta (abas e quadro “O que mudou”) e pode aceitar com um clique: a proposta é aprovada na hora.',
+    ],
+  },
+  {
     data: '26/11/2026', titulo: 'Proposta conjunta: várias unidades numa simulação só',
     itens: [
       'Na proposta, “Adicionar unidade” junta mais unidades para o mesmo cliente: a simulação é feita sobre o total.',
@@ -463,7 +470,7 @@ export const CAPITULOS: Capitulo[] = [
     id: 'propostas', modulo: 'propostas', titulo: 'Propostas', papeis: TODOS,
     resumo: 'A proposta montada sobre a tabela de vendas, com PV, comissão, aprovação por alçada e resumo da proposta em PDF ou Word.',
     responsabilidades: {
-      corretor: ['Montar a proposta com o fluxo combinado com o cliente, vincular a pasta e enviar para análise.', 'Ajustar e reenviar as propostas devolvidas.'],
+      corretor: ['Montar a proposta com o fluxo combinado com o cliente, vincular a pasta e enviar para análise.', 'Ajustar e reenviar as propostas devolvidas; levar as contrapropostas ao cliente e aceitar só com o ok dele.'],
       imobiliaria: ['Acompanhar as propostas dos seus corretores e montar propostas quando necessário.'],
       vendas: ['Analisar as propostas na sua alçada: aprovar, devolver para ajuste ou recusar, sempre com o motivo.'],
       admin: ['Analisar as propostas abaixo da alçada da Sec. Vendas e acompanhar os descontos concedidos.', 'Manter os parâmetros da proposta: dias de vencimento e alçadas de aprovação.'],
@@ -513,7 +520,7 @@ export const CAPITULOS: Capitulo[] = [
         titulo: 'Analisar uma proposta conjunta', papeis: ['vendas', 'admin'],
         passos: [
           'Abra a proposta e fique na aba “Conjunta”. O quadro “Análise da proposta conjunta” vale para todas as unidades.',
-          'Clique em “Aprovar”, “Devolver para ajuste” ou “Recusar” (com o motivo). Se uma unidade não puder ser aprovada (por exemplo, já negociada no espelho), nenhuma é aprovada e o sistema avisa o motivo.',
+          'Clique em “Aprovar”, “Devolver com contraproposta” ou “Recusar” (com o motivo). A contraproposta é feita sobre o total, na aba “Conjunta”, e dividida entre as unidades pelo preço de tabela. Se uma unidade não puder ser aprovada (por exemplo, já negociada no espelho), nenhuma é aprovada e o sistema avisa o motivo.',
           'Para cancelar uma unidade só depois da aprovação (desistência de uma delas), abra a aba da unidade e clique em “Cancelar só esta unidade”. “Cancelar a proposta conjunta”, na aba “Conjunta”, cancela todas.',
         ],
       },
@@ -535,6 +542,17 @@ export const CAPITULOS: Capitulo[] = [
         texto: 'A proposta devolvida volta a ser editável e mostra o motivo no topo: ajuste e envie de novo. Proposta recusada ou cancelada fica só para consulta.',
       },
       {
+        titulo: 'Contraproposta recebida', papeis: PARCEIROS,
+        passos: [
+          'Quando a equipe devolve com contraproposta, a proposta aparece como “Devolvida para ajuste” com a marca “com contraproposta” na lista.',
+          'No quadro “Contraproposta”, veja quem fez, quando e o motivo. A tabela “O que mudou” compara a proposta original com a contraproposta: valor total, PV sobre a tabela, sinal e comissão. Abaixo, as séries que saíram aparecem riscadas e as que entraram, em negrito.',
+          'Use as abas “Contraproposta” e “Proposta original” para ver cada versão completa na grade, com o comparativo e a captação.',
+          'Se o cliente aceitar, clique em “Aceitar contraproposta”: a proposta é aprovada na hora e a unidade vai para “Proposta recebida”. Vincule a pasta antes.',
+          'Se o cliente pedir outra condição, altere a grade e clique em “Enviar para análise”: ela volta para a equipe, com a alçada calculada de novo.',
+        ],
+        atencao: 'Depois de alterar a grade, o botão “Aceitar contraproposta” fica desligado: o que foi alterado precisa passar pela análise.',
+      },
+      {
         titulo: 'Resumo da proposta', papeis: TODOS,
         texto: 'O botão “Resumo da proposta” gera um PDF (e o botão “Word”, o mesmo em .docx) com o imóvel, os proponentes, o fluxo de pagamento, a intermediação e as condições gerais. É um resumo para o cliente conferir: sai só com os campos preenchidos e sem assinaturas. A carta para assinatura, com os dados conferidos pela IA, é emitida em Contratos.',
       },
@@ -543,7 +561,9 @@ export const CAPITULOS: Capitulo[] = [
         passos: [
           'Abra a proposta enviada. Confira o PV, o fluxo e a comissão (a equipe pode ajustar a comissão).',
           'Aprovar: a unidade vai para “Proposta recebida” no espelho, com valor e PV.',
-          'Devolver para ajuste: escreva o que o corretor deve mudar.',
+          'Devolver com contraproposta: a grade fica liberada para você. Altere séries, valores, vencimentos e, se precisar, a comissão; escreva o motivo e clique em “Devolver com contraproposta”. O corretor verá a original e a sua versão lado a lado, e pode aceitar com um clique (aprovação na hora).',
+          'Se você não alterar a grade, o botão só devolve a proposta para ajuste, com o motivo. “Desistir” descarta as alterações.',
+          'A Sec. Vendas só faz contraproposta dentro da sua alçada (PV a partir do limite dela); abaixo disso, só o administrador.',
           'Recusar ou cancelar: o motivo é obrigatório.',
         ],
         dica: 'Com o módulo desligado, só o administrador vê Propostas (para testar). Tabela e taxa são configuradas pela Launch; dias de vencimento, alçadas, comissão da imobiliária, coordenação de vendas (percentual e em quantas parcelas) e a parte do sinal para a comissão, pelo administrador em “Parâmetros da proposta”.',
