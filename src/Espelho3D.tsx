@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DUO_HAUS, type LayoutModelo } from './espelho3d/duohaus';
 import { type Unidade, type Status, STATUS, rotuloStatus, formatarArea } from './dados';
 
 /**
@@ -28,6 +30,30 @@ const corDoStatus = (s: Status) => {
 
 interface Bloco { mesh: THREE.Mesh; unidade: Unidade }
 
+/** Modelo real do prédio (.glb compactado em gzip), carregado uma vez por sessão. */
+let modeloCache: Promise<THREE.Group> | null = null;
+function carregarModelo(url: string): Promise<THREE.Group> {
+  if (!modeloCache) {
+    modeloCache = (async () => {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('modelo indisponível');
+      let bytes = await r.arrayBuffer();
+      const b0 = new Uint8Array(bytes, 0, 2);
+      // alguns servidores já descompactam no caminho; só descompacta se ainda estiver em gzip
+      if (b0[0] === 0x1f && b0[1] === 0x8b) {
+        bytes = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+      }
+      const gltf = await new GLTFLoader().parseAsync(bytes, '');
+      return gltf.scene;
+    })();
+    modeloCache.catch(() => { modeloCache = null; });
+  }
+  return modeloCache;
+}
+
+/** O layout do modelo serve se todas as unidades caem num andar e num vão conhecidos. */
+const servePara = (l: LayoutModelo, us: Unidade[]) => us.length > 0 && us.every((u) => l.lajes[u.andar] != null && l.vaos[u.posicao]);
+
 export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
   const caixa = useRef<HTMLDivElement>(null);
   const estado = useRef<{
@@ -37,6 +63,7 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
   const [dica, setDica] = useState<{ x: number; y: number; u: Unidade } | null>(null);
   const [girando, setGirando] = useState(false);
   const [filtro, setFiltro] = useState<Status | null>(null);
+  const [carregando, setCarregando] = useState(false);
   const selRef = useRef(aoSelecionar); selRef.current = aoSelecionar;
   const recRef = useRef(recentes); recRef.current = recentes;
   const filtroRef = useRef(filtro); filtroRef.current = filtro;
@@ -99,7 +126,7 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxPolarAngle = Math.PI / 2 - 0.03;
-    controls.minDistance = 15; controls.maxDistance = 115;
+    controls.minDistance = 15; controls.maxDistance = 160;
     controls.autoRotateSpeed = 0.8;
 
     estado.current = { ...estado.current, renderer, scene, camera, controls };
@@ -176,7 +203,62 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
   useEffect(() => {
     const { scene, camera, controls } = estado.current;
     if (!scene || !camera || !controls) return;
-    if (estado.current.predio) { scene.remove(estado.current.predio); estado.current.predio.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.()); }
+    if (estado.current.predio) { scene.remove(estado.current.predio); }
+    let cancelado = false;
+    if (servePara(DUO_HAUS, unidades)) {
+      setCarregando(true);
+      carregarModelo(DUO_HAUS.url).then((modelo) => {
+        if (cancelado) return;
+        montarNoModelo(modelo, DUO_HAUS);
+      }).catch(() => { if (!cancelado) montarBlocos(); }).finally(() => { if (!cancelado) setCarregando(false); });
+      return () => { cancelado = true; };
+    }
+    montarBlocos();
+    return () => { cancelado = true; };
+
+    /** Fachada real: o modelo do estúdio, com um vidro colorido em cada apartamento. */
+    function montarNoModelo(modelo: THREE.Group, l: LayoutModelo) {
+      const predio = new THREE.Group();
+      // modelo em Z para cima (metros) -> tela em Y para cima: (x, y, z) => (x, z, -y)
+      const casca = modelo.clone();
+      casca.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          const mat = (m.material as THREE.MeshStandardMaterial).clone();
+          mat.roughness = 0.8; mat.metalness = 0;
+          m.material = mat;
+        }
+      });
+      predio.add(casca);
+      const geo = new THREE.BoxGeometry(1, 1, 0.08);
+      const blocos: Bloco[] = [];
+      const mats = new Map<string, THREE.MeshStandardMaterial>();
+      for (const u of unidades) {
+        const v = l.vaos[u.posicao]; const z = l.lajes[u.andar];
+        const cor = corDoStatus(u.status);
+        const mat = new THREE.MeshStandardMaterial({ color: cor.clone().multiplyScalar(0.55), emissive: cor, emissiveIntensity: 0.55, roughness: 0.3, transparent: true });
+        mats.set(u.id, mat);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.scale.set(Math.max(0.6, v.x1 - v.x0 - 0.3), l.peDireito - 0.75, 1);
+        // um pouco para fora do vidro, no lado da fachada
+        mesh.position.set((v.x0 + v.x1) / 2, z + 0.15 + (l.peDireito - 0.75) / 2, -(v.y + v.lado * 0.14));
+        predio.add(mesh);
+        blocos.push({ mesh, unidade: u });
+      }
+      scene!.add(predio);
+      estado.current.predio = predio;
+      estado.current.blocos = blocos;
+      estado.current.mats = mats;
+      const caixaP = new THREE.Box3().setFromObject(casca);
+      const centro = caixaP.getCenter(new THREE.Vector3());
+      estado.current.centro = centro;
+      const tam = caixaP.getSize(new THREE.Vector3());
+      camera!.position.set(centro.x - tam.y * 0.6, centro.y * 0.8, centro.z + tam.y * 1.45);
+      controls!.target.copy(centro);
+      controls!.update();
+    }
+
+    function montarBlocos() {
     const predio = new THREE.Group();
     const andares = [...new Set(unidades.map((u) => u.andar))].sort((a, b) => a - b);
     if (!andares.length) return;
@@ -254,16 +336,17 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
       predio.add(l);
     }
 
-    scene.add(predio);
+    scene!.add(predio);
     estado.current.predio = predio;
     estado.current.blocos = blocos;
     estado.current.mats = mats;
     const centro = new THREE.Vector3(0, topo / 2, 0);
     estado.current.centro = centro;
     const dist = Math.max(topo, largura) * 1.6;
-    camera.position.set(dist * 0.75, topo * 0.55, dist * 0.9);
-    controls.target.copy(centro);
-    controls.update();
+    camera!.position.set(dist * 0.75, topo * 0.55, dist * 0.9);
+    controls!.target.copy(centro);
+    controls!.update();
+    }
   }, [forma]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // cor em tempo real, sem remontar o prédio
@@ -302,6 +385,7 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
   return (
     <div className="espelho3d">
       <div ref={caixa} className="espelho3d-tela" />
+      {carregando && <div className="espelho3d-carregando">Carregando a fachada do prédio…</div>}
       {dica && (
         <div className="espelho3d-dica" style={{ left: dica.x + 14, top: dica.y + 14 }}>
           <strong>Apto {dica.u.numero}</strong>

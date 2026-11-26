@@ -50,7 +50,7 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
   {
     data: '25/11/2026', titulo: 'Espelho em 3D',
     itens: [
-      'No Espelho, o botão “3D” mostra o prédio em três dimensões, com cada apartamento na cor do status, em tempo real. Arraste para girar, use a roda (ou dois dedos) para aproximar, passe o mouse para ver os dados e clique para abrir a unidade. “Fachada” volta para a visão de antes; o navegador lembra a escolha.',
+      'No Espelho, o botão “3D” mostra o prédio em três dimensões — o modelo real da fachada do Duo Haus —, com cada apartamento na cor do status, em tempo real. Arraste para girar, use a roda (ou dois dedos) para aproximar, passe o mouse para ver os dados e clique para abrir a unidade. “Fachada” volta para a visão de antes; o navegador lembra a escolha.',
       'Na legenda, clique num status para destacar só essas unidades.',
     ],
   },
