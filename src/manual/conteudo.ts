@@ -53,6 +53,7 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
       'Em Contratos, a Intermediação Imobiliária é emitida com os demais documentos e entra no envelope logo depois da Carta Proposta.',
       'Contratadas (imobiliária e coordenação), valores e parcelas saem da proposta aprovada; pela imobiliária assina o gestor.',
       'O Word dos documentos emitidos agora traz todos os quadros do PDF (unidade, pagamento e comissão).',
+      'Contratos: botão “Baixar tudo em um PDF” junta os documentos e anexos na ordem do envelope, para conferir antes de assinar.',
     ],
   },
   {
@@ -648,6 +649,7 @@ export const CAPITULOS: Capitulo[] = [
           'Em “Data do contrato”, escolha “Hoje” ou “Outra data” e informe a data. Ela sai no local e data de todos os documentos (Intermediação, Quadro Resumo, Normas e Carta Proposta).',
           'Clique em “Emitir documentos” e confira a data na confirmação. Cada documento ganha um número e fica aguardando validação. Todos saem em PDF e em Word, com os mesmos quadros.',
           'Precisa ajustar a formatação? Baixe o Word, edite e use “Enviar ajuste”. A versão sobe e a validação volta para pendente.',
+          'Para conferir tudo de uma vez, clique em “Baixar tudo em um PDF”: os documentos ativos e os anexos fixos saem num arquivo só, na mesma ordem do envelope da D4Sign. Documento que só existe em Word fica de fora, e o sistema avisa qual.',
           'Confira e clique em “Validar” em cada documento.',
         ],
       },

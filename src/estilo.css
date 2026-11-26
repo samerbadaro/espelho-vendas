@@ -1146,3 +1146,4 @@ small.bloco { display: block; color: var(--tinta-2); }
 .espelho3d-ajuda { position: absolute; left: 0; right: 0; bottom: 8px; margin: 0; text-align: center; color: rgba(255,255,255,.7); font-size: 12px; pointer-events: none; }
 @media (max-width: 640px) { .espelho3d-legenda { max-width: 100%; right: 10px; top: 48px; } .espelho3d-tela { height: 62vh; } }
 .espelho3d-carregando { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 14px; background: rgba(14,22,38,.55); pointer-events: none; }
+.ct-tudo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 14px 0 8px; }

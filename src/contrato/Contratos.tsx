@@ -336,6 +336,41 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     finally { setOcupado(''); carregar(); }
   };
 
+  /** Junta num PDF só os documentos ativos e os anexos fixos, na ordem do envelope, para conferir antes de assinar. */
+  const baixarTudo = async () => {
+    const ativos = emit.filter((c) => !c.cancelado_em);
+    if (!ativos.length) return;
+    setOcupado('Juntando os documentos num PDF…');
+    try {
+      const { PDFDocument } = await import('pdf-lib');
+      const { data: fs } = await supabase.from('contrato_anexos_fixos').select('nome, caminho, ordem').eq('ativo', true).order('ordem');
+      const ordem: Record<string, number> = { carta_proposta: 0, intermediacao: 1, quadro_resumo: 2, normas: 3 };
+      const itens = [
+        ...ativos.map((c) => ({ nome: `${c.numero} - ${c.nome}`, caminho: c.caminho, peso: ordem[c.documento] ?? 4 })),
+        ...((fs as { nome: string; caminho: string; ordem: number }[]) ?? []).map((f) => ({ nome: f.nome, caminho: /\.pdf$/i.test(f.caminho) ? f.caminho : null, peso: 5 + f.ordem / 1000 })),
+      ].sort((a, b) => a.peso - b.peso);
+      const unico = await PDFDocument.create();
+      const fora: string[] = [];
+      for (const i of itens) {
+        if (!i.caminho) { fora.push(i.nome); continue; }
+        const { data, error } = await supabase.storage.from('contratos').download(i.caminho);
+        if (error || !data) { fora.push(i.nome); continue; }
+        try {
+          const origem = await PDFDocument.load(await data.arrayBuffer(), { ignoreEncryption: true });
+          (await unico.copyPages(origem, origem.getPageIndices())).forEach((pg) => unico.addPage(pg));
+        } catch { fora.push(i.nome); }
+      }
+      if (!unico.getPageCount()) { avisar('Nenhum documento em PDF para juntar.', 'erro'); return; }
+      const cliente = pasta.tipo_pessoa === 'pj' ? pasta.empresa_razao_social : pasta.comprador_nome;
+      const nome = [prop.unidades?.numero, cliente, 'documentos'].filter(Boolean).join(' - ').replace(/[\\/:*?"<>|]+/g, ' ');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([(await unico.save()) as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }));
+      a.download = `${nome}.pdf`; a.click();
+      if (fora.length) avisar(`Ficaram de fora (sem PDF): ${fora.join(', ')}. Na D4Sign o envelope só monta com todos em PDF.`, 'erro');
+    } catch (e) { avisar(`Não foi possível juntar os documentos. ${(e as Error).message}`, 'erro'); }
+    finally { setOcupado(''); }
+  };
+
   const baixar = async (c: Emitido, word = false) => {
     const caminho = word ? c.caminho_docx : c.caminho;
     if (!caminho) return;
@@ -483,6 +518,12 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
           <button type="button" className="botao principal" disabled={!podeEmitir || !!ocupado} onClick={emitir}>Emitir documentos</button>
         </div>
 
+        {emit.some((c) => !c.cancelado_em) && (
+          <div className="ct-tudo">
+            <button type="button" className="botao" disabled={!!ocupado} onClick={baixarTudo}><Download size={16} /> Baixar tudo em um PDF</button>
+            <small className="sub">Documentos ativos e anexos fixos, na ordem do envelope da D4Sign.</small>
+          </div>
+        )}
         {emit.length > 0 && (
           <div className="tabela-rolagem">
             <table className="tabela ct-emitidos">
