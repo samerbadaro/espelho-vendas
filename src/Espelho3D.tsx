@@ -58,7 +58,7 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
   const caixa = useRef<HTMLDivElement>(null);
   const estado = useRef<{
     renderer?: THREE.WebGLRenderer; scene?: THREE.Scene; camera?: THREE.PerspectiveCamera; controls?: OrbitControls;
-    blocos: Bloco[]; mats: Map<string, THREE.MeshStandardMaterial>; predio?: THREE.Group; frame?: number; centro?: THREE.Vector3;
+    blocos: Bloco[]; mats: Map<string, THREE.MeshStandardMaterial>; predio?: THREE.Group; casca?: THREE.Object3D; frame?: number; centro?: THREE.Vector3;
   }>({ blocos: [], mats: new Map() });
   const [dica, setDica] = useState<{ x: number; y: number; u: Unidade } | null>(null);
   const [girando, setGirando] = useState(false);
@@ -138,7 +138,10 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
       const r = renderer.domElement.getBoundingClientRect();
       ponteiro.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ponteiro, camera);
-      const hit = ray.intersectObjects(estado.current.blocos.map((b) => b.mesh), false)[0];
+      const alvos: THREE.Object3D[] = estado.current.blocos.map((b) => b.mesh);
+      // na fachada real, as paredes escondem os apartamentos do outro lado
+      if (estado.current.casca) alvos.push(estado.current.casca);
+      const hit = ray.intersectObjects(alvos, true)[0];
       return hit ? estado.current.blocos.find((b) => b.mesh === hit.object) ?? null : null;
     };
     const mover = (ev: PointerEvent) => {
@@ -230,6 +233,7 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
         }
       });
       predio.add(casca);
+      estado.current.casca = casca;
       const geo = new THREE.BoxGeometry(1, 1, 0.08);
       const blocos: Bloco[] = [];
       const mats = new Map<string, THREE.MeshStandardMaterial>();
@@ -259,6 +263,7 @@ export default function Espelho3D({ unidades, recentes, aoSelecionar }: Props) {
     }
 
     function montarBlocos() {
+    estado.current.casca = undefined;
     const predio = new THREE.Group();
     const andares = [...new Set(unidades.map((u) => u.andar))].sort((a, b) => a - b);
     if (!andares.length) return;
