@@ -11,7 +11,8 @@ import { DadosContrato } from './DadosContrato';
 import { EnvelopeAssinatura } from './Envelope';
 import { padronizar, type DadosContrato as Dados } from './leitura';
 import { CAMPOS_EMPREENDIMENTO, COLUNAS_AREAS, type Areas } from './campos';
-import { NOME_DOCUMENTO, type Comissao, type SerieContrato, type TipoDocumento } from './gerador';
+import { NOME_DOCUMENTO, type Comissao, type DadosIntermediacao, type SerieContrato, type TipoDocumento } from './gerador';
+import { dadosIntermediacao } from './intermediacao';
 
 interface Linha {
   id: string; codigo: string; pasta_id: string; analisada_em: string | null; resumo: { total?: number } | null;
@@ -128,7 +129,9 @@ export function ListaContratos() {
 }
 
 interface Proposta {
-  id: string; codigo: string; pasta_id: string; status: string; series: SerieContrato[]; parte_sinal?: number | null; resumo: { total?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number } | null;
+  id: string; codigo: string; pasta_id: string; status: string; series: SerieContrato[]; parte_sinal?: number | null;
+  comissao_pct?: number | null; coordenacao_pct?: number | null; coordenacao_parcelas?: number | null; imobiliaria_id?: string | null; criado_por_id?: string | null;
+  resumo: { total?: number; comissao?: number; comissao_imobiliaria?: number; comissao_coordenacao?: number } | null;
   unidades: { numero: string } | null;
 }
 interface PastaC {
@@ -147,7 +150,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const [emit, setEmit] = useState<Emitido[]>([]);
   const [comissao, setComissao] = useState<ComissaoUI[]>([]);
   const [modelos, setModelos] = useState<Partial<Record<TipoDocumento, string>>>({});
-  const [escolha, setEscolha] = useState<Record<TipoDocumento, boolean>>({ quadro_resumo: true, normas: true });
+  const [escolha, setEscolha] = useState<Record<TipoDocumento, boolean>>({ intermediacao: true, quadro_resumo: true, normas: true });
+  const [intermed, setIntermed] = useState<DadosIntermediacao | null>(null);
   const [ocupado, setOcupado] = useState('');
   const [erro, setErro] = useState('');
   const [comCarta, setComCarta] = useState(true);
@@ -157,7 +161,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
   const dataContrato = dataHoje || !outraData ? hojeISO() : outraData;
 
   const carregar = useCallback(async () => {
-    const { data: p } = await supabase.from('propostas').select('id, codigo, pasta_id, status, series, resumo, parte_sinal, unidades(numero)').eq('id', id).maybeSingle();
+    const { data: p } = await supabase.from('propostas').select('id, codigo, pasta_id, status, series, resumo, parte_sinal, comissao_pct, coordenacao_pct, coordenacao_parcelas, imobiliaria_id, criado_por_id, unidades(numero)').eq('id', id).maybeSingle();
     if (!p || (p as unknown as Proposta).status !== 'aprovada') { setErro('Proposta não encontrada ou não aprovada.'); return; }
     const pr = p as unknown as Proposta;
     setProp(pr);
@@ -189,7 +193,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       || (x.cancelado_em ? 0 : (ordemDoc[x.documento] ?? 9) - (ordemDoc[y.documento] ?? 9)) || y.numero - x.numero));
     // Emissão sugere só o que ainda não foi emitido
     const ativos = new Set(((c as Emitido[]) ?? []).filter((x) => !x.cancelado_em).map((x) => x.documento));
-    if (ativos.size) { setEscolha({ quadro_resumo: !ativos.has('quadro_resumo'), normas: !ativos.has('normas') }); setComCarta(!ativos.has('carta_proposta')); }
+    if (ativos.size) { setEscolha({ intermediacao: !ativos.has('intermediacao'), quadro_resumo: !ativos.has('quadro_resumo'), normas: !ativos.has('normas') }); setComCarta(!ativos.has('carta_proposta')); }
     // padrão: imobiliária da proposta + coordenação de vendas (paga pelo comprador com o sinal; item 9.3 do Quadro Resumo)
     const coord = cm as { coordenacao_comercial: string | null; coordenacao_documento: string | null; parte_sinal: number | null } | null;
     setParteSinal(Number(pr.parte_sinal ?? coord?.parte_sinal ?? 0.7));
@@ -200,6 +204,8 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       ...(vImob ? [{ nome: pc?.imobiliarias?.nome ?? '', documento: pc?.imobiliarias?.cnpj ?? '', valor: Number(vImob), forma }] : []),
       ...(vCoord ? [{ nome: empDados['coordenacao.razao_social'] || coord?.coordenacao_comercial || 'Coordenação de vendas', documento: empDados['coordenacao.cnpj'] || coord?.coordenacao_documento || '', valor: Number(vCoord), forma }] : []),
     ]).map((c) => ({ ...c, valor: paraTxt(c.valor) })));
+    // intermediação: parcelas da comissão (da proposta aprovada), imobiliária e gestor que assina por ela
+    dadosIntermediacao(pr).then(setIntermed).catch(() => setIntermed(null));
   }, [id]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -218,7 +224,7 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
     pagamento: !!reg?.pagamento_conferido_em,
     empreendimento: camposVazios.length === 0,
   };
-  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && (escolha.quadro_resumo || escolha.normas || comCarta);
+  const podeEmitir = ok.partes && ok.unidade && ok.pagamento && (escolha.intermediacao || escolha.quadro_resumo || escolha.normas || comCarta);
 
   const salvarComissao = async (conferido: boolean) => {
     if (conferido && comissao.some((c) => !c.nome.trim() || !(doTxt(c.valor) > 0))) { avisar('Preencha nome e valor de cada beneficiário da comissão.', 'erro'); return; }
@@ -234,12 +240,14 @@ export function PaginaContrato({ id }: { id: string; perfil: Perfil }) {
       campos: emp, tipoPessoa: pasta.tipo_pessoa, empresa: d.empresa ?? null, comprador: d.comprador ?? {}, conjuge: temConj ? d.conjuge ?? null : null,
       representante2: pasta.tipo_pessoa === 'pj' ? d.representante2 ?? null : null,
       unidade: prop.unidades?.numero ?? '', areas: areas ?? null, series, comissao: reg?.comissao ?? [],
-      data: dataContrato, referencia: `${pasta.codigo} · ${prop.codigo}`, parteSinal,
+      data: dataContrato, referencia: `${pasta.codigo} · ${prop.codigo}`, parteSinal, intermediacao: intermed,
     };
   };
 
   /** Preenche o modelo em Word do documento (o enviado pelo administrador ou o padrão). */
-  const wordPreenchido = async (tipo: TipoDocumento, ctx: ReturnType<typeof contexto>) => {
+  const wordPreenchido = async (tipo: TipoDocumento, ctx: ReturnType<typeof contexto>): Promise<{ docx: Blob; vazios: string[] }> => {
+    // sem modelo próprio: o Word sai do mesmo conteúdo do PDF (com todos os quadros do modelo)
+    if (!modelos[tipo]) { const { gerarWord } = await import('./gerador'); const w = await gerarWord(tipo, ctx); return { docx: w.docx, vazios: w.faltando }; }
     const { preencherModelo, dadosParaModelo } = await import('./marcadores');
     let modelo: ArrayBuffer;
     if (modelos[tipo]) {

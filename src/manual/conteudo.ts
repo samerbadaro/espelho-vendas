@@ -48,6 +48,14 @@ export const REVISAO_MANUAL = '26/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
   {
+    data: '26/11/2026', titulo: 'Intermediação Imobiliária no contrato', papeis: ['admin', 'vendas'],
+    itens: [
+      'Em Contratos, a Intermediação Imobiliária é emitida com os demais documentos e entra no envelope logo depois da Carta Proposta.',
+      'Contratadas (imobiliária e coordenação), valores e parcelas saem da proposta aprovada; pela imobiliária assina o gestor.',
+      'O Word dos documentos emitidos agora traz todos os quadros do PDF (unidade, pagamento e comissão).',
+    ],
+  },
+  {
     data: '26/11/2026', titulo: 'Contraproposta',
     itens: [
       'Na análise, “Devolver com contraproposta” libera a grade para a equipe alterar a proposta antes de devolver.',
@@ -633,10 +641,12 @@ export const CAPITULOS: Capitulo[] = [
       {
         titulo: '4. Emissão',
         passos: [
-          'Marque o que emitir: Quadro Resumo, Normas e Carta Proposta. O sistema sugere só o que ainda não foi emitido.',
+          'Marque o que emitir: Intermediação Imobiliária, Quadro Resumo, Normas e Carta Proposta. O sistema sugere só o que ainda não foi emitido.',
+          'A Intermediação Imobiliária sai pronta: contratante(s) da pasta conferida; imobiliária (nome, CNPJ, CRECI-J) e coordenação de vendas com percentual e valor; valor total da negociação dividido em preço do imóvel + intermediação; e uma linha por parcela do sinal com a parte da imobiliária e da coordenação, tiradas da proposta aprovada. O pagamento é descrito como cobrança mensal única pela Imobitech, que distribui para cada parte.',
+          'Pela imobiliária assina sempre o gestor, nunca o corretor. Se a proposta foi feita pelo próprio gestor, é ele; senão, o gestor da imobiliária da proposta. A vendedora não assina a intermediação.',
           'Use “Pré-visualizar” para conferir antes.',
-          'Em “Data do contrato”, escolha “Hoje” ou “Outra data” e informe a data. Ela sai no local e data de todos os documentos (Quadro Resumo, Normas e Carta Proposta).',
-          'Clique em “Emitir documentos” e confira a data na confirmação. Cada documento ganha um número e fica aguardando validação. A Carta Proposta sai em PDF e em Word.',
+          'Em “Data do contrato”, escolha “Hoje” ou “Outra data” e informe a data. Ela sai no local e data de todos os documentos (Intermediação, Quadro Resumo, Normas e Carta Proposta).',
+          'Clique em “Emitir documentos” e confira a data na confirmação. Cada documento ganha um número e fica aguardando validação. Todos saem em PDF e em Word, com os mesmos quadros.',
           'Precisa ajustar a formatação? Baixe o Word, edite e use “Enviar ajuste”. A versão sobe e a validação volta para pendente.',
           'Confira e clique em “Validar” em cada documento.',
         ],
@@ -644,9 +654,9 @@ export const CAPITULOS: Capitulo[] = [
       {
         titulo: '5. Envelope de assinatura (D4Sign)',
         passos: [
-          'Com todos os documentos validados, clique em “Montar envelope na D4Sign”. Os documentos marcados viram um PDF só, nesta ordem: Carta Proposta, Contrato de Intermediação (quando houver), Quadro Resumo, Normas Contratuais e os demais documentos fixos. Na D4Sign o arquivo aparece como “unidade - empreendimento - cliente” (ex.: 206 - Duo Haus - Fulano de Tal).',
+          'Com todos os documentos validados, clique em “Montar envelope na D4Sign”. Os documentos marcados viram um PDF só, nesta ordem: Carta Proposta, Intermediação Imobiliária, Quadro Resumo, Normas Contratuais e os demais documentos fixos. Na D4Sign o arquivo aparece como “unidade - empreendimento - cliente” (ex.: 206 - Duo Haus - Fulano de Tal).',
           'Confira a prévia (PDF do envelope ou o pacote completo em ZIP). Se algo estiver errado, use “Descartar e ajustar”.',
-          'Revise os assinantes e a ordem: cliente e cônjuge, imobiliária, incorporadora e testemunhas. Cada um pode receber por e-mail ou WhatsApp.',
+          'Revise os assinantes e a ordem: cliente e cônjuge, imobiliária (o gestor), coordenação de vendas, incorporadora e testemunhas. Cada um pode receber por e-mail ou WhatsApp.',
           'A assinatura de cada pessoa vai para a linha com o nome dela nos documentos gerados pelo sistema. Por isso, o nome do assinante tem que ser o mesmo que aparece embaixo da linha. Quem não tiver linha com o nome assina na folha de assinaturas da D4Sign.',
           'Clique em “Enviar para assinatura”. A unidade passa sozinha para “Contrato em assinatura” no espelho e a lista de Contratos mostra “Contrato enviado”. Acompanhe quem já assinou e use “Reenviar” para quem está pendente.',
           'Quando todos assinarem, a unidade vira “Vendida” no espelho e o contrato aparece como “Contrato assinado”. Baixe o pacote assinado (ZIP).',

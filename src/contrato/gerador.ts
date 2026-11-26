@@ -29,9 +29,37 @@ export interface ContextoContrato {
   referencia: string;  // aparece no rodapé
   /** parte de cada parcela do sinal que paga a comissão (ex.: 0,7); o contrato mostra o sinal líquido */
   parteSinal?: number;
+  /** dados do instrumento de intermediação (contratadas e parcelas da comissão, da proposta aprovada) */
+  intermediacao?: DadosIntermediacao | null;
 }
-export type TipoDocumento = 'quadro_resumo' | 'normas';
-export const NOME_DOCUMENTO: Record<TipoDocumento, string> = { quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais' };
+export interface DadosIntermediacao {
+  imobiliaria: { nome: string; cnpj: string; creci: string };
+  gestor: { nome: string; email: string };
+  /** parcelas do sinal que pagam a comissão, com a parte de cada contratada */
+  linhas: { data: string; imobiliaria: number; coordenacao: number }[];
+  totalNegociacao: number;
+}
+export type TipoDocumento = 'intermediacao' | 'quadro_resumo' | 'normas';
+export const NOME_DOCUMENTO: Record<TipoDocumento, string> = { intermediacao: 'Intermediação Imobiliária', quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais' };
+/** Documentos que aceitam modelo próprio em Word (a intermediação sai sempre do texto do sistema). */
+export const DOCUMENTOS_COM_MODELO: TipoDocumento[] = ['quadro_resumo', 'normas'];
+
+/** Valores que o texto da intermediação usa como {{campo}}. */
+export function camposIntermediacao(d: DadosIntermediacao | null | undefined, unidade: string): Record<string, string> {
+  const base: Record<string, string> = { 'unidade.numero': unidade };
+  if (!d) return base;
+  const imob = d.linhas.reduce((t, l) => t + l.imobiliaria, 0), coord = d.linhas.reduce((t, l) => t + l.coordenacao, 0);
+  const total = Math.round((imob + coord) * 100) / 100;
+  const pct = d.totalNegociacao > 0 ? (total / d.totalNegociacao) * 100 : 0;
+  const v = (x: number) => (x > 0 ? valorExt(x) : '');
+  return {
+    ...base,
+    'negociacao.total': v(d.totalNegociacao), 'negociacao.preco_imovel': v(Math.round((d.totalNegociacao - total) * 100) / 100),
+    'intermediacao.total': v(total), 'intermediacao.pct': total > 0 ? `${fmtNum(pct, 2)}%` : '',
+    'intermediacao.imobiliaria': d.imobiliaria.nome, 'intermediacao.imobiliaria_cnpj': d.imobiliaria.cnpj ? formatarCNPJ(d.imobiliaria.cnpj) : '',
+    'intermediacao.imobiliaria_creci': d.imobiliaria.creci, 'intermediacao.gestor_nome': d.gestor.nome, 'intermediacao.gestor_email': d.gestor.email,
+  };
+}
 
 // ---------- formatação ----------
 export const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -421,7 +449,63 @@ function blocoAceiteCompradores(e: Escritor) {
   e.assinaturas(nomesCompradores(e.ctx));
 }
 
+// ---------- blocos do instrumento de intermediação ----------
+
+const somaInt = (e: Escritor) => {
+  const ls = e.ctx.intermediacao?.linhas ?? [];
+  const imob = ls.reduce((t, l) => t + l.imobiliaria, 0), coord = ls.reduce((t, l) => t + l.coordenacao, 0);
+  return { ls, imob, coord, total: imob + coord, neg: e.ctx.intermediacao?.totalNegociacao ?? 0 };
+};
+const pctDe = (v: number, total: number) => (total > 0 ? `${fmtNum((v / total) * 100, 2)}%` : '-');
+
+/** Quadro das contratadas: imobiliária e coordenação, com CNPJ, CRECI, percentual e valor. */
+function blocoContratadas(e: Escritor) {
+  const { imob, coord, total, neg } = somaInt(e);
+  e.autoTabela({
+    head: [['Contratada', 'CNPJ', 'CRECI', 'Função', '%', 'Valor']],
+    body: [
+      [up(e.campo('{{intermediacao.imobiliaria}}')), e.campo('{{intermediacao.imobiliaria_cnpj}}'), e.campo('{{intermediacao.imobiliaria_creci}}'), 'Intermediação imobiliária', pctDe(imob, neg), real(imob)],
+      [up(e.campo('{{coordenacao.razao_social}}')), e.campo('{{coordenacao.cnpj}}'), e.campo('{{coordenacao.creci}}'), 'Coordenação de vendas', pctDe(coord, neg), real(coord)],
+      [{ content: 'TOTAL', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: pctDe(total, neg), styles: { fontStyle: 'bold' } }, { content: real(total), styles: { fontStyle: 'bold' } }],
+    ],
+    columnStyles: { 4: { halign: 'right', cellWidth: 16 }, 5: { halign: 'right', cellWidth: 26 } },
+  });
+}
+
+/** Parcelas da remuneração: uma linha por parcela do sinal, com a parte de cada contratada. */
+function blocoParcelasIntermediacao(e: Escritor) {
+  const { ls, imob, coord, total } = somaInt(e);
+  const ord = (i: number) => `${i + 1}ª`;
+  e.autoTabela({
+    head: [['Parcela', 'Vencimento', 'Imobiliária', 'Coordenação', 'Total da parcela']],
+    body: [
+      ...(ls.length ? ls.map((l, i): RowInput => [ord(i), data(l.data), real(l.imobiliaria), real(l.coordenacao), real(l.imobiliaria + l.coordenacao)])
+        : [['-', '-', '-', '-', '-'] as RowInput]),
+      [{ content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold' } }, { content: real(imob), styles: { fontStyle: 'bold' } }, { content: real(coord), styles: { fontStyle: 'bold' } }, { content: real(total), styles: { fontStyle: 'bold' } }],
+    ],
+    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+  });
+}
+
+/** Assinaturas: contratante(s), imobiliária (pelo gestor), coordenação e testemunhas. A vendedora não assina. */
+function blocoAssinaturasIntermediacao(e: Escritor) {
+  e.espaco(4);
+  e.para('CONTRATANTE(S):', { negrito: true, secao: true });
+  e.assinaturas(nomesCompradores(e.ctx));
+  e.para('CONTRATADAS:', { negrito: true, secao: true });
+  e.assinaturas([
+    [up(e.campo('{{intermediacao.imobiliaria}}')), `p.p. ${up(e.campo('{{intermediacao.gestor_nome}}'))}`],
+    [up(e.campo('{{coordenacao.razao_social}}')), `p.p. ${up(e.campo('{{coordenacao.signatario_nome}}'))}`],
+  ]);
+  e.para('TESTEMUNHAS', { negrito: true, secao: true });
+  e.assinaturas([
+    [`NOME: ${up(e.campo('{{testemunha1.nome}}'))}`, `CPF: ${e.campo('{{testemunha1.cpf}}')}`],
+    [`NOME: ${up(e.campo('{{testemunha2.nome}}'))}`, `CPF: ${e.campo('{{testemunha2.cpf}}')}`],
+  ]);
+}
+
 const BLOCOS: Record<string, (e: Escritor) => void> = {
+  contratadas_intermediacao: blocoContratadas, parcelas_intermediacao: blocoParcelasIntermediacao, assinaturas_intermediacao: blocoAssinaturasIntermediacao,
   unidade_quadro: blocoUnidadeQuadro, pagamento_quadro: blocoPagamentoQuadro, comissao_quadro: blocoComissaoQuadro,
   aceite_compradores: blocoAceiteCompradores,
   partes: blocoPartes, quadro_unidade: blocoUnidade, pagamento: blocoPagamento, tabela_comissao: blocoComissao,
@@ -432,8 +516,9 @@ const BLOCOS: Record<string, (e: Escritor) => void> = {
 async function montar(tipo: TipoDocumento, ctx: ContextoContrato) {
   const modelo = tipo === 'quadro_resumo'
     ? (await import('./modelos/quadroResumo')).QUADRO_RESUMO
+    : tipo === 'intermediacao' ? (await import('./modelos/intermediacao')).INTERMEDIACAO
     : (await import('./modelos/normas')).NORMAS;
-  const e = new Escritor(ctx);
+  const e = new Escritor(tipo === 'intermediacao' ? { ...ctx, campos: { ...ctx.campos, ...camposIntermediacao(ctx.intermediacao, ctx.unidade) } } : ctx);
   for (const bruto of modelo.split(/\n\s*\n/)) {
     const p = bruto.trim();
     if (!p) continue;

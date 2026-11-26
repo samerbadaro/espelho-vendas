@@ -6,7 +6,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { supabase, formatarDataHora } from '../dados';
 import { useDialogos } from '../ui';
 import { CAMPOS_EMPREENDIMENTO, COLUNAS_AREAS, DADOS_EXEMPLO, type Areas } from './campos';
-import { NOME_DOCUMENTO, type TipoDocumento } from './gerador';
+import { DOCUMENTOS_COM_MODELO, NOME_DOCUMENTO, type TipoDocumento } from './gerador';
 import { MARCADORES, conferirModelo, contextoExemplo, dadosParaModelo } from './marcadores';
 
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -285,7 +285,7 @@ function ModelosContrato() {
           <p className="sub">Baixe o modelo, edite no Word (texto, formatação, logo) mantendo os marcadores entre chaves, como {'{comprador.nome}'}, e envie de volta.</p>
         </div>
       </div>
-      {(Object.keys(NOME_DOCUMENTO) as TipoDocumento[]).map((t) => {
+      {DOCUMENTOS_COM_MODELO.map((t) => {
         const m = ativos[t];
         return (
           <div key={t} className="mc-linha">

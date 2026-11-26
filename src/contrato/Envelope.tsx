@@ -1,6 +1,7 @@
 // Envelope único de assinatura da pasta (D4Sign): um PDF só, na ordem Carta Proposta,
 // Contrato de Intermediação, Quadro Resumo, Normas e documentos fixos. Montar → conferir prévia →
 // assinantes e ordem → enviar → acompanhar → pacote assinado.
+import { gestorDaProposta } from './intermediacao';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2, Clock, Download, Eye, FileArchive, Package, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { supabase, formatarDataHora } from '../dados';
@@ -29,7 +30,7 @@ const SITUACAO: Record<string, [string, string]> = {
   assinado: ['Assinado por todos', 'sp-aprovada'], cancelado: ['Cancelado', 'sp-pendente_correcao'],
 };
 const ORDEM_DOC: Record<string, number> = { carta_proposta: 0, intermediacao: 1, quadro_resumo: 2, normas: 3 };
-const NOME_ESPERADO: Record<string, string> = { quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais', carta_proposta: 'Carta Proposta' };
+const NOME_ESPERADO: Record<string, string> = { carta_proposta: 'Carta Proposta', intermediacao: 'Intermediação Imobiliária', quadro_resumo: 'Quadro Resumo', normas: 'Normas Contratuais' };
 
 export function EnvelopeAssinatura({ pastaId, propostaId, documentos, dados, temConjuge, pj, emp, imobiliariaId, aoMudar }: {
   pastaId: string; propostaId: string; documentos: DocEmitido[]; dados: Dados; temConjuge: boolean; pj: boolean; emp: Record<string, string>; imobiliariaId: string | null; aoMudar: () => void;
@@ -74,9 +75,11 @@ export function EnvelopeAssinatura({ pastaId, propostaId, documentos, dados, tem
     const c = dados.comprador ?? {}, j = dados.conjuge ?? {};
     type Gestor = { nome: string | null; email: string };
     let gestor: Gestor | null = null;
-    if (imobiliariaId) {
-      const { data } = await supabase.from('perfis').select('nome, email').eq('imobiliaria_id', imobiliariaId).eq('papel', 'imobiliaria').order('email').limit(1).maybeSingle();
-      gestor = (data as Gestor | null) ?? null;
+    if (imobiliariaId || propostaId) {
+      // sempre o gestor da imobiliária (o próprio, se foi ele quem fez a proposta), nunca o corretor
+      const { data: pr } = propostaId ? await supabase.from('propostas').select('criado_por_id, imobiliaria_id').eq('id', propostaId).maybeSingle() : { data: null };
+      const p0 = pr as { criado_por_id: string | null; imobiliaria_id: string | null } | null;
+      gestor = await gestorDaProposta({ criado_por_id: p0?.criado_por_id, imobiliaria_id: p0?.imobiliaria_id ?? imobiliariaId });
     }
     const tel = (t?: string) => (t ? formatarTelefone(t) : '');
     setLista(([
@@ -89,7 +92,7 @@ export function EnvelopeAssinatura({ pastaId, propostaId, documentos, dados, tem
       { ordem: 5, papel: 'Testemunha', nome: emp['testemunha1.nome'] ?? '', email: emp['testemunha1.email'] ?? '', whatsapp: '', canal: 'email', testemunha: true },
       { ordem: 6, papel: 'Testemunha', nome: emp['testemunha2.nome'] ?? '', email: emp['testemunha2.email'] ?? '', whatsapp: '', canal: 'email', testemunha: true },
     ] as Assinante[]).map((a, i) => ({ ...a, ordem: i + 1 })));
-  }, [dados, temConjuge, pj, emp, imobiliariaId]);
+  }, [dados, temConjuge, pj, emp, imobiliariaId, propostaId]);
   // sugere uma vez por envelope montado; depois, o que a pessoa digitar não é sobrescrito
   const sugeridoPara = useRef<string | null>(null);
   useEffect(() => {
