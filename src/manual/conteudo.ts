@@ -55,7 +55,7 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
       'A grade fica em ordem de data, com o financiamento sempre por último.',
       'Erro quando a série tem mais parcelas do que cabem até a entrega.',
       'Funil: a coluna da proposta aprovada passa a se chamar “Proposta aprovada”.',
-      'Parâmetros da proposta: o administrador edita as tabelas de venda (séries, percentuais e início) e os meses da tabela e da entrega.',
+      'Parâmetros da proposta: o administrador edita as tabelas de venda (séries, percentuais e início) e os meses da tabela e da entrega, e baixa a tabela de vendas em PDF.',
       'Análise: se a documentação da pasta não estiver aprovada, o quadro avisa e o botão “Aprovar” fica desligado até a pasta ser aprovada.',
     ],
   },
@@ -556,6 +556,7 @@ export const CAPITULOS: Capitulo[] = [
         passos: [
           'Em “Tabelas de venda” (no fim de Parâmetros da proposta), ajuste o mês da tabela e o mês da entrega e clique em “Salvar meses”.',
           'Escolha a tabela (TABELA 1, TABELA 2) e edite cada série: nome, periodicidade, número de parcelas, % do preço, a partir de quando (tabela ou entrega) e quantos meses depois (use número negativo para antes da entrega; ex.: Única 12 meses antes = entrega, −12). As colunas “1ª parcela” e “Última” mostram o mês de cada uma.',
+          'Para tirar a tabela em PDF, clique em “Baixar tabela de vendas (PDF)” (marque “só disponíveis” para deixar de fora as unidades já negociadas). Sai uma seção por tabela, com preço total e o valor de cada parcela por unidade.',
           'Os percentuais precisam somar 100%, e só as parcelas do financiamento podem passar da entrega. Clique em “Salvar TABELA …”. A mudança vale para as próximas propostas abertas e para o PV calculado no envio.',
           'Em Propostas, clique em “Parâmetros da proposta”.',
           'Dias de vencimento: marque os dias do mês permitidos nas parcelas (o ato, na data da proposta, fica de fora). Esses dias aparecem como opção em “Vencimento” no editor.',

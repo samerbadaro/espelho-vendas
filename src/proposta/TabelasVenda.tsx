@@ -20,6 +20,14 @@ export function TabelasVenda() {
   const [todas, setTodas] = useState<Record<string, Linha[]>>({});
   const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [soDisp, setSoDisp] = useState(true);
+  const [gerando, setGerando] = useState(false);
+  const pdf = async () => {
+    setGerando(true); setMsg(null);
+    try { const { baixarTabelaVendas } = await import('./tabelaPdf'); await baixarTabelaVendas({ soDisponiveis: soDisp }); }
+    catch (e) { setMsg({ ok: false, t: `Não foi possível gerar o PDF. ${(e as Error).message}` }); }
+    finally { setGerando(false); }
+  };
 
   const carregar = async () => {
     const [{ data: c }, { data: ts }, { data: ss }] = await Promise.all([
@@ -86,7 +94,12 @@ export function TabelasVenda() {
   if (!tabelas.length) return <p className="vazio">Carregando tabelas…</p>;
   return (
     <div className="tabelas-venda">
-      <h4>Tabelas de venda</h4>
+      <div className="titulo-linha"><h4>Tabelas de venda</h4>
+        <span className="botoes-linha">
+          <label className="param-check"><input type="checkbox" checked={soDisp} onChange={(e) => setSoDisp(e.target.checked)} /> só disponíveis</label>
+          <button className="botao" disabled={gerando} onClick={pdf}>{gerando ? 'Gerando…' : 'Baixar tabela de vendas (PDF)'}</button>
+        </span>
+      </div>
       <p className="dica">As séries começam num número de meses a partir do mês da tabela (venda) ou da entrega. Ex.: “Única” 12 meses antes da entrega = base “entrega” e meses −12.</p>
       <div className="grade-campos">
         <label>Mês da tabela<input type="month" value={mesTabela} onChange={(e) => setMesTabela(e.target.value)} /></label>
