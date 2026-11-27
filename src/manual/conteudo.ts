@@ -55,6 +55,7 @@ export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?
       'A grade fica em ordem de data, com o financiamento sempre por último.',
       'Erro quando a série tem mais parcelas do que cabem até a entrega.',
       'Funil: a coluna da proposta aprovada passa a se chamar “Proposta aprovada”.',
+      'Análise: se a documentação da pasta não estiver aprovada, o quadro avisa e o botão “Aprovar” fica desligado até a pasta ser aprovada.',
     ],
   },
   {

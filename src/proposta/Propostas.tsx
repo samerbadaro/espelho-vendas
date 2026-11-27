@@ -19,6 +19,7 @@ const CLASSE: Record<StatusProposta, string> = {
 };
 const Selo = ({ s }: { s: StatusProposta }) => <span className={`selo ${CLASSE[s]}`}>{rotuloProposta(s)}</span>;
 
+const ROTULO_PASTA: Record<string, string> = { incompleta: 'incompleta', pronta: 'pronta para envio', aguardando_analise: 'aguardando análise', em_analise: 'em análise', pendente_correcao: 'com pendência de correção', aprovada: 'aprovada', devolucao_pix: 'em devolução de Pix', cancelada: 'cancelada' };
 interface PastaResumo { id: string; codigo: string; comprador_nome: string; status: string; imobiliaria_id: string }
 
 // =====================================================================
@@ -222,6 +223,8 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   if (!ctx || !alvo) return <section className="secao"><p className="vazio">Carregando…</p></section>;
 
   const pasta = pastas.find((p) => p.id === pastaId);
+  /** a proposta só é aprovada com a documentação da pasta aprovada */
+  const pastaPendente = !pastaId || (!!pasta && pasta.status !== 'aprovada');
   const temErro = estado?.resultado.avisos.some((a) => a.nivel === 'erro') ?? true;
   const temPermuta = estado?.series.some((s) => s.periodicidade === 'Permuta') ?? false;
   const pvPct = estado ? Math.round((estado.resultado.proposta.vpl / estado.resultado.tabela.vpl) * 10000) / 100 : 0;
@@ -301,10 +304,11 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     if (faltaPermuta) { avisar('Descreva a permuta nas observações antes de enviar.', 'erro'); return; }
     if (temErro) { avisar('Corrija os erros da grade (vencimentos, parcelas) antes de enviar.', 'erro'); return; }
     if (!pastaId) { avisar('Vincule a pasta do comprador antes de enviar.', 'erro'); return; }
+    const avisoPasta = pasta && pasta.status !== 'aprovada' ? ` Atenção: a documentação da pasta ${pasta.codigo} está ${ROTULO_PASTA[pasta.status] ?? 'não aprovada'}; a proposta só poderá ser aprovada depois que a pasta for aprovada.` : '';
     const deQuem = ehGrupo ? `as ${unidadesSel.length} propostas serão aprovadas juntas` : 'a proposta será aprovada na hora';
     const textoAlcada = alcada === 'automatica' ? `PV dentro da tabela e sinal cobrindo a comissão: ${deQuem} e ${ehGrupo ? 'as unidades irão' : 'a unidade irá'} para "Proposta recebida".`
       : `PV de ${pvPct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%${ehGrupo ? ' no conjunto' : ''}: a aprovação fica com ${alcada === 'vendas' ? 'a Sec. Vendas' : 'o administrador'}.`;
-    if (!(await confirmar({ titulo: ehGrupo ? 'Enviar a proposta conjunta?' : 'Enviar proposta?', texto: `${textoAlcada} Depois de enviada, ela só volta a ser editada se for devolvida para ajuste.`, confirmar: 'Enviar proposta' }))) return;
+    if (!(await confirmar({ titulo: ehGrupo ? 'Enviar a proposta conjunta?' : 'Enviar proposta?', texto: `${textoAlcada} Depois de enviada, ela só volta a ser editada se for devolvida para ajuste.${avisoPasta}`, confirmar: 'Enviar proposta' }))) return;
     const s = await salvar();
     if (!s) return;
     if (s.grupo) {
@@ -476,9 +480,14 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
       {equipe && proposta && propostaVista?.status === 'enviada' && (conjunta || !grupoId) && !modoContra && (
         <div className="cartao analise-prop">
           <strong>{grupoId ? 'Análise da proposta conjunta (vale para todas as unidades)' : 'Análise da equipe'}</strong>
+          {pastaPendente && (
+            <p className="alerta">{pasta
+              ? <>A pasta {pasta.codigo} ({pasta.comprador_nome}) está com a documentação <strong>{ROTULO_PASTA[pasta.status] ?? 'não aprovada'}</strong>.</>
+              : <>A proposta não tem pasta do comprador vinculada.</>}{' '}A proposta só pode ser aprovada depois que a documentação for aprovada em Pastas. Até lá, ela continua em análise e a unidade não muda no espelho.</p>
+          )}
           {propostaVista.alcada === 'admin' && perfil.papel !== 'admin' && <span className="dica">PV de {(propostaVista.resumo.pv_pct_grupo ?? propostaVista.resumo.pv_pct)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%: abaixo da alçada da Sec. Vendas, só o administrador aprova.</span>}
           <div className="botoes-linha">
-            {(propostaVista.alcada !== 'admin' || perfil.papel === 'admin') && <button className="botao ok" onClick={() => analisar('aprovada')} disabled={salvando}>Aprovar</button>}
+            {(propostaVista.alcada !== 'admin' || perfil.papel === 'admin') && <button className="botao ok" onClick={() => analisar('aprovada')} disabled={salvando || pastaPendente} title={pastaPendente ? 'Aprove a documentação da pasta antes' : undefined}>Aprovar</button>}
             <button className="botao" onClick={() => { setModoContra(true); setVerOriginal(false); setAnalise(null); }} title="Altere a grade e devolva ao corretor com a sua contraproposta (ou só com o motivo, sem alterar)">Devolver com contraproposta</button>
             <button className="botao" onClick={() => setAnalise('recusada')}>Recusar</button>
           </div>
