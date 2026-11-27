@@ -13,6 +13,7 @@ import {
   aplicarModelo, calcular, distribuir, fmtData, fmtMes, fmtNum, fmtPct, fmtReal, hojeISO, mesmasSeries, pesosPorPreco, precoUnidade, rotuloPeriodicidade, somarSeries, unidadeConjunta,
   type ConfigEmpreendimento, type Resultado, type Serie, type Unidade,
 } from './motor';
+import { TabelasVenda } from './TabelasVenda';
 
 const CLASSE: Record<StatusProposta, string> = {
   rascunho: 'spr-rascunho', enviada: 'spr-enviada', devolvida: 'spr-devolvida', aprovada: 'spr-aprovada', recusada: 'spr-recusada', cancelada: 'spr-cancelada',
@@ -755,6 +756,7 @@ function ParametrosProposta({ aoFechar }: { aoFechar: () => void }) {
           </div>
           <div className="botoes"><button className="botao principal" disabled={salvando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar parâmetros'}</button></div>
           {msg && <p className={msg.ok ? 'ok' : 'erro'}>{msg.t}</p>}
+          <TabelasVenda />
         </>
       )}
     </div>

@@ -197,3 +197,10 @@ select.celula { cursor: pointer; }
 .prop-nome > span { font-size: 0.75rem; color: var(--tinta-2); }
 .prop-nome input { font: inherit; padding: 8px 10px; border: 1px solid var(--borda-forte); border-radius: var(--raio); background: var(--superficie); }
 .prop-nome-lista { color: var(--tinta-2); }
+
+/* Tabelas de venda (parâmetros) */
+.tabelas-venda { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--borda); display: grid; gap: 10px; }
+.tabelas-venda h4 { margin: 0; }
+.tabela-series input, .tabela-series select { font: inherit; width: 100%; min-width: 92px; padding: 4px 6px; border: 1px solid var(--borda-forte); border-radius: var(--raio); background: var(--superficie); }
+.tabela-series input.dir { text-align: right; }
+.tabela-series td { padding: 6px 8px; }
