@@ -44,9 +44,19 @@ const PARCEIROS: PapelManual[] = ['imobiliaria', 'corretor'];
 const TODOS: PapelManual[] = ['admin', 'vendas', 'imobiliaria', 'corretor'];
 
 /** Atualizado a cada entrega (data da última revisão do manual). */
-export const REVISAO_MANUAL = '26/11/2026';
+export const REVISAO_MANUAL = '27/11/2026';
 
 export const NOVIDADES: { data: string; titulo: string; itens: string[]; papeis?: PapelManual[] }[] = [
+  {
+    data: '27/11/2026', titulo: 'Ajustes na proposta',
+    itens: [
+      'Proposta conjunta com unidades de tabelas diferentes: as séries iguais agora são somadas (antes apareciam repetidas).',
+      'Campo “Nome da proposta”, que aparece na lista e entra na busca.',
+      'A grade fica em ordem de data, com o financiamento sempre por último.',
+      'Erro quando a série tem mais parcelas do que cabem até a entrega.',
+      'Funil: a coluna da proposta aprovada passa a se chamar “Proposta aprovada”.',
+    ],
+  },
   {
     data: '26/11/2026', titulo: 'Intermediação Imobiliária no contrato', papeis: ['admin', 'vendas'],
     itens: [
@@ -453,7 +463,7 @@ export const CAPITULOS: Capitulo[] = [
         itens: [
           'Pasta aprovada: documentação aprovada, ainda sem unidade.',
           'Reserva: unidade reservada (espelho: Reservada).',
-          'Contrato em confecção: proposta aprovada, contrato sendo preparado (espelho: Proposta recebida).',
+          'Proposta aprovada: proposta aprovada, contrato sendo preparado (espelho: Proposta recebida).',
           'Enviado para assinatura (espelho: Contrato em assinatura).',
           'Assinado / Vendido (espelho: Vendida).',
         ],
@@ -489,7 +499,9 @@ export const CAPITULOS: Capitulo[] = [
         titulo: 'Montar uma proposta', papeis: TODOS,
         passos: [
           'Em Propostas, clique em “Nova proposta” e escolha a unidade.',
-          'O fluxo da tabela já vem montado. Use “Modelo da tabela”, “Mensais até a entrega”, “Semestrais”, “Anuais” ou “Até as chaves” para trocar o modelo, ou edite as séries (quantidade, periodicidade, 1º vencimento e valor).',
+          'Dê um nome à proposta no campo “Nome da proposta” (ex.: “Samer – Lote do Parque do Cerrado”). Ele aparece na lista e entra na busca, para achar rascunhos e saber de qual tratativa é.',
+          'O fluxo da tabela já vem montado. Use “Modelo da tabela”, “Mensais até a entrega”, “Semestrais”, “Anuais” ou “Até as chaves” para trocar o modelo, ou edite as séries (quantidade, periodicidade, 1º vencimento e valor). A grade se reorganiza sozinha em ordem de data (ao sair do campo de data, ao trocar a periodicidade e ao incluir série), com o financiamento sempre por último.',
+          'Toda parcela antes das chaves precisa vencer até o mês da entrega. Se a série tiver parcelas demais, a linha fica vermelha e o sistema diz quantas cabem (ex.: “Cabem 7 parcelas semestrais até a entrega (out/2030); a série tem 8”). Com erro, a proposta não pode ser enviada.',
           'Em “Ajustar para”, escolha “Zerar PV” (o valor presente fica igual ao da tabela) ou “Zerar nominal” (o valor total fica igual ao da tabela; o PV pode ficar abaixo). Depois clique em “⟲ ajustar” na série que vai absorver a diferença. O preço nunca passa do preço de tabela: se zerar o PV exigir isso, a série para no preço de tabela e o sistema avisa que, com essa condição, não dá para chegar ao PV 0 (antecipe parcelas para melhorar). Se por qualquer motivo o preço passar da tabela (por exemplo, depois de “Aumentar o ato”), a proposta mostra um erro e não pode ser enviada até voltar ao preço de tabela.',
           'Acompanhe o comparativo tabela × proposta: valor total, PV (valor presente), preço do m² e captação até as chaves, cada um com a variação em % e a diferença em R$. Logo abaixo aparecem o desconto nominal e o desconto em valor presente, em R$.',
           'A tabela “Captação acumulada” mostra o % recebido em cada marco (3, 6, 12... meses e até a entrega).',
@@ -535,7 +547,7 @@ export const CAPITULOS: Capitulo[] = [
       },
       {
         titulo: 'Buscar propostas', papeis: TODOS,
-        texto: 'Na lista de Propostas, use o campo de busca para encontrar por unidade, nome do cliente, imobiliária, corretor ou código. A busca não diferencia acentos nem maiúsculas e funciona junto com o filtro de status.',
+        texto: 'Na lista de Propostas, use o campo de busca para encontrar pelo nome da proposta, unidade, nome do cliente, imobiliária, corretor ou código. A busca não diferencia acentos nem maiúsculas e funciona junto com o filtro de status.',
       },
       {
         titulo: 'Parâmetros da proposta', papeis: ['admin'],

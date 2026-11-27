@@ -12,7 +12,7 @@ const ESPELHO: Record<Etapa, string> = {
 const ETAPAS: { valor: Etapa; rotulo: string }[] = [
   { valor: 'aprovada', rotulo: 'Pasta aprovada' },
   { valor: 'reserva', rotulo: 'Reserva' },
-  { valor: 'contrato_confeccao', rotulo: 'Contrato em confecção' },
+  { valor: 'contrato_confeccao', rotulo: 'Proposta aprovada' },
   { valor: 'enviado_assinatura', rotulo: 'Enviado para assinatura' },
   { valor: 'assinado', rotulo: 'Assinado / Vendido' },
 ];

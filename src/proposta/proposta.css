@@ -191,3 +191,9 @@ select.celula { cursor: pointer; }
 .series-comp li { margin: 2px 0; font-variant-numeric: tabular-nums; }
 .series-comp li.saiu { text-decoration: line-through; color: var(--tinta-2); }
 .series-comp li.entrou { font-weight: 700; }
+
+/* Nome da proposta */
+.prop-nome { display: grid; gap: 4px; max-width: 560px; margin: 0 0 14px; }
+.prop-nome > span { font-size: 0.75rem; color: var(--tinta-2); }
+.prop-nome input { font: inherit; padding: 8px 10px; border: 1px solid var(--borda-forte); border-radius: var(--raio); background: var(--superficie); }
+.prop-nome-lista { color: var(--tinta-2); }

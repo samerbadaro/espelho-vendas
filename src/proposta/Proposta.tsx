@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  aplicarModelo, calcular, dataDaParcela, fmtData, fmtMes, fmtNum, fmtPct, fmtReal, mesesEntre, novoId,
+  aplicarModelo, calcular, dataDaParcela, fmtData, fmtMes, fmtNum, fmtPct, fmtReal, mesesEntre, novoId, ordenarSeries,
   PERIODICIDADES, TOLERANCIA_PV, aumentarSinal, redistribuir, somarMeses, type ConfigEmpreendimento, type Modelo, type Periodicidade, type Resultado,
   type Serie, type Unidade,
 } from './motor';
@@ -51,7 +51,7 @@ export function EditorProposta({
   const preChavesTabela = CFG.tabelas[unidade.tabela].filter((s) => s.periodicidade !== 'Financiamento').reduce((s, x) => s + x.percentual, 0);
   const [dia, setDia] = useState(dias.includes(10) ? 10 : dias[0] ?? 10);
   const [preChaves, setPreChaves] = useState<number | null>(null); // null = o da tabela
-  const [series, setSeries] = useState<Serie[]>(() => seriesIniciais ?? aplicarModelo(CFG, unidade, 'tabela', { dia, hoje }));
+  const [series, setSeries] = useState<Serie[]>(() => ordenarSeries(seriesIniciais ?? aplicarModelo(CFG, unidade, 'tabela', { dia, hoje })));
   const [comissaoPct, setComissaoPct] = useState(comissaoInicial ?? CFG.comissao.percentual);
   const [parteSinal, setParteSinal] = useState(parteInicial ?? CFG.comissao.parteDoSinal);
   // coordenação de vendas: percentual fixo do parâmetro (o da proposta salva, se houver); parcelas de 1 a 3 (exceção por proposta)
@@ -77,10 +77,14 @@ export function EditorProposta({
   };
   const mudar = (id: string, campo: Partial<Serie>) => setSeries((l) => l.map((s) => (s.id === id ? { ...s, ...campo } : s)));
   const remover = (id: string) => setSeries((l) => l.filter((s) => s.id !== id));
+  /** Reordena por data (financiamento sempre por último): ao sair do campo de data, ao trocar a periodicidade e ao incluir. */
+  const ordenar = () => setSeries((l) => { const o = ordenarSeries(l); return o.every((x, i) => x === l[i]) ? l : o; });
   const adicionar = () => {
-    const ultima = series[series.length - 1];
+    // a nova série entra depois da última parcela antes das chaves (não depois do financiamento)
+    const antes = series.filter((x) => x.periodicidade !== 'Financiamento');
+    const ultima = antes[antes.length - 1];
     const venc = ultima ? dataDaParcela(ultima, ultima.qtd) : hoje;
-    setSeries((l) => [...l, { id: novoId(), qtd: 1, periodicidade: 'Mensais', vencimento: venc < dataMinima ? dataMinima : venc, valor: 0 }]);
+    setSeries((l) => ordenarSeries([...l, { id: novoId(), qtd: 1, periodicidade: 'Mensais', vencimento: venc < dataMinima ? dataMinima : venc, valor: 0 }]));
   };
   const pvZero = (id: string) => {
     const res = redistribuir(CFG, unidade, series, id, meta);
@@ -166,11 +170,11 @@ export function EditorProposta({
                       <>
                         <td className="estreita"><CelulaNumero rotulo="Número de parcelas" valor={s.qtd} casas={0} aoMudar={(n) => mudar(s.id, { qtd: Math.max(1, Math.round(n)) })} /></td>
                         <td>
-                          <select className="celula" value={s.periodicidade} onChange={(e) => mudar(s.id, { periodicidade: e.target.value as Periodicidade })}>
+                          <select className="celula" value={s.periodicidade} onChange={(e) => { mudar(s.id, { periodicidade: e.target.value as Periodicidade }); ordenar(); }}>
                             {PERIODICIDADES.map((p) => <option key={p.valor} value={p.valor}>{p.rotulo}</option>)}
                           </select>
                         </td>
-                        <td><input className="celula" type="date" min={dataMinima} value={s.vencimento} onChange={(e) => mudar(s.id, { vencimento: e.target.value })} /></td>
+                        <td><input className="celula" type="date" min={dataMinima} value={s.vencimento} onChange={(e) => mudar(s.id, { vencimento: e.target.value })} onBlur={ordenar} /></td>
                         <td><CelulaNumero rotulo="Valor da parcela" valor={s.valor} aoMudar={(n) => mudar(s.id, { valor: Math.max(0, n) })} /></td>
                       </>
                     )}

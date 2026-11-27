@@ -275,7 +275,6 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
   const diferencaVPL = p.vpl - t.vpl;
 
   const avisos: Aviso[] = [];
-  const limitePreChaves = somarMeses(cfg.mesEntrega, 2);
   for (const s of series) {
     if (!s.vencimento) { avisos.push({ nivel: 'erro', texto: 'Série sem data de vencimento.', serieId: s.id }); continue; }
     if (!(s.qtd >= 1) || !Number.isInteger(s.qtd)) avisos.push({ nivel: 'erro', texto: 'Número de parcelas inválido.', serieId: s.id });
@@ -285,8 +284,13 @@ export function calcular(cfg: ConfigEmpreendimento, u: Unidade, series: Serie[],
     if (op.diasVencimento?.length && s.vencimento !== op.dataMinima && !op.diasVencimento.includes(diaVenc))
       avisos.push({ nivel: 'alerta', texto: `Vencimento no dia ${String(diaVenc).padStart(2, '0')}: use dia ${op.diasVencimento.map((d) => String(d).padStart(2, '0')).join(', ').replace(/, (\d+)$/, ' ou $1')}.`, serieId: s.id });
     const fim = dataDaParcela(s, Math.max(0, Math.floor(s.qtd) - 1));
-    if (s.periodicidade !== 'Financiamento' && indiceMes(fim) > indiceMes(limitePreChaves))
-      avisos.push({ nivel: 'alerta', texto: 'Parcela no período do financiamento (depois da entrega).', serieId: s.id });
+    // parcelas antes das chaves têm de caber até o mês da entrega
+    if (s.periodicidade !== 'Financiamento' && s.periodicidade !== 'Permuta' && indiceMes(fim) > indiceMes(cfg.mesEntrega)) {
+      const cabem = Math.max(0, Math.floor((indiceMes(cfg.mesEntrega) - indiceMes(s.vencimento.slice(0, 7))) / PASSO[s.periodicidade]) + 1);
+      avisos.push({ nivel: 'erro', serieId: s.id, texto: s.qtd > 1 && cabem > 0
+        ? `Cabem ${cabem} parcela${cabem > 1 ? 's' : ''} ${rotuloPeriodicidade(s.periodicidade).toLowerCase()} até a entrega (${fmtMes(cfg.mesEntrega)}); a série tem ${s.qtd}.`
+        : `Parcela depois da entrega (${fmtMes(cfg.mesEntrega)}): só o financiamento vence depois das chaves.` });
+    }
     if (s.periodicidade === 'Financiamento' && indiceMes(s.vencimento) < indiceMes(cfg.mesEntrega))
       avisos.push({ nivel: 'alerta', texto: 'Financiamento antes da entrega.', serieId: s.id });
   }
@@ -477,10 +481,16 @@ export function unidadeConjunta(cfg: ConfigEmpreendimento, us: Unidade[]): { cfg
   const area = us.reduce((s, u) => s + u.area, 0);
   const mesmaTabela = us.every((u) => u.tabela === us[0].tabela);
   const tabela = mesmaTabela ? us[0].tabela : '__conjunta';
-  const tabelas = mesmaTabela ? cfg.tabelas : {
-    ...cfg.tabelas,
-    __conjunta: us.flatMap((u, i) => cfg.tabelas[u.tabela].map((s) => ({ ...s, percentual: (s.percentual * precos[i]) / soma }))),
-  };
+  // tabelas diferentes: soma as séries iguais (mesma periodicidade, quantidade e início), ponderadas pelo preço;
+  // série que só existe numa das tabelas entra sozinha
+  const somadas = new Map<string, SerieTabela>();
+  us.forEach((u, i) => cfg.tabelas[u.tabela].forEach((s) => {
+    const k = `${s.periodicidade}|${s.qtd}|${s.inicio.base}|${s.inicio.meses}`;
+    const parte = (s.percentual * precos[i]) / soma;
+    const ja = somadas.get(k);
+    if (ja) ja.percentual += parte; else somadas.set(k, { ...s, percentual: parte });
+  }));
+  const tabelas = mesmaTabela ? cfg.tabelas : { ...cfg.tabelas, __conjunta: [...somadas.values()] };
   const unidade: Unidade = { numero: us.map((u) => u.numero).join(' + '), area, tipo: '__conjunta', peso: 1, tabela };
   return {
     cfg: { ...cfg, tabelas, precoM2PorTipo: { ...cfg.precoM2PorTipo, __conjunta: soma / area }, unidades: [...cfg.unidades, unidade] },
@@ -521,6 +531,15 @@ export function somarSeries(lista: Serie[][]): Serie[] {
 export const rotuloPeriodicidade = (p: Periodicidade) => PERIODICIDADES.find((x) => x.valor === p)?.rotulo ?? p;
 
 /** Mesmas séries (estrutura e valores, ao centavo). */
-export function mesmasSeries(a: Serie[], b: Serie[]) {
+export function mesmasSeries(a0: Serie[], b0: Serie[]) {
+  const a = ordenarSeries(a0), b = ordenarSeries(b0);
   return a.length === b.length && a.every((s, i) => s.qtd === b[i].qtd && s.periodicidade === b[i].periodicidade && s.vencimento === b[i].vencimento && Math.abs(s.valor - b[i].valor) < 0.005);
+}
+
+/** Ordem cronológica das séries (pelo 1º vencimento), com o financiamento sempre por último. */
+export function ordenarSeries(series: Serie[]): Serie[] {
+  return series.map((s, i) => ({ s, i })).sort((a, b) => {
+    const fa = a.s.periodicidade === 'Financiamento' ? 1 : 0, fb = b.s.periodicidade === 'Financiamento' ? 1 : 0;
+    return fa - fb || (a.s.vencimento || '9999').localeCompare(b.s.vencimento || '9999') || a.i - b.i;
+  }).map((x) => x.s);
 }

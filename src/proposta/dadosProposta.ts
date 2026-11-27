@@ -75,7 +75,7 @@ export const rotuloProposta = (s: StatusProposta) => STATUS_PROPOSTA.find((x) =>
 export interface PropostaSalva {
   id: string; codigo: string; unidade_id: string; pasta_id: string | null; imobiliaria_id: string | null;
   criado_por_id: string | null; criado_por: string | null; criado_por_nome?: string | null; data_proposta: string; status: StatusProposta;
-  series: Omit<Serie, 'id'>[]; resumo: Resumo; observacoes: string | null; comissao_pct: number | null; parte_sinal: number | null;
+  series: Omit<Serie, 'id'>[]; resumo: Resumo; observacoes: string | null; nome?: string | null; comissao_pct: number | null; parte_sinal: number | null;
   coordenacao_pct?: number | null; coordenacao_parcelas?: number | null;
   motivo_analise: string | null; analisada_por: string | null; analisada_em: string | null; enviada_em: string | null;
   versao: number; criada_em: string; atualizada_em: string; alcada?: Alcada | null; grupo_id?: string | null;

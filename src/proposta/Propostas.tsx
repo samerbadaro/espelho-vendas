@@ -34,7 +34,7 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     let q = supabase.from('propostas')
-      .select('id, codigo, status, alcada, analisada_por, data_proposta, resumo, criado_por, criado_por_nome, atualizada_em, grupo_id, contraproposta, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
+      .select('id, codigo, status, alcada, analisada_por, data_proposta, resumo, criado_por, criado_por_nome, atualizada_em, grupo_id, contraproposta, nome, unidades(numero), pastas(comprador_nome), imobiliarias(nome)')
       .order('atualizada_em', { ascending: false }).limit(300);
     if (filtro) q = q.eq('status', filtro);
     q.then(({ data, error }) => {
@@ -45,7 +45,7 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
   // busca sem acento e sem diferenciar maiúsculas, em unidade, cliente, imobiliária, corretor e código
   const sem = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const termo = sem(busca.trim());
-  const filtradas = (lista ?? []).filter((p) => !termo || sem([p.codigo, p.unidades?.numero, p.pastas?.comprador_nome, p.imobiliarias?.nome, p.criado_por, p.criado_por_nome].filter(Boolean).join(' ')).includes(termo));
+  const filtradas = (lista ?? []).filter((p) => !termo || sem([p.nome, p.codigo, p.unidades?.numero, p.pastas?.comprador_nome, p.imobiliarias?.nome, p.criado_por, p.criado_por_nome].filter(Boolean).join(' ')).includes(termo));
   // proposta conjunta: uma linha só para as propostas do mesmo grupo (e mesma situação)
   const visiveis = useMemo(() => {
     const linhas: { p: (typeof filtradas)[number]; codigos: string[]; numeros: string[]; total: number | null; pv: number | null }[] = [];
@@ -83,7 +83,7 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
       </div>
       {verParametros && perfil.papel === 'admin' && <ParametrosProposta aoFechar={() => setVerParametros(false)} />}
       <div className="filtros">
-        <input type="search" placeholder="Buscar por unidade, cliente, imobiliária, corretor ou código" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar propostas" />
+        <input type="search" placeholder="Buscar por nome da proposta, unidade, cliente, imobiliária, corretor ou código" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar propostas" />
         <select value={filtro} onChange={(e) => setFiltro(e.target.value as StatusProposta | '')}>
           <option value="">Todas</option>
           {STATUS_PROPOSTA.map((s) => <option key={s.valor} value={s.valor}>{s.rotulo}</option>)}
@@ -99,7 +99,7 @@ export function ListaPropostas({ perfil }: { perfil: Perfil }) {
             <tbody>
               {visiveis.map(({ p, codigos, numeros, total, pv }) => (
                 <tr key={`${p.id}-${codigos.length}`} tabIndex={0} onClick={() => ir(`/painel/propostas/${p.id}`)} onKeyDown={(e) => e.key === 'Enter' && ir(`/painel/propostas/${p.id}`)}>
-                  <td className="mono">{codigos.join(', ')}{codigos.length > 1 && <small className="dica nowrap"> conjunta</small>}</td>
+                  <td><span className="mono">{codigos.join(', ')}</span>{codigos.length > 1 && <small className="dica nowrap"> conjunta</small>}{p.nome && <><br /><small className="prop-nome-lista">{p.nome}</small></>}</td>
                   <td className="mono">{numeros.join(', ')}</td>
                   <td>{p.pastas?.comprador_nome ?? <span className="dica">sem pasta</span>}</td>
                   {equipe && <td>{p.imobiliarias?.nome ?? 'Direto'}</td>}
@@ -140,6 +140,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
   const [unidadeIds, setUnidadeIds] = useState<string[]>([]);
   const [pastaId, setPastaId] = useState('');
   const [obs, setObs] = useState('');
+  const [nomeProposta, setNomeProposta] = useState('');
   const [estado, setEstado] = useState<EstadoEditor | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [analise, setAnalise] = useState<null | 'devolvida' | 'recusada' | 'cancelada' | 'cancelar-unidade'>(null);
@@ -171,7 +172,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
       const { data: gs } = await supabase.from('propostas').select('*').eq('grupo_id', p.grupo_id).neq('status', 'cancelada').order('codigo');
       grupo = (gs ?? []) as PropostaSalva[];
     }
-    setProposta(p); setMembros(grupo); setPastaId(p.pasta_id ?? ''); setObs(p.observacoes ?? ''); setModoContra(false); setVerOriginal(false);
+    setProposta(p); setMembros(grupo); setPastaId(p.pasta_id ?? ''); setObs(p.observacoes ?? ''); setNomeProposta(p.nome ?? ''); setModoContra(false); setVerOriginal(false);
     const conjunta = grupo.length > 0 && p.status !== 'cancelada';
     setUnidadeIds(conjunta ? grupo.map((m) => m.unidade_id) : [p.unidade_id]);
     // a proposta cancelada de um grupo abre sozinha; o resto abre na visão conjunta (que também serve para uma unidade só)
@@ -240,7 +241,7 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
     setSalvando(true);
     try {
       const base = {
-        pasta_id: pastaId || null, observacoes: obs.trim() || null,
+        pasta_id: pastaId || null, observacoes: obs.trim() || null, nome: nomeProposta.trim() || null,
         comissao_pct: estado.comissaoPct, parte_sinal: estado.parteSinal,
         coordenacao_pct: estado.coordenacaoPct, coordenacao_parcelas: estado.coordenacaoParcelas,
       };
@@ -449,6 +450,13 @@ export function PaginaProposta({ id, perfil }: { id: string | 'nova'; perfil: Pe
           {editavel && !modoContra && <button className="botao principal" onClick={enviar} disabled={salvando || !estado}><Send size={16} /> Enviar para análise</button>}
         </div>
       </div>
+
+      <label className="prop-nome">
+        <span>Nome da proposta</span>
+        <input type="text" value={nomeProposta} maxLength={120} onChange={(e) => setNomeProposta(e.target.value)} disabled={!editavel || modoContra}
+          placeholder="Ex.: Samer – Lote do Parque do Cerrado" aria-describedby="prop-nome-dica" />
+        <small id="prop-nome-dica" className="dica">Para achar a proposta na lista (busca) e saber de qual tratativa ela é.</small>
+      </label>
 
       {membros.length > 1 && proposta?.status !== 'cancelada' && (
         <div className="prop-vistas" role="tablist" aria-label="Visão da proposta conjunta">
