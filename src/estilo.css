@@ -950,11 +950,14 @@ small.bloco { display: block; color: var(--tinta-2); }
 .ct-doc { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .ct-doc .botao.link { margin-left: auto; }
 .ct-emitidos tr.cancelado td { opacity: 0.55; }
-.ct-acoes { display: flex; gap: 6px; justify-content: flex-end; }
+/* a célula continua sendo célula de tabela (com a borda da linha); os botões ficam lado a lado, à direita */
+td.ct-acoes { text-align: right; white-space: nowrap; }
+td.ct-acoes > * { vertical-align: middle; }
+td.ct-acoes > * + * { margin-left: 6px; }
 .dc-areas td, .dc-areas th { white-space: nowrap; font-size: 0.8rem; }
 @media (max-width: 760px) { .ct-comissao { grid-template-columns: 1fr 1fr; } }
 .ct-busca { margin-bottom: 12px; }
-.ct-acoes { flex-wrap: wrap; } .ct-acoes label.botao { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.ct-acoes label.botao { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .mc-linha { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda); flex-wrap: wrap; }
 .mc-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
 .mc-acoes label.botao { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
